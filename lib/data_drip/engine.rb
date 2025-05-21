@@ -1,6 +1,19 @@
 module DataDrip
-    class Engine < ::Rails::Engine
-        isolate_namespace DataDrip
-        puts "DataDrip::Engine loaded"
-    end
+  class Engine < ::Rails::Engine
+    isolate_namespace DataDrip
+
+		initializer "data_drip.assets.precompile" do |app|
+			app.config.assets.precompile += %w[
+				data_drip/application.css
+			]
+		end
+		
+		initializer "data_drip.eager_load" do |app|
+			unless app.config.eager_load
+				app.config.to_prepare do
+					Rails.autoloaders.main.eager_load_dir("#{Rails.root}/app/backfills")
+				end
+			end
+		end
+  end
 end

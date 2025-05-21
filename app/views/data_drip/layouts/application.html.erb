@@ -1,0 +1,19 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>DataDrip</title>
+  <%= csrf_meta_tags %>
+  <%= csp_meta_tag %>
+
+  <%= stylesheet_link_tag "data_drip/application", "data-turbo-track": "reload" %>
+	<%= javascript_importmap_tags %>
+</head>
+<body>
+  <%= yield %>
+  <% flash.each do |key, value| %>
+		<div class="mb-4 p-2 rounded <%= key == 'notice' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800' %>">
+			<%= value %>
+		</div>
+	<% end %>
+</body>
+</html>
