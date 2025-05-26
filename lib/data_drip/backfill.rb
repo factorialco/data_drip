@@ -22,7 +22,7 @@ module DataDrip
 		end
 
 		def explain
-			ap scope.explain # rubocop:disable Rails/Output
+			pp scope.explain # rubocop:disable Rails/Output
 		end
 
 		def self.from_data_migration

@@ -1,7 +1,7 @@
 <ul>
     <% @backfills.map(&:name).uniq.each do |backfill| %>
     <li>
-        <%= backfill %> 
+        <%= backfill %> <%= backfill.constantize.new.scope.count %> 
         <%= button_to 'Run', run_backfill_path(backfill: backfill), method: :post, class: 'btn btn-primary' %>
     </li>
     <% end %>

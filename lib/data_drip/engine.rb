@@ -9,7 +9,7 @@ module DataDrip
 		end
 		
 		initializer "data_drip.eager_load" do |app|
-			unless app.config.eager_load
+			if !app.config.eager_load && Dir.exist?(Rails.root.join("app/backfills"))
 				app.config.to_prepare do
 					Rails.autoloaders.main.eager_load_dir("#{Rails.root}/app/backfills")
 				end
