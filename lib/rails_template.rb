@@ -37,5 +37,21 @@ after_bundle do
   rails_command "generate data_drip:install"
 
   # Run DataDrip backfill generator
-  # rails_command "generate data_drip:backfill add_role_to_employee"
+  rails_command "generate data_drip:backfill add_role_to_employee"
+
+  # Update the scope method in the generated backfill
+  gsub_file "app/backfills/add_role_to_employee.rb",
+            /def scope.*?end/m,
+            "def scope\n    Employee.where(role: nil)\n  end\n"
+
+  # Update all occurrences of the process batch method in the generated backfill
+  gsub_file "app/backfills/add_role_to_employee.rb",
+            /(def |# def )process_batch\(batch\)(?:.|\n)*?end/m do |match|
+    if match.lstrip.start_with?("#")
+      # Comment each line of the replacement
+      "# def process_batch(batch)\n#   batch.update_all(role: 'intern')\n# end"
+    else
+      "def process_batch(batch)\n    batch.update_all(role: 'intern')\n  end"
+    end
+  end
 end
