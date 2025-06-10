@@ -5,7 +5,7 @@ require "rails/generators/base"
 module DataDrip
   module Generators
     class InstallGenerator < Rails::Generators::Base
-      source_root File.expand_path("../templates", __dir__)
+      source_root File.expand_path("templates", __dir__)
 
       def mount_engine_route
         route_config = 'mount DataDrip::Engine => "/data_drip"'
@@ -22,6 +22,22 @@ module DataDrip
       def create_backfills_directory
         empty_directory "app/backfills"
         say_status("create", "Created app/backfills directory", :green)
+      end
+
+      def create_backfill_run_migration
+        # template "backfill.rb.erb", File.join(backfills_path, "#{file_name}.rb")
+        migration_file = "db/migrate/#{Time.now.utc.strftime("%Y%m%d%H%M%S")}_create_data_drip_backfill_run.rb"
+        if File.exist?(migration_file)
+          say_status("skipped", "DataDrip backfill run migration already exists", :yellow)
+        else
+          template "backfill_run_migration.rb.erb", migration_file, migration_version: migration_version
+          run "rails db:migrate"
+          say_status("create", "Created DataDrip backfill run migration", :green)
+        end
+      end
+
+      def migration_version
+        "[#{Rails::VERSION::MAJOR}.#{Rails::VERSION::MINOR}]"
       end
     end
   end
