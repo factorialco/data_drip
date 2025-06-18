@@ -36,28 +36,6 @@ after_bundle do
   # Run DataDrip install generator
   rails_command "generate data_drip:install"
 
-  # Add Tailwind gem and install it
-  gem "tailwindcss-rails"
-  run "bundle install"
-
-  # Ensure tailwind.config.js exists and is configured for engine and app views
-  create_file "tailwind.config.js", <<~JS
-    module.exports = {
-      content: [
-        './app/views/**/*.{erb,haml,html,slim}',
-        '../data_drip/app/views/**/**/*.{erb,haml,html,slim}',
-        '../data_drip/app/assets/stylesheets/**/*.css'
-      ],
-      theme: {
-        extend: {},
-      },
-      plugins: [],
-    }
-  JS
-
-  # Install Tailwind CSS in the dummy app
-  rails_command "tailwindcss:install"
-
   # Run DataDrip backfill generator
   rails_command "generate data_drip:backfill add_role_to_employee"
 

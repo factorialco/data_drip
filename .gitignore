@@ -6,6 +6,9 @@
 /pkg/
 /spec/reports/
 /tmp/
+/node_modules/
+my_data_drip_dummy/
+.DS_Store
 
 # rspec failure tracking
 .rspec_status
