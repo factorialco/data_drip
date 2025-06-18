@@ -1,4 +1,3 @@
 DataDrip::Engine.routes.draw do
-    get 'backfills' => 'backfills#index'
-    post 'backfills/run' => 'backfills#run', as: :run_backfill
+  resources :backfill_runs, only: %i[index show new create]
 end

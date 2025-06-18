@@ -1,9 +1,0 @@
-<ul class="space-y-4">
-    <% @backfills.map(&:name).uniq.each do |backfill_class_name| %>
-    <li class="p-4 bg-blue-50 rounded shadow flex items-center space-x-4">
-        <span class="font-bold text-blue-700 text-lg"><%= backfill_class_name %></span>
-        <span class="text-gray-500">(<%= backfill_class_name.constantize.new.scope.count %>)</span>
-        <%= button_to 'Run', run_backfill_path(backfill_class_name: backfill_class_name), method: :post, class: 'btn btn-primary ml-auto' %>
-    </li>
-    <% end %>
-</ul>

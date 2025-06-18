@@ -3,6 +3,8 @@ class CreateDataDripBackfillRun < ActiveRecord::Migration<%= migration_version %
     create_table :data_drip_backfill_runs, id: :bigint do |t|
         t.string :backfill_class_name, null: false
         t.integer :status, null: false, default: 0, index: true
+        t.integer :batch_size, null: false, default: 100
+        t.datetime :start_at, null: false
         t.timestamps null: false
     end
   end

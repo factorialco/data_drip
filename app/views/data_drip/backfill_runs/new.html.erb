@@ -1,0 +1,31 @@
+<% if @run.errors.any? %>
+  <div class="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-6">
+    <h4 class="font-bold mb-2">There were errors:</h4>
+    <ul class="list-disc list-inside">
+      <% @run.errors.full_messages.each do |msg| %>
+        <li><%= msg %></li>
+      <% end %>
+    </ul>
+  </div>
+<% end %>
+
+<%= form_with model: @run, url: backfill_runs_path, local: true, html: { class: "max-w-lg mx-auto bg-white p-8 rounded shadow" } do |f| %>
+  <div class="mb-6">
+    <%= f.label :backfill_class_name, "Backfill Class", class: "block text-gray-700 font-bold mb-2" %>
+    <%= f.select :backfill_class_name, backfill_class_names, {}, class: "block w-full mt-1 rounded border-gray-300 shadow-sm focus:ring focus:ring-blue-200 focus:border-blue-400" %>
+  </div>
+
+  <div class="mb-6">
+    <%= f.label :batch_size, "Batch Size", class: "block text-gray-700 font-bold mb-2" %>
+    <%= f.number_field :batch_size, class: "block w-full mt-1 rounded border-gray-300 shadow-sm focus:ring focus:ring-blue-200 focus:border-blue-400", min: 1 %>
+  </div>
+
+  <div class="mb-6">
+    <%= f.label :start_at, "Start At", class: "block text-gray-700 font-bold mb-2" %>
+    <%= f.datetime_field :start_at, class: "block w-full mt-1 rounded border-gray-300 shadow-sm focus:ring focus:ring-blue-200 focus:border-blue-400" %>
+  </div>
+
+  <div class="flex justify-end">
+    <%= f.submit "Start Backfill", class: "bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded shadow" %>
+  </div>
+<% end %>

@@ -1,0 +1,10 @@
+<ul class="space-y-4">
+    <% @backfill_runs.each do |backfill_run| %>
+    <li class="p-4 bg-blue-50 rounded shadow flex items-center space-x-4">
+        <span class="font-bold text-blue-700 text-lg"><%= backfill_run.backfill_class_name %></span>
+    </li>
+    <% end %>
+</ul>
+
+
+<%= link_to 'New Backfill Run', new_backfill_run_path, class: 'mt-4 inline-block px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700' %>
