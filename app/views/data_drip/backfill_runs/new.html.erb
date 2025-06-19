@@ -1,7 +1,7 @@
-<div class="min-h-screen flex items-center justify-center bg-teal-lighter">
+<div class="min-h-screen flex items-center justify-center bg-gradient-to-r from-slate-700 to-gray-900">
   <div class="w-full max-w-lg">
-    <%= form_with model: @run, url: backfill_runs_path, local: true, html: { class: "bg-white p-8 rounded shadow" } do |f| %>
-      <h1 class="text-3xl font-bold text-center mb-8 text-gray-800">New Backfill Run</h1>
+    <%= form_with model: @run, url: backfill_runs_path, local: true, html: { class: "bg-white p-10 md:p-14 rounded-lg" } do |f| %>
+      <h1 class="text-4xl md:text-5xl font-semibold text-center mb-10 text-gray-700">New Backfill Run</h1>
       <% if @run.errors.any? %>
         <div class="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-6">
           <h4 class="font-bold mb-2">There were errors:</h4>
@@ -14,9 +14,9 @@
       <% end %>
 
       <div class="mb-6">
-        <%= f.label :backfill_class_name, "BACKFILL CLASS", class: "block text-gray-700 font-bold mb-2" %>
+        <%= f.label :backfill_class_name, "BACKFILL CLASS", class: "block text-gray-500 font-semibold mb-2" %>
         <div class="relative">
-          <%= f.select :backfill_class_name, backfill_class_names, {}, class: "block w-full mt-1 rounded border border-gray-200 shadow-sm focus:ring focus:ring-blue-200 focus:border-blue-400 px-3 py-2 appearance-none pr-10" %>
+          <%= f.select :backfill_class_name, backfill_class_names, {}, class: "block w-full mt-1 rounded border border-gray-200 focus:ring focus:ring-blue-200 focus:border-blue-400 px-3 py-2 appearance-none pr-10" %>
           <div class="pointer-events-none absolute inset-y-0 right-0 flex items-center px-3 text-gray-400">
             <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
@@ -26,18 +26,20 @@
       </div>
 
       <div class="mb-6">
-        <%= f.label :batch_size, "BATCH SIZE", class: "block text-gray-700 font-bold mb-2" %>
+        <%= f.label :batch_size, "BATCH SIZE", class: "block text-gray-500 font-semibold mb-2" %>
         <%= f.number_field :batch_size, class: "block w-full mt-1 rounded border border-gray-200  focus:ring focus:ring-blue-200 focus:border-blue-400 px-3 py-2", min: 1 %>
       </div>
 
       <div class="mb-6">
-        <%= f.label :start_at, "START AT", class: "block text-gray-700 font-bold mb-2" %>
-        <%= f.datetime_field :start_at, value: "", class: "block w-full mt-1 rounded border border-gray-200 shadow-sm focus:ring focus:ring-blue-200 focus:border-blue-400 px-3 py-2" %>
+        <%= f.label :start_at, "RUN SHOULD START AT", class: "block text-gray-500 font-semibold mb-2" %>
+        <%= f.datetime_field :start_at, value: "", class: "block w-full mt-1 rounded border border-gray-200 focus:ring focus:ring-blue-200 focus:border-blue-400 px-3 py-2" %>
       </div>
 
       <div class="flex justify-center">
-        <%= f.submit "Create Backfill Run", class: "bg-teal hover:bg-teal-dark text-white uppercase text-lg py-2 px-4 rounded shadow" %>
+        <%= f.submit "Create Backfill Run", class: "text-white font-bold py-2 px-4 rounded gradient-btn" %>
       </div>
     <% end %>
   </div>
 </div>
+
+
