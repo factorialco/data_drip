@@ -2,6 +2,8 @@ module DataDrip
   class BackfillRun < ApplicationRecord
     self.table_name = "data_drip_backfill_runs"
 
+    has_many :batches, class_name: "DataDrip::BackfillRunBatch", dependent: :destroy
+
     validates :backfill_class_name, presence: true
     validate :backfill_class_exists
     validate :backfill_class_properly_configured?

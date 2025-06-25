@@ -25,14 +25,24 @@ module DataDrip
       end
 
       def create_backfill_run_migration
-        # template "backfill.rb.erb", File.join(backfills_path, "#{file_name}.rb")
-        migration_file = "db/migrate/#{Time.now.utc.strftime("%Y%m%d%H%M%S")}_create_data_drip_backfill_run.rb"
+        migration_file = "db/migrate/#{Time.now.utc.strftime("%Y%m%d%H%M%S")}_create_data_drip_backfill_runs.rb"
         if File.exist?(migration_file)
           say_status("skipped", "DataDrip backfill run migration already exists", :yellow)
         else
           template "backfill_run_migration.rb.erb", migration_file, migration_version: migration_version
           run "rails db:migrate"
           say_status("create", "Created DataDrip backfill run migration", :green)
+        end
+      end
+
+      def create_backfill_run_batch_migration
+        migration_file = "db/migrate/#{Time.now.utc.strftime("%Y%m%d%H%M%S").to_i + 1}_create_data_drip_backfill_run_batches.rb"
+        if File.exist?(migration_file)
+          say_status("skipped", "DataDrip backfill run batch migration already exists", :yellow)
+        else
+          template "backfill_run_batch_migration.rb.erb", migration_file, migration_version: migration_version
+          run "rails db:migrate"
+          say_status("create", "Created DataDrip backfill run batch migration", :green)
         end
       end
 

@@ -1,0 +1,13 @@
+<h1>Name <%= @run.backfill_class_name %></h1>
+<p>Created At <%= @run.created_at %></p>
+<p>Starting At <%= @run.start_at %></p>
+<p>Batch Size <%= @run.batch_size %></p>
+<p>Status <%= @run.status %></p>
+<p>Processed <%= @run.processed_count %></p>
+<p>Total <%= @run.total_count %></p>
+
+<% if @run.error_message %>
+    <div class="mb-4 p-2 rounded bg-red-100 text-red-800">
+		<%= @run.error_message %>
+	</div>
+<% end %>

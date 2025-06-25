@@ -22,6 +22,10 @@ module DataDrip
       end
     end
 
+    def show
+      @run = DataDrip::BackfillRun.find(params[:id])
+    end
+
     private
 
     def backfill_run_params
