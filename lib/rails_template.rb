@@ -3,10 +3,18 @@
 # Set application name
 app_name = "data_drip_dummy"
 
+possible_paths = [
+  File.expand_path("..", Dir.pwd),
+  File.expand_path("../..", Dir.pwd)
+]
+gem_path = possible_paths.find { |path| File.exist?(File.join(path, "data_drip.gemspec")) }
+
+raise "Could not find data_drip.gemspec in expected locations" unless gem_path
+
 # Add the Employee model
 after_bundle do
   # Add the DataDrip gem with local path
-  gem "data_drip", path: ".."
+  gem "data_drip", path: gem_path
 
   # Run bundle install again for the new gem
   run "bundle install"

@@ -2,9 +2,13 @@ module DataDrip
   class DripperChild < ActiveJob::Base
     queue_as :data_drip_child
 
-    def perform(backfill_run, start_id, finish_id)
-      new_backfill_child = backfill_run.backfill_class.new(batch_size: backfill_run.batch_size, sleep_time: 5)
-      new_backfill_child.call(start_id: start_id, finish_id: finish_id)
+    def perform(backfill_run_batch)
+      backfill_run_batch.run!
+      backfill_run_batch.completed!
+    rescue StandardError => e
+      backfill_run_batch.failed!
+      backfill_run_batch.update(error_message: e.message)
+      raise e
     end
   end
 end
