@@ -2,7 +2,7 @@ module DataDrip
   class BackfillRunBatch < ApplicationRecord
     self.table_name = "data_drip_backfill_run_batches"
 
-    belongs_to :run, class_name: "DataDrip::BackfillRun"
+    belongs_to :backfill_run, class_name: "DataDrip::BackfillRun"
 
     validates :start_id, presence: true
     validates :finish_id, presence: true
@@ -21,7 +21,7 @@ module DataDrip
 
     def run!
       running!
-      backfill = run.backfill_class.new(batch_size: batch_size, sleep_time: 5)
+      backfill = backfill_run.backfill_class.new(batch_size: batch_size, sleep_time: 5)
       backfill.call(start_id: start_id, finish_id: finish_id)
     end
   end

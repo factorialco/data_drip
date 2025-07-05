@@ -17,7 +17,7 @@ module DataDrip
       BackfillRun.transaction do
         batch_ids.each do |batch|
           BackfillRunBatch.create!(
-            run: backfill_run,
+            backfill_run: backfill_run,
             status: :pending,
             batch_size: backfill_run.batch_size,
             start_id: batch[:start_id],

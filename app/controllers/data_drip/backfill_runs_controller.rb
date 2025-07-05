@@ -2,6 +2,7 @@ module DataDrip
   class BackfillRunsController < ActionController::Base
     layout "data_drip/layouts/application"
     helper_method :backfill_class_names
+    helper DataDrip::BackfillRunsHelper
     def index
       @backfill_runs = DataDrip::BackfillRun.all
     end
@@ -23,7 +24,7 @@ module DataDrip
     end
 
     def show
-      @run = DataDrip::BackfillRun.find(params[:id])
+      @backfill_run = DataDrip::BackfillRun.find(params[:id])
     end
 
     private

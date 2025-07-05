@@ -1,13 +1,66 @@
-<h1>Name <%= @run.backfill_class_name %></h1>
-<p>Created At <%= @run.created_at %></p>
-<p>Starting At <%= @run.start_at %></p>
-<p>Batch Size <%= @run.batch_size %></p>
-<p>Status <%= @run.status %></p>
-<p>Processed <%= @run.processed_count %></p>
-<p>Total <%= @run.total_count %></p>
+<div class="min-h-screen flex bg-white">  
+  <div class="hidden md:flex flex-col m-2 justify-between w-72 bg-gradient-to-b from-slate-700 to-gray-900 fixed inset-y-0 left-0">
+    <div class="p-6 flex justify-center items-center">
+      <%= link_to backfill_runs_path, class: "block" do %>
+        <span class="text-4xl font-bold tracking-widest bg-clip-text text-transparent"
+          style="background: linear-gradient(135deg, #f72585 10%, #b5179e 50%, #7209b7 90%); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; text-fill-color: transparent;">DATADRIP
+        </span>
+      <% end %>
+    </div>
+  </div>
 
-<% if @run.error_message %>
-    <div class="mb-4 p-2 rounded bg-red-100 text-red-800">
-		<%= @run.error_message %>
-	</div>
-<% end %>
+  <div class="flex-1 flex flex-col items-center justify-start py-10">
+    <div class="w-full max-w-5xl mb-8">
+      <div class="bg-gradient-to-r from-slate-700 to-gray-900 rounded-lg p-6 shadow text-white">
+        <h1 class="text-2xl mb-4 text-left"><%= @backfill_run.backfill_class_name %></h1>
+        <div class="flex flex-row gap-4 mt-4">
+          <div class="flex-1 flex flex-col gap-1">
+            <p class="text-sm font-light text-left mt-0.5">
+              <span class="font-semibold">Status:</span>
+              <%= status_tag(@backfill_run.status) %>
+            </p>
+            <p class="text-sm font-light text-left mt-0.5"><span class="font-semibold">Processed:</span> <%= @backfill_run.processed_count %></p>
+            <p class="text-sm font-light text-left mt-0.5"><span class="font-semibold">Total:</span> <%= @backfill_run.total_count %></p>
+          </div>
+          <div class="flex-1 flex flex-col gap-1">
+            <p class="text-sm font-light text-left mt-0.5"><span class="font-semibold">Batch Size:</span> <%= @backfill_run.batch_size %></p>
+            <p class="text-sm font-light text-left mt-0.5"><span class="font-semibold">Created At:</span> <%= @backfill_run.created_at.strftime('%d-%m-%Y, %H:%M:%S') if @backfill_run.created_at %></p>
+            <p class="text-sm font-light text-left mt-0.5"><span class="font-semibold">Starting At:</span> <%= @backfill_run.start_at.strftime('%d-%m-%Y, %H:%M:%S') if @backfill_run.start_at %></p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="w-full max-w-5xl flex-1 flex flex-col">
+      <div class="bg-white rounded-lg border border-gray-200 p-6 flex-1 flex flex-col">
+        <div class="flex justify-between items-center mb-6">
+          <div>
+            <h2 class="text-lg font-semibold text-gray-700">Batches</h2>
+            <p class="text-sm text-gray-400 pt-2">Check the status of each batch</p>
+          </div> 
+        </div>
+        <div class="overflow-x-auto">
+          <table class="w-full text-left">
+            <thead>
+              <tr>
+                <th class="py-2 px-4 text-gray-400 font-semibold text-sm">STATUS</th>
+                <th class="py-2 px-4 text-gray-400 font-semibold text-sm">BATCH SIZE</th>
+                <th class="py-2 px-4 text-gray-400 font-semibold text-sm">ERRORS</th>
+              </tr>
+            </thead>
+            <tbody>
+              <% @backfill_run.batches.each do |batch| %>
+                <tr class="border-b border-gray-100 last:border-b-0">
+                  <td class="py-3 px-4 text-gray-700 align-middle"><%= status_tag(batch.status) %></td>
+                  <td class="py-3 px-4 text-gray-700 align-middle"><%= batch.batch_size %></td>
+                  <td class="py-3 px-4 text-red-700 align-middle"><%= batch.error_message %></td>
+                </tr>
+              <% end %>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+

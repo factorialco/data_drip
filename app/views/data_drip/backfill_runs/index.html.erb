@@ -1,16 +1,19 @@
 <div class="min-h-screen flex bg-white">
   
-  <div class="hidden md:flex flex-col justify-between w-72 bg-gradient-to-b from-slate-700 to-gray-900 h-screen">
-    <div></div>
-    <div class="p-6">
-      <button class="w-full px-4 py-2 text-white rounded font-bold shadow gradient-btn">Log Out</button>
-    </div>
+  <div class="hidden md:flex flex-col m-2 justify-between w-72 bg-gradient-to-b from-slate-700 to-gray-900 fixed inset-y-0 left-0">
+      <div class="p-6 flex justify-center items-center">
+        <%= link_to backfill_runs_path, class: "block" do %>
+          <span class="text-4xl font-bold tracking-widest bg-clip-text text-transparent"
+            style="background: linear-gradient(135deg, #f72585 10%, #b5179e 50%, #7209b7 90%); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; text-fill-color: transparent;">DATADRIP
+          </span>
+        <% end %>
+      </div>
   </div>
   
   <div class="flex-1 flex flex-col items-center justify-start py-10">
     <div class="w-full max-w-5xl mb-8">
       <div class="bg-gradient-to-r from-slate-700 to-gray-900 rounded-lg p-6 shadow text-white">
-        <h1 class="text-2xl mb-1 text-left">Hello Oriol!</h1>
+        <h1 class="text-2xl mb-1 text-left">Hello there!</h1>
         <p class="text-sm font-light text-left mt-0.5">We are happy to see you again.</p>
         <div class="mt-8 flex">
           <%= link_to 'New Backfill Run', new_backfill_run_path, class: 'px-4 py-2 text-white rounded font-bold shadow gradient-btn' %>
@@ -39,7 +42,7 @@
               <% @backfill_runs.each do |backfill_run| %>
                 <tr class="border-b border-gray-100 last:border-b-0">
                   <td class="py-3 px-4 text-gray-700 font-semibold align-middle"><%= link_to backfill_run.backfill_class_name, backfill_run_path(backfill_run) %></td>
-                  <td class="py-3 px-4 text-gray-700 align-middle"><%= backfill_run.status %></td>
+                  <td class="py-3 px-4 text-gray-700 align-middle"><%= status_tag(backfill_run.status) %></td>
                   <td class="py-3 px-4 text-gray-700 align-middle"><%= backfill_run.batch_size %></td>
                 </tr>
               <% end %>
