@@ -8,8 +8,8 @@
 /tmp/
 /node_modules/
 my_data_drip_dummy/
-spec/test_app
 .DS_Store
 
 # rspec failure tracking
 .rspec_status
+.byebug_history
