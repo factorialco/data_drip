@@ -8,7 +8,7 @@ module DataDrip
     validates :finish_id, presence: true
     validates :batch_size, presence: true, numericality: { greater_than: 0 }
 
-    enum :status, %i[pending enqueued running completed failed], validate: true, default: :pending
+    enum :status, %i[pending enqueued running completed failed stopped], validate: true, default: :pending
 
     after_commit :enqueue, on: :create
 

@@ -37,4 +37,36 @@ RSpec.describe DataDrip::BackfillRunsController, type: :controller do
       expect(flash[:alert]).to eq("Error creating backfill run")
     end
   end
+
+  describe "POST #stop" do
+    let!(:backfill_run) { DataDrip::BackfillRun.create!(backfill_class_name: "AddRoleToEmployee", batch_size: 100, start_at: Time.current + 1.hour) }
+
+    context "when the backfill run is running" do
+      before do
+        backfill_run.update(status: "running")
+      end
+
+      it "stops the backfill run and redirects" do
+        post :stop, params: { id: backfill_run.id }
+
+        expect(backfill_run.reload.status).to eq("stopped")
+        expect(response).to redirect_to(backfill_run_path(backfill_run))
+        expect(flash[:notice]).to eq("Backfill run has been stopped.")
+      end
+    end
+
+    context "when the backfill run is not running" do
+      before do
+        backfill_run.update(status: "completed")
+      end
+
+      it "does not change the status and redirects" do
+        post :stop, params: { id: backfill_run.id }
+
+        expect(backfill_run.reload.status).to eq("completed")
+        expect(response).to redirect_to(backfill_run_path(backfill_run))
+        expect(flash[:alert]).to eq("Backfill run is not currently running.")
+      end
+    end
+  end
 end

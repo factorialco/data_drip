@@ -14,7 +14,7 @@ module DataDrip
 
     after_commit :enqueue
 
-    enum :status, %i[pending enqueued running completed failed], validate: true, default: :pending
+    enum :status, %i[pending enqueued running completed failed stopped], validate: true, default: :pending
 
     def backfill_class
       @backfill_class ||= DataDrip.all.find { |klass| klass.name == backfill_class_name }

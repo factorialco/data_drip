@@ -3,10 +3,15 @@ module DataDrip
     queue_as :data_drip_child
 
     def perform(backfill_run_batch)
+      parent = backfill_run_batch.backfill_run
+      if parent.stopped?
+        backfill_run_batch.stopped!
+        return
+      end
+
       backfill_run_batch.run!
       backfill_run_batch.completed!
 
-      parent = backfill_run_batch.backfill_run
       parent.increment!(:processed_count, backfill_run_batch.batch_size)
       parent.completed! if parent.batches.where.not(status: :completed).count == 0
     rescue StandardError => e

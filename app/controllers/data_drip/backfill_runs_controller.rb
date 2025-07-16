@@ -38,6 +38,18 @@ module DataDrip
       @backfill_run = DataDrip::BackfillRun.find(params[:id])
     end
 
+    def stop
+      @backfill_run = DataDrip::BackfillRun.find(params[:id])
+      if @backfill_run.running? 
+        @backfill_run.stopped!
+        flash[:notice] = "Backfill run has been stopped."
+      else
+        flash[:alert] = "Backfill run is not currently running."
+      end
+
+      redirect_to backfill_run_path(@backfill_run)
+    end
+
     private
 
     def backfill_run_params

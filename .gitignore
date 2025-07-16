@@ -5,6 +5,8 @@
 /doc/
 /pkg/
 /spec/reports/
+/spec/test_app/log
+/spec/test_app/storage
 /tmp/
 /node_modules/
 my_data_drip_dummy/
