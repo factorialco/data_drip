@@ -12,3 +12,4 @@ my_data_drip_dummy/
 
 # rspec failure tracking
 .rspec_status
+.byebug_history

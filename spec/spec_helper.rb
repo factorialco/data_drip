@@ -2,6 +2,13 @@
 
 require "data_drip"
 
+ENV["RAILS_ENV"] ||= "test"
+
+require "rails"
+require "test_app/config/environment"
+require "rspec/rails"
+ActiveRecord::Migration.maintain_test_schema!
+
 RSpec.configure do |config|
   # Enable flags like --only-failures and --next-failure
   config.example_status_persistence_file_path = ".rspec_status"

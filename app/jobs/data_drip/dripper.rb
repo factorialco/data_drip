@@ -14,8 +14,16 @@ module DataDrip
 
       backfill_run.update(total_count: new_backfill.count)
 
-      batch_ids.each do |batch|
-        DripperChild.perform_later(backfill_run, batch[:start_id], batch[:finish_id])
+      BackfillRun.transaction do
+        batch_ids.each do |batch|
+          BackfillRunBatch.create!(
+            backfill_run: backfill_run,
+            status: :pending,
+            batch_size: backfill_run.batch_size,
+            start_id: batch[:start_id],
+            finish_id: batch[:finish_id]
+          )
+        end
       end
     rescue StandardError => e
       backfill_run.failed!

@@ -31,10 +31,9 @@ Gem::Specification.new do |spec|
   end
   spec.bindir = "exe"
   spec.executables = spec.files.grep(%r{\Aexe/}) { |f| File.basename(f) }
-  spec.require_paths = ["lib", "app", "config"] 
-  
-  spec.add_dependency "tailwindcss-rails", "~> 3.3.1"
+  spec.require_paths = %w[lib app config]
 
+  spec.add_dependency "rails", ">= 7.1"
 
   # Uncomment to register a new dependency of your gem
   # spec.add_dependency "example-gem", "~> 1.0"
