@@ -11,6 +11,7 @@ module DataDrip
     validate :start_at_must_be_valid_datetime
     validates :start_at, presence: true
     validates :batch_size, presence: true, numericality: { greater_than: 0 }
+    validates :amount_of_elements, numericality: { greater_than_or_equal_to: 0 }, allow_nil: true
 
     after_commit :enqueue
 

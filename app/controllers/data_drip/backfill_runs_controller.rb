@@ -67,7 +67,8 @@ module DataDrip
       params.require(:backfill_run).permit(
         :backfill_class_name,
         :batch_size,
-        :start_at
+        :start_at,
+        :amount_of_elements
       )
     end
 

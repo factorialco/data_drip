@@ -31,6 +31,11 @@
       </div>
 
       <div class="mb-6">
+        <%= f.label :amount_of_elements, "MAXIMUM AMOUNT OF ELEMENTS", class: "block text-gray-500 font-semibold mb-2" %>
+        <%= f.number_field :amount_of_elements, class: "block w-full mt-1 rounded border border-gray-200  focus:ring focus:ring-blue-200 focus:border-blue-400 px-3 py-2", min: 0, step: 10 %>
+      </div>
+
+      <div class="mb-6">
         <%= f.label :start_at, "RUN SHOULD START AT", class: "block text-gray-500 font-semibold mb-2" %>
         <%= f.datetime_field :start_at, value: "", class: "block w-full mt-1 rounded border border-gray-200 focus:ring focus:ring-blue-200 focus:border-blue-400 px-3 py-2" %>
       </div>
