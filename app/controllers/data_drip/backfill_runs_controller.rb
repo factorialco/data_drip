@@ -37,6 +37,17 @@ module DataDrip
     def show
       @backfill_run = DataDrip::BackfillRun.find(params[:id])
     end
+    
+    def destroy
+      @backfill_run = DataDrip::BackfillRun.find(params[:id])
+      if @backfill_run.enqueued?
+        @backfill_run.destroy!
+        flash[:notice] = "Backfill run has been deleted."
+      else
+        flash[:alert] = "Backfill run cannot be deleted as it is not in an enqueued state."
+      end
+      redirect_to backfill_runs_path
+    end
 
     def stop
       @backfill_run = DataDrip::BackfillRun.find(params[:id])

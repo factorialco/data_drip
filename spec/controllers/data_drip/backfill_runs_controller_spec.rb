@@ -69,4 +69,36 @@ RSpec.describe DataDrip::BackfillRunsController, type: :controller do
       end
     end
   end
+
+  describe "DELETE #destroy" do
+    let!(:backfill_run) { DataDrip::BackfillRun.create!(backfill_class_name: "AddRoleToEmployee", batch_size: 100, start_at: Time.current + 1.hour) }
+
+    context "when the backfill run is enqueued" do
+      before do
+        backfill_run.update(status: "enqueued")
+      end
+
+      it "deletes the backfill run and redirects" do
+        delete :destroy, params: { id: backfill_run.id }
+
+        expect(DataDrip::BackfillRun.exists?(backfill_run.id)).to be_falsey
+        expect(response).to redirect_to(backfill_runs_path)
+        expect(flash[:notice]).to eq("Backfill run has been deleted.")
+      end
+    end
+
+    context "when the backfill run is not enqueued" do
+      before do
+        backfill_run.update(status: "running")
+      end
+
+      it "does not delete the backfill run and redirects with an alert" do
+        delete :destroy, params: { id: backfill_run.id }
+
+        expect(DataDrip::BackfillRun.exists?(backfill_run.id)).to be_truthy
+        expect(response).to redirect_to(backfill_runs_path)
+        expect(flash[:alert]).to eq("Backfill run cannot be deleted as it is not in an enqueued state.")
+      end
+    end
+  end
 end
