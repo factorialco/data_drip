@@ -23,7 +23,7 @@ module DataDrip
       @run = DataDrip::BackfillRun.new(backfill_run_params)
       if @run.valid?
         @run.save!
-        user_time_zone = params[:user_timezone] || "UTC"
+        user_time_zone = params[:user_timezone].presence || "UTC"
         local_time = @run.start_at.in_time_zone(user_time_zone)
         redirect_to backfill_runs_path,
                     notice:
@@ -36,6 +36,7 @@ module DataDrip
 
     def show
       @backfill_run = DataDrip::BackfillRun.find(params[:id])
+      @user_timezone = params[:user_timezone] || "UTC"
     end
     
     def destroy

@@ -2,6 +2,7 @@ require "spec_helper"
 
 RSpec.describe DataDrip::BackfillRunsController, type: :controller do
   routes { DataDrip::Engine.routes }
+
   describe "POST #create" do
     let(:valid_attributes) do
       {
@@ -35,6 +36,40 @@ RSpec.describe DataDrip::BackfillRunsController, type: :controller do
 
       expect(response.body).to include("Error")
       expect(flash[:alert]).to eq("Error creating backfill run")
+    end
+
+    it "renders new template when backfill class name is invalid" do
+      invalid_class_attributes = valid_attributes.merge(backfill_class_name: "NonExistentClass")
+      
+      expect do
+        post :create, params: { backfill_run: invalid_class_attributes }
+      end.not_to change(DataDrip::BackfillRun, :count)
+
+      expect(response.body).to include("Error")
+      expect(flash[:alert]).to eq("Error creating backfill run")
+    end
+
+    context "with timezone conversion" do
+      let(:timezone_attributes) do
+        {
+          backfill_class_name: "AddRoleToEmployee",
+          batch_size: 100,
+          start_at: "2024-01-15T10:30:00",
+          user_timezone: "America/New_York"
+        }
+      end
+
+      it "converts timezone correctly" do
+        post :create, params: { backfill_run: timezone_attributes, user_timezone: "America/New_York" }
+        expect(response).to redirect_to(backfill_runs_path)
+        expect(flash[:notice]).to include("Will run at 15-01-2024, 10:30:00 EST")
+      end
+
+      it "uses UTC when no timezone is provided" do
+        post :create, params: { backfill_run: timezone_attributes, user_timezone: nil }
+        expect(response).to redirect_to(backfill_runs_path)
+        expect(flash[:notice]).to include("Will run at")
+      end
     end
   end
 
@@ -99,6 +134,21 @@ RSpec.describe DataDrip::BackfillRunsController, type: :controller do
         expect(response).to redirect_to(backfill_runs_path)
         expect(flash[:alert]).to eq("Backfill run cannot be deleted as it is not in an enqueued state.")
       end
+    end
+
+    context "when backfill run is not found" do
+      it "raises an error" do
+        expect {
+          delete :destroy, params: { id: 999999 }
+        }.to raise_error(ActiveRecord::RecordNotFound)
+      end
+    end
+  end
+
+  describe "#backfill_class_names" do
+    it "returns sorted and unique backfill class names" do
+      expect(controller.send(:backfill_class_names)).to include("Select a backfill class")
+      expect(controller.send(:backfill_class_names)).to include("AddRoleToEmployee")
     end
   end
 end

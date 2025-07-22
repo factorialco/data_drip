@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.0].define(version: 2025_07_07_105026) do
+ActiveRecord::Schema[8.0].define(version: 2025_07_22_141548) do
   create_table "data_drip_backfill_run_batches", force: :cascade do |t|
     t.bigint "backfill_run_id", null: false
     t.integer "status", default: 0, null: false
@@ -34,6 +34,7 @@ ActiveRecord::Schema[8.0].define(version: 2025_07_07_105026) do
     t.datetime "start_at", null: false
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
+    t.integer "amount_of_elements"
     t.index ["status"], name: "index_data_drip_backfill_runs_on_status"
   end
 

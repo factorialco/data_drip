@@ -12,12 +12,18 @@
   <div class="flex-1 flex flex-col items-center justify-start py-10">
     <div class="w-full max-w-5xl mb-8">
       <div class="bg-gradient-to-r from-slate-700 to-gray-900 rounded-lg p-6 shadow text-white">
-        <h1 class="text-2xl mb-4 text-left"><%= @backfill_run.backfill_class_name %></h1>
-        <% if @backfill_run.running? %>
-          <%= button_to 'STOP', stop_backfill_run_path(@backfill_run), method: :post, data: {confirm: "Are you sure you want to stop?", disable_with: 'stopping'} %>
-        <% elsif @backfill_run.enqueued? %>
-          <%= button_to 'DELETE', backfill_run_path(@backfill_run), method: :delete, data: {confirm: "Are you sure you want to delete?", disable_with: 'deleting'} %>
-        <% end %>
+        <div class="flex flex-row gap-4 mb-4">
+          <div class="flex-1">
+            <h1 class="text-2xl text-left"><%= @backfill_run.backfill_class_name %></h1>
+          </div>
+          <div class="flex-1 flex justify-end items-center">
+            <% if @backfill_run.running? %>
+              <%= button_to 'STOP', stop_backfill_run_path(@backfill_run), method: :post, data: {confirm: "Are you sure you want to stop?", disable_with: 'stopping'}, class: "px-4 py-2 text-white rounded font-bold shadow", style: "background-color: #ef4444; border: 1px solid #f97316;" %>
+            <% elsif @backfill_run.enqueued? %>
+              <%= button_to 'DELETE', backfill_run_path(@backfill_run), method: :delete, data: {confirm: "Are you sure you want to delete?", disable_with: 'deleting'}, class: "px-4 py-2 text-white rounded font-bold shadow", style: "background-color: #ef4444; border: 1px solid #dc2626;" %>
+            <% end %>
+          </div>
+        </div>
         <div class="flex flex-row gap-4 mt-4">
           <div class="flex-1 flex flex-col gap-1">
             <p class="text-sm font-light text-left mt-0.5">
@@ -29,8 +35,8 @@
           </div>
           <div class="flex-1 flex flex-col gap-1">
             <p class="text-sm font-light text-left mt-0.5"><span class="font-semibold">Batch Size:</span> <%= @backfill_run.batch_size %></p>
-            <p class="text-sm font-light text-left mt-0.5"><span class="font-semibold">Created At:</span> <%= @backfill_run.created_at.strftime('%d-%m-%Y, %H:%M:%S') if @backfill_run.created_at %></p>
-            <p class="text-sm font-light text-left mt-0.5"><span class="font-semibold">Starting At:</span> <%= @backfill_run.start_at.strftime('%d-%m-%Y, %H:%M:%S') if @backfill_run.start_at %></p>
+            <p class="text-sm font-light text-left mt-0.5"><span class="font-semibold">Created At:</span> <%= format_datetime_in_user_timezone(@backfill_run.created_at, @user_timezone) %></p>
+            <p class="text-sm font-light text-left mt-0.5"><span class="font-semibold">Starting At:</span> <%= format_datetime_in_user_timezone(@backfill_run.start_at, @user_timezone) %></p>
           </div>
         </div>
       </div>

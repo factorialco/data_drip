@@ -4,7 +4,9 @@ module DataDrip
 
     initializer "data_drip.assets.precompile" do |app|
       unless Rails.env.test?
-        app.config.assets.precompile += %w[data_drip/application.css]
+        if app.config.respond_to?(:assets)
+          app.config.assets.precompile += %w[data_drip/application.css]
+        end
       end
     end
 
