@@ -2,7 +2,10 @@ module DataDrip
   class BackfillRun < ApplicationRecord
     self.table_name = "data_drip_backfill_runs"
 
-    has_many :batches, class_name: "DataDrip::BackfillRunBatch", dependent: :destroy
+    has_many :batches,
+             class_name: "DataDrip::BackfillRunBatch",
+             dependent: :destroy
+    belongs_to :backfiller, class_name: DataDrip.backfiller_class
 
     validates :backfill_class_name, presence: true
     validate :backfill_class_exists
@@ -11,14 +14,27 @@ module DataDrip
     validate :start_at_must_be_valid_datetime
     validates :start_at, presence: true
     validates :batch_size, presence: true, numericality: { greater_than: 0 }
-    validates :amount_of_elements, numericality: { greater_than_or_equal_to: 0 }, allow_nil: true
+    validates :amount_of_elements,
+              numericality: {
+                greater_than_or_equal_to: 0
+              },
+              allow_nil: true
 
     after_commit :enqueue
 
-    enum :status, %i[pending enqueued running completed failed stopped], validate: true, default: :pending
+    enum :status,
+         %i[pending enqueued running completed failed stopped],
+         validate: true,
+         default: :pending
+
+    def backfiller_name
+      @backfiller_name ||=
+        backfiller.send(DataDrip.backfiller_name_attribute.to_sym)
+    end
 
     def backfill_class
-      @backfill_class ||= DataDrip.all.find { |klass| klass.name == backfill_class_name }
+      @backfill_class ||=
+        DataDrip.all.find { |klass| klass.name == backfill_class_name }
     end
 
     def enqueue
@@ -33,7 +49,10 @@ module DataDrip
     def backfill_class_exists
       return if backfill_class
 
-      errors.add(:backfill_class_name, "must be a valid DataDrip backfill class")
+      errors.add(
+        :backfill_class_name,
+        "must be a valid DataDrip backfill class"
+      )
     end
 
     def backfill_class_properly_configured?
@@ -51,7 +70,10 @@ module DataDrip
       scope = backfill.scope
       return unless scope.count.zero?
 
-      errors.add(:backfill_class_name, "No records to process for #{backfill_class.name}. No jobs enqueued.")
+      errors.add(
+        :backfill_class_name,
+        "No records to process for #{backfill_class.name}. No jobs enqueued."
+      )
     end
 
     def start_at_must_be_valid_datetime

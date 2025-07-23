@@ -4,10 +4,14 @@ require_relative "data_drip/version"
 require "rails"
 require "data_drip/engine"
 require "data_drip/backfill"
-# require_relative "../app/controllers/data_drip/backfill_runs_controller"
 
 module DataDrip
-  class Error < StandardError; end
+  mattr_accessor :backfiller_class, default: "::User"
+  mattr_accessor :backfiller_name_attribute, default: :name
+  mattr_accessor :base_controller_class, default: "::ApplicationController"
+
+  class Error < StandardError
+  end
 
   def self.all
     DataDrip::Backfill.descendants.uniq

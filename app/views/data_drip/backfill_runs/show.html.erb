@@ -1,9 +1,18 @@
-<div class="min-h-screen flex bg-white">  
-  <div class="hidden md:flex flex-col m-2 justify-between w-72 bg-gradient-to-b from-slate-700 to-gray-900 fixed inset-y-0 left-0">
+<div class="min-h-screen flex bg-white">
+  <div
+    class="
+      hidden md:flex flex-col m-2 justify-between w-72 bg-gradient-to-b from-slate-700
+      to-gray-900 fixed inset-y-0 left-0
+    "
+  >
     <div class="p-6 flex justify-center items-center">
       <%= link_to backfill_runs_path, class: "block" do %>
-        <span class="text-4xl font-bold tracking-widest bg-clip-text text-transparent"
-          style="background: linear-gradient(135deg, #f72585 10%, #b5179e 50%, #7209b7 90%); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; text-fill-color: transparent;">DATADRIP
+        <span
+          class="
+            text-4xl font-bold tracking-widest bg-clip-text text-transparent
+          "
+          style="background: linear-gradient(135deg, #f72585 10%, #b5179e 50%, #7209b7 90%); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; text-fill-color: transparent;"
+        >DATADRIP
         </span>
       <% end %>
     </div>
@@ -11,16 +20,38 @@
 
   <div class="flex-1 flex flex-col items-center justify-start py-10">
     <div class="w-full max-w-5xl mb-8">
-      <div class="bg-gradient-to-r from-slate-700 to-gray-900 rounded-lg p-6 shadow text-white">
+      <div
+        class="
+          bg-gradient-to-r from-slate-700 to-gray-900 rounded-lg p-6 shadow text-white
+        "
+      >
         <div class="flex flex-row gap-4 mb-4">
           <div class="flex-1">
             <h1 class="text-2xl text-left"><%= @backfill_run.backfill_class_name %></h1>
+            <p>by
+              <%= @backfill_run.backfiller_name %></p>
           </div>
           <div class="flex-1 flex justify-end items-center">
             <% if @backfill_run.running? %>
-              <%= button_to 'STOP', stop_backfill_run_path(@backfill_run), method: :post, data: {confirm: "Are you sure you want to stop?", disable_with: 'stopping'}, class: "px-4 py-2 text-white rounded font-bold shadow", style: "background-color: #ef4444; border: 1px solid #f97316;" %>
+              <%= button_to "STOP",
+              stop_backfill_run_path(@backfill_run),
+              method: :post,
+              data: {
+                confirm: "Are you sure you want to stop?",
+                disable_with: "stopping",
+              },
+              class: "px-4 py-2 text-white rounded font-bold shadow",
+              style: "background-color: #ef4444; border: 1px solid #f97316;" %>
             <% elsif @backfill_run.enqueued? %>
-              <%= button_to 'DELETE', backfill_run_path(@backfill_run), method: :delete, data: {confirm: "Are you sure you want to delete?", disable_with: 'deleting'}, class: "px-4 py-2 text-white rounded font-bold shadow", style: "background-color: #ef4444; border: 1px solid #dc2626;" %>
+              <%= button_to "DELETE",
+              backfill_run_path(@backfill_run),
+              method: :delete,
+              data: {
+                confirm: "Are you sure you want to delete?",
+                disable_with: "deleting",
+              },
+              class: "px-4 py-2 text-white rounded font-bold shadow",
+              style: "background-color: #ef4444; border: 1px solid #dc2626;" %>
             <% end %>
           </div>
         </div>
@@ -30,25 +61,39 @@
               <span class="font-semibold">Status:</span>
               <%= status_tag(@backfill_run.status) %>
             </p>
-            <p class="text-sm font-light text-left mt-0.5"><span class="font-semibold">Processed:</span> <%= @backfill_run.processed_count %> <%= @backfill_run.amount_of_elements ? "(Maximum amount of elements: #{@backfill_run.amount_of_elements})" : ''%></p>
-            <p class="text-sm font-light text-left mt-0.5"><span class="font-semibold">Total:</span> <%= @backfill_run.total_count %></p>
+            <p class="text-sm font-light text-left mt-0.5"><span class="font-semibold">Processed:</span>
+              <%= @backfill_run.processed_count %>
+              <%= if @backfill_run.amount_of_elements
+                "(Maximum amount of elements: #{@backfill_run.amount_of_elements})"
+              else
+                ""
+              end %></p>
+            <p class="text-sm font-light text-left mt-0.5"><span class="font-semibold">Total:</span>
+              <%= @backfill_run.total_count %></p>
           </div>
           <div class="flex-1 flex flex-col gap-1">
-            <p class="text-sm font-light text-left mt-0.5"><span class="font-semibold">Batch Size:</span> <%= @backfill_run.batch_size %></p>
-            <p class="text-sm font-light text-left mt-0.5"><span class="font-semibold">Created At:</span> <%= format_datetime_in_user_timezone(@backfill_run.created_at, @user_timezone) %></p>
-            <p class="text-sm font-light text-left mt-0.5"><span class="font-semibold">Starting At:</span> <%= format_datetime_in_user_timezone(@backfill_run.start_at, @user_timezone) %></p>
+            <p class="text-sm font-light text-left mt-0.5"><span class="font-semibold">Batch Size:</span>
+              <%= @backfill_run.batch_size %></p>
+            <p class="text-sm font-light text-left mt-0.5"><span class="font-semibold">Created At:</span>
+              <%= format_datetime_in_user_timezone(@backfill_run.created_at, @user_timezone) %></p>
+            <p class="text-sm font-light text-left mt-0.5"><span class="font-semibold">Starting At:</span>
+              <%= format_datetime_in_user_timezone(@backfill_run.start_at, @user_timezone) %></p>
           </div>
         </div>
       </div>
     </div>
 
     <div class="w-full max-w-5xl flex-1 flex flex-col">
-      <div class="bg-white rounded-lg border border-gray-200 p-6 flex-1 flex flex-col">
+      <div
+        class="
+          bg-white rounded-lg border border-gray-200 p-6 flex-1 flex flex-col
+        "
+      >
         <div class="flex justify-between items-center mb-6">
           <div>
             <h2 class="text-lg font-semibold text-gray-700">Batches</h2>
             <p class="text-sm text-gray-400 pt-2">Check the status of each batch</p>
-          </div> 
+          </div>
         </div>
         <div class="overflow-x-auto">
           <table class="w-full text-left">
@@ -74,4 +119,3 @@
     </div>
   </div>
 </div>
-

@@ -7,8 +7,10 @@ class CreateDataDripBackfillRuns < ActiveRecord::Migration[8.0]
       t.integer :batch_size, null: false, default: 100
       t.integer :total_count
       t.integer :processed_count, null: false, default: 0
+      t.bigint :backfiller_id, null: false
       t.datetime :start_at, null: false
       t.timestamps null: false
     end
   end
 end
+

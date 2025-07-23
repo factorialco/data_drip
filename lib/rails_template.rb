@@ -7,7 +7,10 @@ possible_paths = [
   File.expand_path("..", Dir.pwd),
   File.expand_path("../..", Dir.pwd)
 ]
-gem_path = possible_paths.find { |path| File.exist?(File.join(path, "data_drip.gemspec")) }
+gem_path =
+  possible_paths.find do |path|
+    File.exist?(File.join(path, "data_drip.gemspec"))
+  end
 
 raise "Could not find data_drip.gemspec in expected locations" unless gem_path
 
@@ -21,12 +24,16 @@ after_bundle do
 
   # Generate Employee model
   generate :model, "Employee", "name:string", "age:integer", "role:string"
+  generate :model, "User", "name:string"
 
   # Migrate database
   rails_command "db:migrate"
 
   # Create seed file with 1000 Employees
   append_to_file "db/seeds.rb", <<~RUBY
+
+    puts "Seeding users..."
+    User.create!(name: "Suzie")
 
     puts "Seeding employees..."
     1000.times do |i|
@@ -62,4 +69,8 @@ after_bundle do
       "def process_batch(batch)\n    batch.update_all(role: 'intern')\n  end"
     end
   end
+
+  gsub_file "app/controllers/application_controller.rb",
+            "ActionController::Base",
+            "ActionController::Base\n\ndef find_current_backfiller\n  User.first!\nend\n"
 end

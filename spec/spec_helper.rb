@@ -7,6 +7,7 @@ ENV["RAILS_ENV"] ||= "test"
 require "rails"
 require "test_app/config/environment"
 require "rspec/rails"
+
 ActiveRecord::Migration.maintain_test_schema!
 
 RSpec.configure do |config|
@@ -18,5 +19,12 @@ RSpec.configure do |config|
 
   config.expect_with :rspec do |c|
     c.syntax = :expect
+  end
+
+  config.before :each do
+    User.delete_all
+    Employee.delete_all
+    DataDrip::BackfillRunBatch.delete_all
+    DataDrip::BackfillRun.delete_all
   end
 end

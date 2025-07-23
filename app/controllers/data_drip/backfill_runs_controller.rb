@@ -1,8 +1,9 @@
 module DataDrip
-  class BackfillRunsController < ActionController::Base
+  class BackfillRunsController < DataDrip.base_controller_class.constantize
     layout "data_drip/layouts/application"
-    helper_method :backfill_class_names
+    helper_method :backfill_class_names, :find_current_backfiller
     helper DataDrip::BackfillRunsHelper
+
     def index
       @backfill_runs = DataDrip::BackfillRun.all
     end
@@ -20,7 +21,12 @@ module DataDrip
           params[:backfill_run][:start_at] = local_time.utc if local_time
         end
       end
-      @run = DataDrip::BackfillRun.new(backfill_run_params)
+
+      @run =
+        DataDrip::BackfillRun.new(
+          backfill_run_params.merge(backfiller: find_current_backfiller)
+        )
+
       if @run.valid?
         @run.save!
         user_time_zone = params[:user_timezone].presence || "UTC"
@@ -38,21 +44,23 @@ module DataDrip
       @backfill_run = DataDrip::BackfillRun.find(params[:id])
       @user_timezone = params[:user_timezone] || "UTC"
     end
-    
+
     def destroy
       @backfill_run = DataDrip::BackfillRun.find(params[:id])
       if @backfill_run.enqueued?
         @backfill_run.destroy!
         flash[:notice] = "Backfill run has been deleted."
       else
-        flash[:alert] = "Backfill run cannot be deleted as it is not in an enqueued state."
+        flash[
+          :alert
+        ] = "Backfill run cannot be deleted as it is not in an enqueued state."
       end
       redirect_to backfill_runs_path
     end
 
     def stop
       @backfill_run = DataDrip::BackfillRun.find(params[:id])
-      if @backfill_run.running? 
+      if @backfill_run.running?
         @backfill_run.stopped!
         flash[:notice] = "Backfill run has been stopped."
       else
