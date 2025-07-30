@@ -35,6 +35,10 @@ Gem::Specification.new do |spec|
 
   spec.add_dependency "rails", ">= 7.1"
 
+  spec.add_dependency "importmap-rails", ">= 1.2.1"
+  spec.add_dependency "stimulus-rails", ">= 1.0"
+  spec.add_dependency "turbo-rails"
+
   # Uncomment to register a new dependency of your gem
   # spec.add_dependency "example-gem", "~> 1.0"
 

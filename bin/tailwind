@@ -1,4 +1,4 @@
 #!/usr/bin/env bash
 
 # Run Tailwind CLI to build CSS for the DataDrip engine
-npx @tailwindcss/cli -i ./app/assets/stylesheets/data_drip/application.tailwind.css -o ./app/assets/stylesheets/data_drip/application.css --watch "$@"
+npx @tailwindcss/cli -i ./app/assets/stylesheets/data_drip/application.tailwind.css -o ./app/assets/stylesheets/data_drip/tailwind.css --watch "$@"

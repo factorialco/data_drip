@@ -9,6 +9,7 @@ module DataDrip
   mattr_accessor :backfiller_class, default: "::User"
   mattr_accessor :backfiller_name_attribute, default: :name
   mattr_accessor :base_controller_class, default: "::ApplicationController"
+  mattr_accessor :importmap, default: Importmap::Map.new
 
   class Error < StandardError
   end
