@@ -48,9 +48,11 @@
 </div>
 <script>
   document.addEventListener("DOMContentLoaded", function() {
-    var tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
-    var tzInput = document.getElementById("user_timezone");
-    if (tzInput) { tzInput.value = tz; }
+    var timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+    var timeZoneInput = document.getElementById("user_timezone");
+    if (timeZoneInput) { 
+      timeZoneInput.value = timeZone; 
+    }
   });
 </script>
 

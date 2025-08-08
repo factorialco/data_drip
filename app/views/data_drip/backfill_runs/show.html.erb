@@ -75,9 +75,11 @@
             <p class="text-sm font-light text-left mt-0.5"><span class="font-semibold">Batch Size:</span>
               <%= @backfill_run.batch_size %></p>
             <p class="text-sm font-light text-left mt-0.5"><span class="font-semibold">Created At:</span>
-              <%= format_datetime_in_user_timezone(@backfill_run.created_at, @user_timezone) %></p>
+              <%= format_datetime_in_user_timezone(@backfill_run.created_at, @user_timezone) %>
+            </p>
             <p class="text-sm font-light text-left mt-0.5"><span class="font-semibold">Starting At:</span>
-              <%= format_datetime_in_user_timezone(@backfill_run.start_at, @user_timezone) %></p>
+              <%= format_datetime_in_user_timezone(@backfill_run.start_at, @user_timezone) %>
+            </p>
           </div>
         </div>
       </div>

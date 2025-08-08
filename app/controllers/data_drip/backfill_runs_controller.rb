@@ -4,6 +4,8 @@ module DataDrip
     helper_method :backfill_class_names, :find_current_backfiller
     helper DataDrip::BackfillRunsHelper
 
+    before_action :set_user_timezone
+
     def index
       @backfill_runs = DataDrip::BackfillRun.all
     end
@@ -13,12 +15,13 @@ module DataDrip
     end
 
     def create
-      if params[:backfill_run][:start_at].present? &&
-           params[:user_timezone].present?
-        user_time_zone = params[:user_timezone]
-        Time.use_zone(user_time_zone) do
-          local_time = Time.zone.parse(params[:backfill_run][:start_at])
-          params[:backfill_run][:start_at] = local_time.utc if local_time
+      if params[:backfill_run][:start_at].present?
+        user_timezone = params[:user_timezone].presence || @user_timezone
+        if user_timezone.present?
+          Time.use_zone(user_timezone) do
+            local_time = Time.zone.parse(params[:backfill_run][:start_at])
+            params[:backfill_run][:start_at] = local_time.utc if local_time
+          end
         end
       end
 
@@ -29,11 +32,10 @@ module DataDrip
 
       if @run.valid?
         @run.save!
-        user_time_zone = params[:user_timezone].presence || "UTC"
-        local_time = @run.start_at.in_time_zone(user_time_zone)
+        local_time = @run.start_at.in_time_zone(@user_timezone)
         redirect_to backfill_runs_path,
-                    notice:
-                      "Backfill job for #{@run.backfill_class_name} has been enqueued. Will run at #{local_time.strftime("%d-%m-%Y, %H:%M:%S %Z")}."
+          notice:
+            "Backfill job for #{@run.backfill_class_name} has been enqueued. Will run at #{local_time.strftime("%d-%m-%Y, %H:%M:%S %Z")}."
       else
         flash.now[:alert] = "Error creating backfill run"
         render :new
@@ -42,7 +44,6 @@ module DataDrip
 
     def show
       @backfill_run = DataDrip::BackfillRun.find(params[:id])
-      @user_timezone = params[:user_timezone] || "UTC"
     end
 
     def destroy
@@ -70,7 +71,20 @@ module DataDrip
       redirect_to backfill_run_path(@backfill_run)
     end
 
+    def set_timezone
+      session[:user_timezone] = params[:timezone] if params[:timezone].present?
+      respond_to do |format|
+        format.json { render json: { success: true } }
+        format.html { redirect_back(fallback_location: backfill_runs_path) }
+      end
+    end
+
     private
+
+    def set_user_timezone
+      @user_timezone = params[:user_timezone].presence || session[:user_timezone] || "UTC"
+      session[:user_timezone] = @user_timezone if params[:user_timezone].present?
+    end
 
     def backfill_run_params
       params.require(:backfill_run).permit(

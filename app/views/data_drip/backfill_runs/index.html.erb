@@ -75,3 +75,21 @@
     </div>
   </div>
 </div>
+
+<script>
+  document.addEventListener('DOMContentLoaded', function() {
+    var userTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+    var currentTimezone = '<%= session[:user_timezone] %>';
+    
+    if (currentTimezone !== userTimezone) {
+      fetch('<%= set_timezone_backfill_runs_path %>', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-CSRF-Token': document.querySelector('meta[name="csrf-token"]').getAttribute('content')
+        },
+        body: JSON.stringify({ timezone: userTimezone })
+      });
+    }
+  });
+</script>
