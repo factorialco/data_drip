@@ -16,10 +16,10 @@ module DataDrip
 
     def format_datetime_in_user_timezone(datetime, user_timezone = "UTC")
       return "" unless datetime
-      
+
       user_timezone = user_timezone.presence || "UTC"
       local_time = datetime.in_time_zone(user_timezone)
-      local_time.strftime('%d-%m-%Y, %H:%M:%S %Z')
+      local_time.strftime("%d-%m-%Y, %H:%M:%S %Z")
     end
   end
 end

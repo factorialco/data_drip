@@ -1,4 +1,6 @@
-<div class="min-h-screen flex bg-white">
+<div class="min-h-screen flex bg-white" 
+     data-controller="backfill-run-updates"
+     data-backfill-run-updates-backfill-run-id-value="<%= @backfill_run.id %>">
   <div
     class="
       hidden md:flex flex-col m-2 justify-between w-72 bg-gradient-to-b from-slate-700
@@ -59,17 +61,23 @@
           <div class="flex-1 flex flex-col gap-1">
             <p class="text-sm font-light text-left mt-0.5">
               <span class="font-semibold">Status:</span>
-              <%= status_tag(@backfill_run.status) %>
+              <span data-backfill-run-updates-target="status">
+                <%= status_tag(@backfill_run.status) %>
+              </span>
             </p>
             <p class="text-sm font-light text-left mt-0.5"><span class="font-semibold">Processed:</span>
-              <%= @backfill_run.processed_count %>
+              <span data-backfill-run-updates-target="processedCount">
+                <%= @backfill_run.processed_count %>
+              </span>
               <%= if @backfill_run.amount_of_elements
                 "(Maximum amount of elements: #{@backfill_run.amount_of_elements})"
               else
                 ""
               end %></p>
             <p class="text-sm font-light text-left mt-0.5"><span class="font-semibold">Total:</span>
-              <%= @backfill_run.total_count %></p>
+              <span data-backfill-run-updates-target="totalCount">
+                <%= @backfill_run.total_count %>
+              </span></p>
           </div>
           <div class="flex-1 flex flex-col gap-1">
             <p class="text-sm font-light text-left mt-0.5"><span class="font-semibold">Batch Size:</span>
@@ -106,14 +114,8 @@
                 <th class="py-2 px-4 text-gray-400 font-semibold text-sm">ERRORS</th>
               </tr>
             </thead>
-            <tbody>
-              <% @backfill_run.batches.each do |batch| %>
-                <tr class="border-b border-gray-100 last:border-b-0">
-                  <td class="py-3 px-4 text-gray-700 align-middle"><%= status_tag(batch.status) %></td>
-                  <td class="py-3 px-4 text-gray-700 align-middle"><%= batch.batch_size %></td>
-                  <td class="py-3 px-4 text-red-700 align-middle"><%= batch.error_message %></td>
-                </tr>
-              <% end %>
+            <tbody data-backfill-run-updates-target="batchesTable">
+              <%= render 'batches_table', backfill_run: @backfill_run %>
             </tbody>
           </table>
         </div>

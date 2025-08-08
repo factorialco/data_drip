@@ -17,6 +17,7 @@ module DataDrip
     def create
       if params[:backfill_run][:start_at].present?
         user_timezone = params[:user_timezone].presence || @user_timezone
+
         if user_timezone.present?
           Time.use_zone(user_timezone) do
             local_time = Time.zone.parse(params[:backfill_run][:start_at])
@@ -71,6 +72,36 @@ module DataDrip
       redirect_to backfill_run_path(@backfill_run)
     end
 
+    def updates
+      @backfill_run = DataDrip::BackfillRun.find(params[:id])
+
+      render json: {
+        status: @backfill_run.status,
+        status_html: render_to_string(partial: 'status_tag', locals: { status: @backfill_run.status }, formats: [:html]),
+        processed_count: @backfill_run.processed_count,
+        total_count: @backfill_run.total_count,
+        batches_html: render_to_string(partial: 'batches_table', locals: { backfill_run: @backfill_run }, formats: [:html])
+      }
+    end
+
+    def stream
+      @backfill_run = DataDrip::BackfillRun.find(params[:id])
+
+      response.headers['Content-Type'] = 'text/event-stream'
+      response.headers['Cache-Control'] = 'no-cache'
+      response.headers['Connection'] = 'keep-alive'
+      response.headers['X-Accel-Buffering'] = 'no'
+
+      send_initial_data
+      monitor_backfill_run
+    rescue IOError, ActionController::Live::ClientDisconnected
+      Rails.logger.info "SSE client disconnected for backfill run #{@backfill_run.id}"
+    rescue => e
+      Rails.logger.error "SSE error for backfill run #{@backfill_run.id}: #{e.message}"
+    ensure
+      response.stream.close if response.stream
+    end
+
     def set_timezone
       session[:user_timezone] = params[:timezone] if params[:timezone].present?
       respond_to do |format|
@@ -80,6 +111,59 @@ module DataDrip
     end
 
     private
+
+    def send_initial_data
+      data = {
+        status: @backfill_run.status,
+        status_html: render_to_string(partial: 'status_tag', locals: { status: @backfill_run.status }, formats: [:html]),
+        processed_count: @backfill_run.processed_count,
+        total_count: @backfill_run.total_count,
+        batches_html: render_to_string(partial: "batches_table", locals: { backfill_run: @backfill_run }, formats: [:html])
+      }
+
+      response.stream.write("data: #{data.to_json}\n\n")
+    rescue => e
+      Rails.logger.error "Error sending initial SSE data: #{e.message}"
+      response.stream.write("data: {\"error\": \"Failed to send initial data\"}\n\n")
+    end
+
+    def monitor_backfill_run
+      last_processed_count = @backfill_run.processed_count
+      last_status = @backfill_run.status
+      timeout = 30.minutes.from_now
+
+      loop do
+        break if Time.current > timeout
+
+        begin
+          @backfill_run.reload
+
+          if @backfill_run.processed_count != last_processed_count ||
+             @backfill_run.status != last_status
+
+            data = {
+              status: @backfill_run.status,
+              status_html: render_to_string(partial: 'status_tag', locals: { status: @backfill_run.status }, formats: [:html]),
+              processed_count: @backfill_run.processed_count,
+              total_count: @backfill_run.total_count,
+              batches_html: render_to_string(partial: "batches_table", locals: { backfill_run: @backfill_run }, formats: [:html])
+            }
+
+            response.stream.write("data: #{data.to_json}\n\n")
+            last_processed_count = @backfill_run.processed_count
+            last_status = @backfill_run.status
+
+            break if %w[completed failed stopped].include?(@backfill_run.status)
+          end
+
+          sleep 1
+        rescue => e
+          Rails.logger.error "Error in SSE monitoring loop: #{e.message}"
+          response.stream.write("data: {\"error\": \"Monitoring error\"}\n\n")
+          break
+        end
+      end
+    end
 
     def set_user_timezone
       @user_timezone = params[:user_timezone].presence || session[:user_timezone] || "UTC"
