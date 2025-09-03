@@ -4,13 +4,18 @@ require "ruby-progressbar"
 
 module DataDrip
   class Backfill
-    def initialize(batch_size: 100, sleep_time: 0.1)
+    def initialize(batch_size: 100, sleep_time: DataDrip.sleep_time)
       @batch_size = batch_size
       @sleep_time = sleep_time
     end
 
     def call(start_id: nil, finish_id: nil)
-      scope.in_batches(of: @batch_size, start: start_id, finish: finish_id) do |batch|
+      DataDrip.before_backfill&.call
+      scope.in_batches(
+        of: @batch_size,
+        start: start_id,
+        finish: finish_id
+      ) do |batch|
         process_batch(batch)
         sleep @sleep_time
       end

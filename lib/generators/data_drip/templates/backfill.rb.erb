@@ -1,4 +1,11 @@
+<% if @sorbet_enabled %># typed: strict<% end %>
 class <%= class_name %> < DataDrip::Backfill
+<% if @sorbet_enabled %>  extend T::Sig
+
+  Elem = type_member { { fixed: YourModel } }
+  RelationType = type_member { { fixed: YourModel::RelationType } }
+<% end %>
+<% if @sorbet_enabled %>  sig { returns(RelationType]) }<% end %>
   def scope
     # YourModel.some_scope.where(something: true)
   end
@@ -27,12 +34,14 @@ class <%= class_name %> < DataDrip::Backfill
   #   element.update!(role: 'new_role')
   # end
 
+<% if @sorbet_enabled %>  sig { params(batch: RelationType).void }<% end %>
   def process_batch(batch)
     # Process the whole batch.
     # Example: batch.update_all(column: 'something')
     raise NotImplementedError
   end
 
+<% if @sorbet_enabled %>  sig { params(element: Elem).void }<% end %>
   def process_element(element)
     # Process each element with the changes that you need to do
     # Example: element.update!(attribute: element.other_attribute * 100)
