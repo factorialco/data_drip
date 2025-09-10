@@ -8,7 +8,14 @@ module DataDrip
     validates :finish_id, presence: true
     validates :batch_size, presence: true, numericality: { greater_than: 0 }
 
-    enum :status, %i[pending enqueued running completed failed stopped], validate: true, default: :pending
+    enum status: {
+           pending: 0,
+           enqueued: 1,
+           running: 2,
+           completed: 3,
+           failed: 4,
+           stopped: 5
+         }
 
     after_commit :enqueue, on: :create
 
@@ -21,7 +28,8 @@ module DataDrip
 
     def run!
       running!
-      backfill = backfill_run.backfill_class.new(batch_size: batch_size, sleep_time: 5)
+      backfill =
+        backfill_run.backfill_class.new(batch_size: batch_size, sleep_time: 5)
       backfill.call(start_id: start_id, finish_id: finish_id)
     end
   end

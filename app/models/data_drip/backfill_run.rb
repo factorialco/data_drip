@@ -22,10 +22,14 @@ module DataDrip
 
     after_commit :enqueue
 
-    enum :status,
-         %i[pending enqueued running completed failed stopped],
-         validate: true,
-         default: :pending
+    enum status: {
+           pending: 0,
+           enqueued: 1,
+           running: 2,
+           completed: 3,
+           failed: 4,
+           stopped: 5
+         }
 
     def backfiller_name
       @backfiller_name ||=
