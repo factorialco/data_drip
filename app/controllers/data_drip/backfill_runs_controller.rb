@@ -35,8 +35,8 @@ module DataDrip
         @run.save!
         local_time = @run.start_at.in_time_zone(@user_timezone)
         redirect_to backfill_runs_path,
-          notice:
-            "Backfill job for #{@run.backfill_class_name} has been enqueued. Will run at #{local_time.strftime("%d-%m-%Y, %H:%M:%S %Z")}."
+                    notice:
+                      "Backfill job for #{@run.backfill_class_name} has been enqueued. Will run at #{local_time.strftime("%d-%m-%Y, %H:%M:%S %Z")}."
       else
         flash.now[:alert] = "Error creating backfill run"
         render :new
@@ -76,21 +76,35 @@ module DataDrip
       @backfill_run = DataDrip::BackfillRun.find(params[:id])
 
       render json: {
-        status: @backfill_run.status,
-        status_html: render_to_string(partial: 'status_tag', locals: { status: @backfill_run.status }, formats: [:html]),
-        processed_count: @backfill_run.processed_count,
-        total_count: @backfill_run.total_count,
-        batches_html: render_to_string(partial: 'batches_table', locals: { backfill_run: @backfill_run }, formats: [:html])
-      }
+               status: @backfill_run.status,
+               status_html:
+                 render_to_string(
+                   partial: "status_tag",
+                   locals: {
+                     status: @backfill_run.status
+                   },
+                   formats: [:html]
+                 ),
+               processed_count: @backfill_run.processed_count,
+               total_count: @backfill_run.total_count,
+               batches_html:
+                 render_to_string(
+                   partial: "batches_table",
+                   locals: {
+                     backfill_run: @backfill_run
+                   },
+                   formats: [:html]
+                 )
+             }
     end
 
     def stream
       @backfill_run = DataDrip::BackfillRun.find(params[:id])
 
-      response.headers['Content-Type'] = 'text/event-stream'
-      response.headers['Cache-Control'] = 'no-cache'
-      response.headers['Connection'] = 'keep-alive'
-      response.headers['X-Accel-Buffering'] = 'no'
+      response.headers["Content-Type"] = "text/event-stream"
+      response.headers["Cache-Control"] = "no-cache"
+      response.headers["Connection"] = "keep-alive"
+      response.headers["X-Accel-Buffering"] = "no"
 
       send_initial_data
       monitor_backfill_run
@@ -109,10 +123,14 @@ module DataDrip
         format.html { redirect_back(fallback_location: backfill_runs_path) }
       end
     end
-    
+
     def find_current_backfiller
-      raise "Missing DataDrip.current_backfiller_method, please set it in an initializer (like DataDrip.current_backfiller_method = :current_user" if DataDrip.current_backfiller_method.blank?
-      raise "Invalid DataDrip.current_backfiller_method: #{DataDrip.current_backfiller_method}. Maybe you need to change the `base_controller_class` for DataDrip (currently: #{DataDrip.base_controller_class})?" unless respond_to?(DataDrip.current_backfiller_method)
+      if DataDrip.current_backfiller_method.blank?
+        raise "Missing DataDrip.current_backfiller_method, please set it in an initializer (like DataDrip.current_backfiller_method = :current_user"
+      end
+      unless respond_to?(DataDrip.current_backfiller_method, true)
+        raise "Invalid DataDrip.current_backfiller_method: #{DataDrip.current_backfiller_method}. Maybe you need to change the `base_controller_class` for DataDrip (currently: #{DataDrip.base_controller_class})?"
+      end
       send(DataDrip.current_backfiller_method)
     end
 
@@ -121,16 +139,32 @@ module DataDrip
     def send_initial_data
       data = {
         status: @backfill_run.status,
-        status_html: render_to_string(partial: 'status_tag', locals: { status: @backfill_run.status }, formats: [:html]),
+        status_html:
+          render_to_string(
+            partial: "status_tag",
+            locals: {
+              status: @backfill_run.status
+            },
+            formats: [:html]
+          ),
         processed_count: @backfill_run.processed_count,
         total_count: @backfill_run.total_count,
-        batches_html: render_to_string(partial: "batches_table", locals: { backfill_run: @backfill_run }, formats: [:html])
+        batches_html:
+          render_to_string(
+            partial: "batches_table",
+            locals: {
+              backfill_run: @backfill_run
+            },
+            formats: [:html]
+          )
       }
 
       response.stream.write("data: #{data.to_json}\n\n")
     rescue => e
       Rails.logger.error "Error sending initial SSE data: #{e.message}"
-      response.stream.write("data: {\"error\": \"Failed to send initial data\"}\n\n")
+      response.stream.write(
+        "data: {\"error\": \"Failed to send initial data\"}\n\n"
+      )
     end
 
     def monitor_backfill_run
@@ -145,14 +179,27 @@ module DataDrip
           @backfill_run.reload
 
           if @backfill_run.processed_count != last_processed_count ||
-             @backfill_run.status != last_status
-
+               @backfill_run.status != last_status
             data = {
               status: @backfill_run.status,
-              status_html: render_to_string(partial: 'status_tag', locals: { status: @backfill_run.status }, formats: [:html]),
+              status_html:
+                render_to_string(
+                  partial: "status_tag",
+                  locals: {
+                    status: @backfill_run.status
+                  },
+                  formats: [:html]
+                ),
               processed_count: @backfill_run.processed_count,
               total_count: @backfill_run.total_count,
-              batches_html: render_to_string(partial: "batches_table", locals: { backfill_run: @backfill_run }, formats: [:html])
+              batches_html:
+                render_to_string(
+                  partial: "batches_table",
+                  locals: {
+                    backfill_run: @backfill_run
+                  },
+                  formats: [:html]
+                )
             }
 
             response.stream.write("data: #{data.to_json}\n\n")
@@ -172,8 +219,11 @@ module DataDrip
     end
 
     def set_user_timezone
-      @user_timezone = params[:user_timezone].presence || session[:user_timezone] || "UTC"
-      session[:user_timezone] = @user_timezone if params[:user_timezone].present?
+      @user_timezone =
+        params[:user_timezone].presence || session[:user_timezone] || "UTC"
+      session[:user_timezone] = @user_timezone if params[
+        :user_timezone
+      ].present?
     end
 
     def backfill_run_params
