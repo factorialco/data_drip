@@ -8,14 +8,7 @@ module DataDrip
     validates :finish_id, presence: true
     validates :batch_size, presence: true, numericality: { greater_than: 0 }
 
-    enum status: {
-           pending: 0,
-           enqueued: 1,
-           running: 2,
-           completed: 3,
-           failed: 4,
-           stopped: 5
-         }
+    DataDrip.cross_rails_enum(self, :status, %i[pending enqueued running completed failed stopped])
 
     after_commit :enqueue, on: :create
 

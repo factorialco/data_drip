@@ -22,14 +22,7 @@ module DataDrip
 
     after_commit :enqueue
 
-    enum status: {
-           pending: 0,
-           enqueued: 1,
-           running: 2,
-           completed: 3,
-           failed: 4,
-           stopped: 5
-         }
+    DataDrip.cross_rails_enum(self, :status, %i[pending enqueued running completed failed stopped])
 
     def backfiller_name
       @backfiller_name ||=

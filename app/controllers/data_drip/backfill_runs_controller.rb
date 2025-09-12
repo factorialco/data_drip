@@ -109,6 +109,12 @@ module DataDrip
         format.html { redirect_back(fallback_location: backfill_runs_path) }
       end
     end
+    
+    def find_current_backfiller
+      raise "Missing DataDrip.current_backfiller_method, please set it in an initializer (like DataDrip.current_backfiller_method = :current_user" if DataDrip.current_backfiller_method.blank?
+      raise "Invalid DataDrip.current_backfiller_method: #{DataDrip.current_backfiller_method}. Maybe you need to change the `base_controller_class` for DataDrip (currently: #{DataDrip.base_controller_class})?" unless respond_to?(DataDrip.current_backfiller_method)
+      send(DataDrip.current_backfiller_method)
+    end
 
     private
 
