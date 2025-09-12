@@ -114,7 +114,6 @@ class FixUserEmails < DataDrip::Backfill
   # Option 2: Process individual elements (for complex logic)
   def process_element(element)
     element.update!(email_verified: true)
-    # Send verification email, etc.
   end
 end
 ```
