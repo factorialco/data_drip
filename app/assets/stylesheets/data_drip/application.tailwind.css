@@ -732,7 +732,7 @@
 }
 @layer properties {
   @supports ((-webkit-hyphens: none) and (not (margin-trim: inline))) or
-    ((-moz-orient: inline) and (not (color: rgb(from red r g b)))) {
+    ((-moz-orient: inline) and (not (color: color-mix(in lab, red, red)))) {
     *,
     ::before,
     ::after,
