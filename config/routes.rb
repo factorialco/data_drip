@@ -1,4 +1,6 @@
 DataDrip::Engine.routes.draw do
+  root to: 'backfill_runs#index'
+  
   resources :backfill_runs, only: %i[index show new create destroy] do
     post :stop, on: :member
     get :updates, on: :member
