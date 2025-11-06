@@ -1,7 +1,5 @@
 # typed: strict
 
-require "ruby-progressbar"
-
 module DataDrip
   class Backfill
     def initialize(batch_size: 100, sleep_time: DataDrip.sleep_time)
