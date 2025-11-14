@@ -23,7 +23,12 @@ after_bundle do
   run "bundle install"
 
   # Generate Employee model
-  generate :model, "Employee", "name:string", "age:integer", "role:string"
+  generate :model,
+           "Employee",
+           "name:string",
+           "age:integer",
+           "role:string",
+           "birthday:date"
   generate :model, "User", "name:string"
 
   # Migrate database
@@ -40,7 +45,8 @@ after_bundle do
       Employee.create!(
         name: "Employee \#{i + 1}",
         age: rand(20..60),
-        role: nil
+        role: nil,
+        birthday: nil
       )
     end
     puts "Seeding complete!"
@@ -57,7 +63,7 @@ after_bundle do
   # Update the scope method in the generated backfill
   gsub_file "app/backfills/add_role_to_employee.rb",
             /def scope.*?end/m,
-            "def scope\n    Employee.where(role: nil)\n  end\n"
+            "attribute :age, :integer\ndef scope\n    Employee.where(role: nil)\n  end\n"
 
   # Update all occurrences of the process batch method in the generated backfill
   gsub_file "app/backfills/add_role_to_employee.rb",
@@ -70,7 +76,26 @@ after_bundle do
     end
   end
 
+  # Run DataDrip backfill generator
+  rails_command "generate data_drip:backfill add_birthday_to_employee"
+
+  # Update the scope method in the generated backfill
+  gsub_file "app/backfills/add_birthday_to_employee.rb",
+            /def scope.*?end/m,
+            "attribute :employee_id, :integer\ndef scope\n    Employee.where(birthday: nil)\n  end\n"
+
+  # Update all occurrences of the process batch method in the generated backfill
+  gsub_file "app/backfills/add_birthday_to_employee.rb",
+            /(def |# def )process_batch\(batch\)(?:.|\n)*?end/m do |match|
+    if match.lstrip.start_with?("#")
+      # Comment each line of the replacement
+      "# def process_batch(batch)\n#   batch.update_all(birthday: Date.today)\n# end"
+    else
+      "def process_batch(batch)\n    batch.update_all(birthday: Date.today)\n  end"
+    end
+  end
+
   gsub_file "app/controllers/application_controller.rb",
             "ActionController::Base",
-            "ActionController::Base\n\ndef find_current_backfiller\n  User.first!\nend\n"
+            "ActionController::Base\n\ndef current_user\n  User.first!\nend\n"
 end

@@ -5,19 +5,31 @@ module DataDrip
     def perform(backfill_run)
       backfill_run.running!
 
-      new_backfill = backfill_run.backfill_class.new(batch_size: backfill_run.batch_size, sleep_time: 5)
+      new_backfill =
+        backfill_run.backfill_class.new(
+          batch_size: backfill_run.batch_size,
+          sleep_time: 5,
+          options: backfill_run.options || {}
+        )
       scope = new_backfill.scope
 
-      scope = scope.limit(backfill_run.amount_of_elements) if backfill_run.amount_of_elements.present? && backfill_run.amount_of_elements > 0
+      scope =
+        scope.limit(
+          backfill_run.amount_of_elements
+        ) if backfill_run.amount_of_elements.present? &&
+        backfill_run.amount_of_elements > 0
 
-      batch_ids = scope.find_in_batches(batch_size: backfill_run.batch_size).map do |batch| 
-        { finish_id: batch.last.id,
-          start_id: batch.first.id }
-      end
+      batch_ids =
+        scope
+          .find_in_batches(batch_size: backfill_run.batch_size)
+          .map do |batch|
+            { finish_id: batch.last.id, start_id: batch.first.id }
+          end
 
       backfill_run.update(total_count: new_backfill.count)
 
-      if backfill_run.amount_of_elements.present? && backfill_run.amount_of_elements < backfill_run.batch_size
+      if backfill_run.amount_of_elements.present? &&
+           backfill_run.amount_of_elements < backfill_run.batch_size
         backfill_run.batch_size = backfill_run.amount_of_elements
         backfill_run.save
       end

@@ -2,9 +2,31 @@
 
 module DataDrip
   class Backfill
-    def initialize(batch_size: 100, sleep_time: DataDrip.sleep_time)
+    def self.attribute(
+      name,
+      type = nil,
+      default: (no_default = true),
+      **options
+    )
+      backfill_options.attribute(name, type, default: default, **options)
+    end
+
+    def self.backfill_options
+      @backfill_options ||=
+        Class.new do
+          include ActiveModel::API
+          include ActiveModel::Attributes
+        end
+    end
+
+    def initialize(
+      batch_size: 100,
+      sleep_time: DataDrip.sleep_time,
+      options: {}
+    )
       @batch_size = batch_size
       @sleep_time = sleep_time
+      @options = options
     end
 
     def call(start_id: nil, finish_id: nil)
@@ -26,6 +48,8 @@ module DataDrip
     def explain
       pp scope.explain
     end
+
+    attr_reader :options
 
     protected
 

@@ -124,6 +124,36 @@ module DataDrip
       end
     end
 
+    def backfill_options
+      backfill_class_name = params[:backfill_class_name]
+
+      if backfill_class_name.blank? ||
+           backfill_class_name == "Select a backfill class"
+        render json: { html: "" }
+        return
+      end
+
+      backfill_class =
+        DataDrip.all.find { |klass| klass.name == backfill_class_name }
+
+      if backfill_class.nil?
+        render json: { html: "" }
+        return
+      end
+
+      # Create a temporary backfill run to use with the helper
+      temp_run =
+        DataDrip::BackfillRun.new(
+          backfill_class_name: backfill_class_name,
+          options: {
+          }
+        )
+
+      html = helpers.backfill_option_inputs(temp_run)
+
+      render json: { html: html }
+    end
+
     def find_current_backfiller
       if DataDrip.current_backfiller_method.blank?
         raise "Missing DataDrip.current_backfiller_method, please set it in an initializer (like DataDrip.current_backfiller_method = :current_user"
@@ -231,7 +261,9 @@ module DataDrip
         :backfill_class_name,
         :batch_size,
         :start_at,
-        :amount_of_elements
+        :amount_of_elements,
+        options: {
+        }
       )
     end
 

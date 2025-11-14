@@ -35,6 +35,9 @@
         <%= f.number_field :amount_of_elements, class: "block w-full mt-1 rounded border border-gray-200  focus:ring focus:ring-blue-200 focus:border-blue-400 px-3 py-2", min: 0, step: 10 %>
       </div>
 
+      <!-- Dynamic backfill options container -->
+      <div id="backfill-options-container"></div>
+
       <div class="mb-6">
         <%= f.label :start_at, "RUN SHOULD START AT", class: "block text-gray-500 font-semibold mb-2" %>
         <%= f.datetime_field :start_at, value: "", class: "block w-full mt-1 rounded border border-gray-200 focus:ring focus:ring-blue-200 focus:border-blue-400 px-3 py-2" %>
@@ -52,6 +55,39 @@
     var timeZoneInput = document.getElementById("user_timezone");
     if (timeZoneInput) { 
       timeZoneInput.value = timeZone; 
+    }
+
+    // Handle backfill class selection change
+    var backfillClassSelect = document.getElementById("backfill_run_backfill_class_name");
+    var optionsContainer = document.getElementById("backfill-options-container");
+    
+    if (backfillClassSelect && optionsContainer) {
+      backfillClassSelect.addEventListener("change", function() {
+        var selectedClass = this.value;
+        
+        // Clear existing options
+        optionsContainer.innerHTML = "";
+        
+        if (selectedClass && selectedClass !== "Select a backfill class") {
+          // Fetch new options via AJAX
+          fetch("<%= backfill_options_backfill_runs_path %>?backfill_class_name=" + encodeURIComponent(selectedClass), {
+            method: "GET",
+            headers: {
+              "Accept": "application/json",
+              "X-Requested-With": "XMLHttpRequest"
+            }
+          })
+          .then(response => response.json())
+          .then(data => {
+            if (data.html) {
+              optionsContainer.innerHTML = data.html;
+            }
+          })
+          .catch(error => {
+            console.error("Error fetching backfill options:", error);
+          });
+        }
+      });
     }
   });
 </script>
