@@ -109,11 +109,16 @@ module DataDrip
       send_initial_data
       monitor_backfill_run
     rescue IOError, ActionController::Live::ClientDisconnected
-      Rails.logger.info "SSE client disconnected for backfill run #{@backfill_run.id}"
+      Rails.logger.info "SSE client disconnected for backfill run #{@backfill_run&.id}"
     rescue => e
-      Rails.logger.error "SSE error for backfill run #{@backfill_run.id}: #{e.message}"
+      Rails.logger.error "SSE error for backfill run #{@backfill_run&.id}: #{e.message}"
+      Rails.logger.error e.backtrace.join("\n")
     ensure
-      response.stream.close if response.stream
+      begin
+        response.stream.close if response.stream&.respond_to?(:close)
+      rescue => e
+        Rails.logger.error "Error closing SSE stream: #{e.message}"
+      end
     end
 
     def set_timezone
@@ -200,10 +205,23 @@ module DataDrip
     def monitor_backfill_run
       last_processed_count = @backfill_run.processed_count
       last_status = @backfill_run.status
-      timeout = 30.minutes.from_now
+      timeout = 5.minutes.from_now
 
       loop do
         break if Time.current > timeout
+        
+        # More aggressive client connection check
+        begin
+          # Try to write data - this will fail if client disconnected
+          response.stream.write("event: ping\ndata: {}\n\n")
+          response.stream.flush if response.stream.respond_to?(:flush)
+        rescue IOError, ActionController::Live::ClientDisconnected, Errno::EPIPE, Errno::ECONNRESET
+          Rails.logger.info "SSE client disconnected during monitoring for backfill run #{@backfill_run.id}"
+          break
+        rescue => e
+          Rails.logger.error "SSE connection error: #{e.class} - #{e.message}"
+          break
+        end
 
         begin
           @backfill_run.reload
@@ -239,7 +257,7 @@ module DataDrip
             break if %w[completed failed stopped].include?(@backfill_run.status)
           end
 
-          sleep 1
+          sleep 2
         rescue => e
           Rails.logger.error "Error in SSE monitoring loop: #{e.message}"
           response.stream.write("data: {\"error\": \"Monitoring error\"}\n\n")

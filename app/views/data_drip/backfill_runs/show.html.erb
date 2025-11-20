@@ -77,11 +77,21 @@
             <p class="text-sm font-light text-left mt-0.5"><span class="font-semibold">Total:</span>
               <span data-backfill-run-updates-target="totalCount">
                 <%= @backfill_run.total_count %>
-              </span></p>
+              </span>
+            </p>
+            <% if @backfill_run.options.present? %>
+              <p class="text-sm font-light text-left mt-0.5"><span class="font-semibold">Filtered by:</span>
+                <span data-backfill-run-updates-target="totalCount">
+                  <% @backfill_run.options.each do |key, value| %>
+                    <%= "#{key} = #{value}" %>
+                  <% end %>
+                </span>
+              </p>
+            <% end %>
           </div>
           <div class="flex-1 flex flex-col gap-1">
             <p class="text-sm font-light text-left mt-0.5"><span class="font-semibold">Batch Size:</span>
-              <%= @backfill_run.batch_size %></p>
+              <%= @backfill_run.batches.first&.batch_size || @backfill_run.batch_size %></p>
             <p class="text-sm font-light text-left mt-0.5"><span class="font-semibold">Created At:</span>
               <%= format_datetime_in_user_timezone(@backfill_run.created_at, @user_timezone) %>
             </p>
@@ -111,6 +121,9 @@
               <tr>
                 <th class="py-2 px-4 text-gray-400 font-semibold text-sm">STATUS</th>
                 <th class="py-2 px-4 text-gray-400 font-semibold text-sm">BATCH SIZE</th>
+                <th class="py-2 px-4 text-gray-400 font-semibold text-sm">FINISHED AT</th>
+                <th class="py-2 px-4 text-gray-400 font-semibold text-sm">START ID</th>
+                <th class="py-2 px-4 text-gray-400 font-semibold text-sm">FINISH ID</th>
                 <th class="py-2 px-4 text-gray-400 font-semibold text-sm">ERRORS</th>
               </tr>
             </thead>

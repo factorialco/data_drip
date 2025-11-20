@@ -12,6 +12,21 @@ module DataDrip
           options: backfill_run.options || {}
         )
       scope = new_backfill.scope
+      
+      # Apply options as dynamic filters to the scope for efficient batch creation
+      if backfill_run.options.present?
+        backfill_run.options.each do |key, value|
+          next unless value.present?
+          
+          if backfill_run.backfill_class.backfill_options.attribute_types[key.to_s]
+            attribute_type = backfill_run.backfill_class.backfill_options.attribute_types[key.to_s]
+            converted_value = attribute_type.cast(value)
+            scope = scope.where(key => converted_value)
+          else
+            scope = scope.where(key => value)
+          end
+        end
+      end
 
       scope =
         scope.limit(
@@ -23,10 +38,14 @@ module DataDrip
         scope
           .find_in_batches(batch_size: backfill_run.batch_size)
           .map do |batch|
-            { finish_id: batch.last.id, start_id: batch.first.id }
+            { 
+              finish_id: batch.last.id, 
+              start_id: batch.first.id,
+              actual_size: batch.size
+            }
           end
 
-      backfill_run.update(total_count: new_backfill.count)
+      backfill_run.update(total_count: scope.count)
 
       if backfill_run.amount_of_elements.present? &&
            backfill_run.amount_of_elements < backfill_run.batch_size
@@ -39,7 +58,7 @@ module DataDrip
           BackfillRunBatch.create!(
             backfill_run: backfill_run,
             status: :pending,
-            batch_size: backfill_run.batch_size,
+            batch_size: batch[:actual_size],
             start_id: batch[:start_id],
             finish_id: batch[:finish_id]
           )

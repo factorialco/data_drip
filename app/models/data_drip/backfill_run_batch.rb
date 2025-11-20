@@ -33,6 +33,8 @@ module DataDrip
         )
 
       # Apply options as dynamic filters to the scope
+      # Note: This filtering also happens in Dripper for efficient batch creation,
+      # but we need it here too because migration.call() uses the unfiltered scope
       filtered_scope = migration.scope
       if backfill_run.options.present?
         backfill_run.options.each do |key, value|

@@ -29,7 +29,8 @@ module DataDrip
 
       user_timezone = user_timezone.presence || "UTC"
       local_time = datetime.in_time_zone(user_timezone)
-      local_time.strftime("%d-%m-%Y, %H:%M:%S %Z")
+      
+      local_time.strftime("%b %d, %H:%M")
     end
 
     def backfill_option_inputs(backfill_run)
