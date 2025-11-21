@@ -31,14 +31,12 @@ module DataDrip
           backfill_run_params.merge(backfiller: find_current_backfiller)
         )
 
-      if @run.valid?
-        @run.save!
+      if @run.save
         local_time = @run.start_at.in_time_zone(@user_timezone)
         redirect_to backfill_runs_path,
                     notice:
                       "Backfill job for #{@run.backfill_class_name} has been enqueued. Will run at #{local_time.strftime("%d-%m-%Y, %H:%M:%S %Z")}."
       else
-        flash.now[:alert] = "Error creating backfill run"
         render :new
       end
     end
@@ -209,13 +207,16 @@ module DataDrip
 
       loop do
         break if Time.current > timeout
-        
+
         # More aggressive client connection check
         begin
           # Try to write data - this will fail if client disconnected
           response.stream.write("event: ping\ndata: {}\n\n")
           response.stream.flush if response.stream.respond_to?(:flush)
-        rescue IOError, ActionController::Live::ClientDisconnected, Errno::EPIPE, Errno::ECONNRESET
+        rescue IOError,
+               ActionController::Live::ClientDisconnected,
+               Errno::EPIPE,
+               Errno::ECONNRESET
           Rails.logger.info "SSE client disconnected during monitoring for backfill run #{@backfill_run.id}"
           break
         rescue => e

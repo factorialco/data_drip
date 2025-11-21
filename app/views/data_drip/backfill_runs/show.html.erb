@@ -80,9 +80,10 @@
               </span>
             </p>
             <% if @backfill_run.options.present? %>
-              <p class="text-sm font-light text-left mt-0.5"><span class="font-semibold">Filtered by:</span>
+              <p class="text-sm font-light text-left mt-0.5"><span class="font-semibold">Options:</span>
                 <span data-backfill-run-updates-target="totalCount">
                   <% @backfill_run.options.each do |key, value| %>
+                    <% next if value.blank? %>
                     <%= "#{key} = #{value}" %>
                   <% end %>
                 </span>

@@ -22,11 +22,17 @@ RSpec.configure do |config|
   end
 
   config.before :each do
-    DataDrip::BackfillRunBatch.delete_all
-    DataDrip::BackfillRun.delete_all
-    Employee.delete_all
-    User.delete_all
+    if defined?(DataDrip::BackfillRunBatch)
+      DataDrip::BackfillRunBatch.delete_all
+    end
+    DataDrip::BackfillRun.delete_all if defined?(DataDrip::BackfillRun)
+    Employee.delete_all if defined?(Employee)
+    User.delete_all if defined?(User)
 
-    ActiveRecord::Base.connection.execute("DELETE FROM sqlite_sequence WHERE name IN ('users', 'employees', 'data_drip_backfill_runs', 'data_drip_backfill_run_batches')") if ActiveRecord::Base.connection.adapter_name == 'SQLite'
+    if ActiveRecord::Base.connection.adapter_name == "SQLite"
+      ActiveRecord::Base.connection.execute(
+        "DELETE FROM sqlite_sequence WHERE name IN ('users', 'employees', 'data_drip_backfill_runs', 'data_drip_backfill_run_batches')"
+      )
+    end
   end
 end

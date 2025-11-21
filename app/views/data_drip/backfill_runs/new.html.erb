@@ -1,6 +1,7 @@
-<div class="min-h-screen flex items-center justify-center bg-gradient-to-r from-slate-700 to-gray-900">
+
+<div class="min-h-screen flex items-center justify-center m-8 bg-gradient-to-r from-slate-700 to-gray-900">
   <div class="w-full max-w-lg">
-    <%= form_with model: @run, url: backfill_runs_path, local: true, html: { class: "bg-white p-10 md:p-14 rounded-lg" } do |f| %>
+    <%= form_with model: @run, url: backfill_runs_path, local: true, html: { class: "bg-white p-10 md:p-14 rounded-lg", "data-turbo": "false" } do |f| %>
       <h1 class="text-4xl md:text-5xl font-semibold text-center mb-10 text-gray-700">New Backfill Run</h1>
       <% if @run.errors.any? %>
         <div class="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-6">
@@ -43,7 +44,7 @@
       </div>
       <%= hidden_field_tag :user_timezone, "", id: "user_timezone" %>
       <div class="flex justify-center">
-        <%= f.submit "Create Backfill Run", class: "text-white font-bold py-2 px-4 rounded gradient-btn" %>
+        <%= f.submit "Create Backfill Run", id: "submit-btn", class: "text-white font-bold py-2 px-4 rounded gradient-btn" %>
       </div>
     <% end %>
   </div>
@@ -105,10 +106,23 @@
 
   document.addEventListener("DOMContentLoaded", initializeBackfillForm);
   
-  if (document.readyState === "loading") {
-  } else {
+  if (document.readyState !== "loading") {
     initializeBackfillForm();
   }
+
+  document.addEventListener("DOMContentLoaded", function() {
+    var form = document.querySelector('form[action*="backfill_runs"]');
+    var submitBtn = document.getElementById("submit-btn");
+    
+    if (form && submitBtn) {
+      form.addEventListener("submit", function() {
+        submitBtn.disabled = true;
+        submitBtn.textContent = "Creating...";
+        submitBtn.classList.add("opacity-50", "cursor-not-allowed");
+      });
+    }
+  });
+  
 </script>
 
 

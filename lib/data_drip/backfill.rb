@@ -2,17 +2,17 @@
 
 module DataDrip
   class Backfill
-    def self.attribute(
-      name,
-      type = nil,
-      default: (no_default = true),
-      **options
-    )
-      backfill_options.attribute(name, type, default: default, **options)
+    def self.attribute(name, type = nil, default: nil, **options)
+      if instance_methods.include?(name.to_sym)
+        raise "Method #{name} already defined in #{self.class.name}"
+      end
+
+      backfill_options_class.attribute(name, type, default: default, **options)
+      define_method(name) { backfill_options.public_send(name) }
     end
 
-    def self.backfill_options
-      @backfill_options ||=
+    def self.backfill_options_class
+      @backfill_options_class ||=
         Class.new do
           include ActiveModel::API
           include ActiveModel::Attributes
@@ -22,11 +22,12 @@ module DataDrip
     def initialize(
       batch_size: 100,
       sleep_time: DataDrip.sleep_time,
-      options: {}
+      backfill_options: {}
     )
       @batch_size = batch_size
       @sleep_time = sleep_time
-      @options = options
+      @backfill_options =
+        self.class.backfill_options_class.new(backfill_options)
     end
 
     def call(start_id: nil, finish_id: nil)
@@ -49,7 +50,7 @@ module DataDrip
       pp scope.explain
     end
 
-    attr_reader :options
+    attr_reader :backfill_options
 
     protected
 
