@@ -66,7 +66,6 @@ module DataDrip
 
     def validate_scope
       return unless backfill_class
-      return unless backfill_class.respond_to?(:new)
 
       begin
         backfill =
@@ -75,7 +74,7 @@ module DataDrip
             sleep_time: 5,
             backfill_options: options || {}
           )
-        scope = backfill.send(:scope)
+        scope = backfill.scope
 
         if amount_of_elements.present? && amount_of_elements > 0
           scope = scope.limit(amount_of_elements)

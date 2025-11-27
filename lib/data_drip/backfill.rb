@@ -52,6 +52,10 @@ module DataDrip
 
     attr_reader :backfill_options
 
+    def scope
+      raise NotImplementedError
+    end
+
     protected
 
     def process_batch(batch)
@@ -59,10 +63,6 @@ module DataDrip
     end
 
     def process_element(element)
-      raise NotImplementedError
-    end
-
-    def scope
       raise NotImplementedError
     end
   end

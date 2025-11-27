@@ -97,7 +97,7 @@ RSpec.describe DataDrip::Backfill, type: :model do
     it "raises NotImplementedError for scope when not defined" do
       backfill = minimal_backfill_class.new
 
-      expect { backfill.send(:scope) }.to raise_error(NotImplementedError)
+      expect { backfill.scope }.to raise_error(NotImplementedError)
     end
 
     it "raises NotImplementedError for process_element when not defined" do
@@ -116,7 +116,7 @@ RSpec.describe DataDrip::Backfill, type: :model do
     it "delegates to scope.count" do
       backfill = test_backfill_class.new
 
-      expect(backfill.count).to eq(backfill.send(:scope).count)
+      expect(backfill.count).to eq(backfill.scope.count)
       expect(backfill.count).to eq(2)
     end
 
@@ -146,7 +146,7 @@ RSpec.describe DataDrip::Backfill, type: :model do
     it "works end-to-end with real data" do
       backfill = test_backfill_class.new(backfill_options: { age: 25 })
 
-      scope = backfill.send(:scope)
+      scope = backfill.scope
       expect(scope.count).to eq(1)
       expect(scope.first.name).to eq("John")
 
