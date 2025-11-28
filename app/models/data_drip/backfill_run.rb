@@ -22,7 +22,11 @@ module DataDrip
 
     after_commit :enqueue
 
-    DataDrip.cross_rails_enum(self, :status, %i[pending enqueued running completed failed stopped])
+    DataDrip.cross_rails_enum(
+      self,
+      :status,
+      %i[pending enqueued running completed failed stopped]
+    )
 
     def backfiller_name
       @backfiller_name ||=
@@ -63,14 +67,29 @@ module DataDrip
     def validate_scope
       return unless backfill_class
 
-      backfill = backfill_class.new
-      scope = backfill.scope
-      return unless scope.count.zero?
+      begin
+        backfill =
+          backfill_class.new(
+            batch_size: batch_size || 100,
+            sleep_time: 5,
+            backfill_options: options || {}
+          )
+        scope = backfill.scope
 
-      errors.add(
-        :backfill_class_name,
-        "No records to process for #{backfill_class.name}. No jobs enqueued."
-      )
+        if amount_of_elements.present? && amount_of_elements > 0
+          scope = scope.limit(amount_of_elements)
+        end
+
+        final_count = scope.count
+        return unless final_count.zero?
+
+        errors.add(
+          :base,
+          "No records to process with the current configuration. Please adjust your options or select a different backfill class."
+        )
+      rescue ActiveModel::UnknownAttributeError => e
+        errors.add(:options, "contains unknown attributes: #{e.message}")
+      end
     end
 
     def start_at_must_be_valid_datetime

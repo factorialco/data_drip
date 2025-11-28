@@ -2,6 +2,7 @@ PATH
   remote: .
   specs:
     data_drip (0.1.0)
+      activemodel (>= 7.1)
       importmap-rails (>= 1.2.1)
       rails (>= 7.1)
       stimulus-rails (>= 1.0)

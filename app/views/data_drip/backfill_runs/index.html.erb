@@ -60,7 +60,7 @@
               </tr>
             </thead>
             <tbody>
-              <% @backfill_runs.each do |backfill_run| %>
+              <% @backfill_runs.reverse.each do |backfill_run| %>
                 <tr class="border-b border-gray-100 last:border-b-0">
                   <td class="py-3 px-4 text-gray-700 font-semibold align-middle"><%= link_to backfill_run.backfill_class_name, backfill_run_path(backfill_run) %></td>
                   <td class="py-3 px-4 text-gray-700 align-middle"><%= status_tag(backfill_run.status) %></td>

@@ -33,6 +33,8 @@ Gem::Specification.new do |spec|
   spec.executables = spec.files.grep(%r{\Aexe/}) { |f| File.basename(f) }
   spec.require_paths = %w[lib app config]
 
+  spec.add_dependency "activemodel", ">= 7.1"
+
   spec.add_dependency "rails", ">= 7.1"
 
   spec.add_dependency "importmap-rails", ">= 1.2.1"

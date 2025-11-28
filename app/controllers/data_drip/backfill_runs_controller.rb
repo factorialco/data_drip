@@ -31,14 +31,12 @@ module DataDrip
           backfill_run_params.merge(backfiller: find_current_backfiller)
         )
 
-      if @run.valid?
-        @run.save!
+      if @run.save
         local_time = @run.start_at.in_time_zone(@user_timezone)
         redirect_to backfill_runs_path,
                     notice:
                       "Backfill job for #{@run.backfill_class_name} has been enqueued. Will run at #{local_time.strftime("%d-%m-%Y, %H:%M:%S %Z")}."
       else
-        flash.now[:alert] = "Error creating backfill run"
         render :new
       end
     end
@@ -109,11 +107,16 @@ module DataDrip
       send_initial_data
       monitor_backfill_run
     rescue IOError, ActionController::Live::ClientDisconnected
-      Rails.logger.info "SSE client disconnected for backfill run #{@backfill_run.id}"
+      Rails.logger.info "SSE client disconnected for backfill run #{@backfill_run&.id}"
     rescue => e
-      Rails.logger.error "SSE error for backfill run #{@backfill_run.id}: #{e.message}"
+      Rails.logger.error "SSE error for backfill run #{@backfill_run&.id}: #{e.message}"
+      Rails.logger.error e.backtrace.join("\n")
     ensure
-      response.stream.close if response.stream
+      begin
+        response.stream.close if response.stream&.respond_to?(:close)
+      rescue => e
+        Rails.logger.error "Error closing SSE stream: #{e.message}"
+      end
     end
 
     def set_timezone
@@ -122,6 +125,36 @@ module DataDrip
         format.json { render json: { success: true } }
         format.html { redirect_back(fallback_location: backfill_runs_path) }
       end
+    end
+
+    def backfill_options
+      backfill_class_name = params[:backfill_class_name]
+
+      if backfill_class_name.blank? ||
+           backfill_class_name == "Select a backfill class"
+        render json: { html: "" }
+        return
+      end
+
+      backfill_class =
+        DataDrip.all.find { |klass| klass.name == backfill_class_name }
+
+      if backfill_class.nil?
+        render json: { html: "" }
+        return
+      end
+
+      # Create a temporary backfill run to use with the helper
+      temp_run =
+        DataDrip::BackfillRun.new(
+          backfill_class_name: backfill_class_name,
+          options: {
+          }
+        )
+
+      html = helpers.backfill_option_inputs(temp_run)
+
+      render json: { html: html }
     end
 
     def find_current_backfiller
@@ -170,10 +203,26 @@ module DataDrip
     def monitor_backfill_run
       last_processed_count = @backfill_run.processed_count
       last_status = @backfill_run.status
-      timeout = 30.minutes.from_now
+      timeout = 5.minutes.from_now
 
       loop do
         break if Time.current > timeout
+
+        # More aggressive client connection check
+        begin
+          # Try to write data - this will fail if client disconnected
+          response.stream.write("event: ping\ndata: {}\n\n")
+          response.stream.flush if response.stream.respond_to?(:flush)
+        rescue IOError,
+               ActionController::Live::ClientDisconnected,
+               Errno::EPIPE,
+               Errno::ECONNRESET
+          Rails.logger.info "SSE client disconnected during monitoring for backfill run #{@backfill_run.id}"
+          break
+        rescue => e
+          Rails.logger.error "SSE connection error: #{e.class} - #{e.message}"
+          break
+        end
 
         begin
           @backfill_run.reload
@@ -209,7 +258,7 @@ module DataDrip
             break if %w[completed failed stopped].include?(@backfill_run.status)
           end
 
-          sleep 1
+          sleep 2
         rescue => e
           Rails.logger.error "Error in SSE monitoring loop: #{e.message}"
           response.stream.write("data: {\"error\": \"Monitoring error\"}\n\n")
@@ -231,7 +280,9 @@ module DataDrip
         :backfill_class_name,
         :batch_size,
         :start_at,
-        :amount_of_elements
+        :amount_of_elements,
+        options: {
+        }
       )
     end
 

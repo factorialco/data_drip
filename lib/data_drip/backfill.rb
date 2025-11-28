@@ -2,9 +2,32 @@
 
 module DataDrip
   class Backfill
-    def initialize(batch_size: 100, sleep_time: DataDrip.sleep_time)
+    def self.attribute(name, type = nil, default: nil, **options)
+      if instance_methods.include?(name.to_sym)
+        raise "Method #{name} already defined in #{self.class.name}"
+      end
+
+      backfill_options_class.attribute(name, type, default: default, **options)
+      define_method(name) { backfill_options.public_send(name) }
+    end
+
+    def self.backfill_options_class
+      @backfill_options_class ||=
+        Class.new do
+          include ActiveModel::API
+          include ActiveModel::Attributes
+        end
+    end
+
+    def initialize(
+      batch_size: 100,
+      sleep_time: DataDrip.sleep_time,
+      backfill_options: {}
+    )
       @batch_size = batch_size
       @sleep_time = sleep_time
+      @backfill_options =
+        self.class.backfill_options_class.new(backfill_options)
     end
 
     def call(start_id: nil, finish_id: nil)
@@ -27,6 +50,12 @@ module DataDrip
       pp scope.explain
     end
 
+    attr_reader :backfill_options
+
+    def scope
+      raise NotImplementedError
+    end
+
     protected
 
     def process_batch(batch)
@@ -34,10 +63,6 @@ module DataDrip
     end
 
     def process_element(element)
-      raise NotImplementedError
-    end
-
-    def scope
       raise NotImplementedError
     end
   end

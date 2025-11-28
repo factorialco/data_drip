@@ -2,6 +2,9 @@
   <tr class="border-b border-gray-100 last:border-b-0">
     <td class="py-3 px-4 text-gray-700 align-middle"><%= status_tag(batch.status) %></td>
     <td class="py-3 px-4 text-gray-700 align-middle"><%= batch.batch_size %></td>
+    <td class="py-3 px-4 text-gray-700 align-middle"><%= format_datetime_in_user_timezone(batch.updated_at, @user_timezone) %></td>
+    <td class="py-3 px-4 text-gray-700 align-middle"><%= batch.start_id %></td>
+    <td class="py-3 px-4 text-gray-700 align-middle"><%= batch.finish_id %></td>
     <td class="py-3 px-4 text-red-700 align-middle"><%= batch.error_message %></td>
   </tr>
 <% end %>
