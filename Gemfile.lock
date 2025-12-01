@@ -232,9 +232,23 @@ GEM
       rubocop-ast (>= 1.44.0, < 2.0)
       ruby-progressbar (~> 1.7)
       unicode-display_width (>= 2.4.0, < 4.0)
-    rubocop-ast (1.44.1)
+    rubocop-ast (1.48.0)
       parser (>= 3.3.7.2)
       prism (~> 1.4)
+    rubocop-performance (1.26.1)
+      lint_roller (~> 1.1)
+      rubocop (>= 1.75.0, < 2.0)
+      rubocop-ast (>= 1.47.1, < 2.0)
+    rubocop-rails (2.34.1)
+      activesupport (>= 4.2.0)
+      lint_roller (~> 1.1)
+      rack (>= 1.1)
+      rubocop (>= 1.75.0, < 2.0)
+      rubocop-ast (>= 1.44.0, < 2.0)
+    rubocop-rails-omakase (1.1.0)
+      rubocop (>= 1.72)
+      rubocop-performance (>= 1.24)
+      rubocop-rails (>= 2.30)
     ruby-progressbar (1.13.0)
     securerandom (0.4.1)
     sqlite3 (2.7.2-arm64-darwin)
@@ -273,6 +287,7 @@ DEPENDENCIES
   rspec (~> 3.0)
   rspec-rails (>= 8.0)
   rubocop (~> 1.21)
+  rubocop-rails-omakase
   sqlite3
 
 BUNDLED WITH

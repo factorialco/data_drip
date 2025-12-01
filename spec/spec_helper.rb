@@ -22,9 +22,7 @@ RSpec.configure do |config|
   end
 
   config.before :each do
-    if defined?(DataDrip::BackfillRunBatch)
-      DataDrip::BackfillRunBatch.delete_all
-    end
+    DataDrip::BackfillRunBatch.delete_all if defined?(DataDrip::BackfillRunBatch)
     DataDrip::BackfillRun.delete_all if defined?(DataDrip::BackfillRun)
     Employee.delete_all if defined?(Employee)
     User.delete_all if defined?(User)

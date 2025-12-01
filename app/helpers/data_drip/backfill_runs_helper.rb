@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 module DataDrip
   module BackfillRunsHelper
     def status_tag(status)
@@ -51,66 +53,66 @@ module DataDrip
 
         inputs_content =
           attribute_types
-            .map do |name, type|
-              content_tag :div, class: "mb-6" do
-                label_content =
-                  label_tag "backfill_run[options][#{name}]",
-                            name.to_s.upcase,
-                            class: "block text-gray-500 font-semibold mb-2"
+          .map do |name, type|
+            content_tag :div, class: "mb-6" do
+              label_content =
+                label_tag "backfill_run[options][#{name}]",
+                          name.to_s.upcase,
+                          class: "block text-gray-500 font-semibold mb-2"
 
-                input_content =
-                  case type
-                  when ActiveModel::Type::String,
-                       ActiveModel::Type::ImmutableString
-                    text_field_tag "backfill_run[options][#{name}]",
+              input_content =
+                case type
+                when ActiveModel::Type::String,
+                     ActiveModel::Type::ImmutableString
+                  text_field_tag "backfill_run[options][#{name}]",
+                                 backfill_run.options[name],
+                                 class: input_class
+                when ActiveModel::Type::Integer, ActiveModel::Type::BigInteger
+                  number_field_tag "backfill_run[options][#{name}]",
                                    backfill_run.options[name],
-                                   class: input_class
-                  when ActiveModel::Type::Integer, ActiveModel::Type::BigInteger
-                    number_field_tag "backfill_run[options][#{name}]",
-                                     backfill_run.options[name],
-                                     class: input_class,
-                                     step: 1
-                  when ActiveModel::Type::Decimal, ActiveModel::Type::Float
-                    number_field_tag "backfill_run[options][#{name}]",
-                                     backfill_run.options[name],
-                                     class: input_class,
-                                     step: 0.01
-                  when ActiveModel::Type::Boolean
-                    content_tag :div, class: "flex items-center" do
-                      check_box_tag(
+                                   class: input_class,
+                                   step: 1
+                when ActiveModel::Type::Decimal, ActiveModel::Type::Float
+                  number_field_tag "backfill_run[options][#{name}]",
+                                   backfill_run.options[name],
+                                   class: input_class,
+                                   step: 0.01
+                when ActiveModel::Type::Boolean
+                  content_tag :div, class: "flex items-center" do
+                    check_box_tag(
+                      "backfill_run[options][#{name}]",
+                      "1",
+                      backfill_run.options[name],
+                      class: "mr-2"
+                    ) +
+                      label_tag(
                         "backfill_run[options][#{name}]",
-                        "1",
-                        backfill_run.options[name],
-                        class: "mr-2"
-                      ) +
-                        label_tag(
-                          "backfill_run[options][#{name}]",
-                          "Yes",
-                          class: "text-gray-700"
-                        )
-                    end
-                  when ActiveModel::Type::Date
-                    date_field_tag "backfill_run[options][#{name}]",
-                                   backfill_run.options[name],
-                                   class: input_class
-                  when ActiveModel::Type::Time
-                    time_field_tag "backfill_run[options][#{name}]",
-                                   backfill_run.options[name],
-                                   class: input_class
-                  when ActiveModel::Type::DateTime
-                    datetime_field_tag "backfill_run[options][#{name}]",
-                                       backfill_run.options[name],
-                                       class: input_class
-                  else
-                    text_area_tag "backfill_run[options][#{name}]",
-                                  backfill_run.options[name],
-                                  class: input_class,
-                                  rows: 3
+                        "Yes",
+                        class: "text-gray-700"
+                      )
                   end
+                when ActiveModel::Type::Date
+                  date_field_tag "backfill_run[options][#{name}]",
+                                 backfill_run.options[name],
+                                 class: input_class
+                when ActiveModel::Type::Time
+                  time_field_tag "backfill_run[options][#{name}]",
+                                 backfill_run.options[name],
+                                 class: input_class
+                when ActiveModel::Type::DateTime
+                  datetime_field_tag "backfill_run[options][#{name}]",
+                                     backfill_run.options[name],
+                                     class: input_class
+                else
+                  text_area_tag "backfill_run[options][#{name}]",
+                                backfill_run.options[name],
+                                class: input_class,
+                                rows: 3
+                end
 
-                label_content + input_content
-              end
+              label_content + input_content
             end
+          end
             .join
             .html_safe
 

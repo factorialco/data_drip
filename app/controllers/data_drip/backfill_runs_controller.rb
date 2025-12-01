@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 module DataDrip
   class BackfillRunsController < DataDrip.base_controller_class.constantize
     layout "data_drip/layouts/application"
@@ -74,26 +76,26 @@ module DataDrip
       @backfill_run = DataDrip::BackfillRun.find(params[:id])
 
       render json: {
-               status: @backfill_run.status,
-               status_html:
+        status: @backfill_run.status,
+        status_html:
                  render_to_string(
                    partial: "status_tag",
                    locals: {
                      status: @backfill_run.status
                    },
-                   formats: [:html]
+                   formats: [ :html ]
                  ),
-               processed_count: @backfill_run.processed_count,
-               total_count: @backfill_run.total_count,
-               batches_html:
+        processed_count: @backfill_run.processed_count,
+        total_count: @backfill_run.total_count,
+        batches_html:
                  render_to_string(
                    partial: "batches_table",
                    locals: {
                      backfill_run: @backfill_run
                    },
-                   formats: [:html]
+                   formats: [ :html ]
                  )
-             }
+      }
     end
 
     def stream
@@ -108,13 +110,13 @@ module DataDrip
       monitor_backfill_run
     rescue IOError, ActionController::Live::ClientDisconnected
       Rails.logger.info "SSE client disconnected for backfill run #{@backfill_run&.id}"
-    rescue => e
+    rescue StandardError => e
       Rails.logger.error "SSE error for backfill run #{@backfill_run&.id}: #{e.message}"
       Rails.logger.error e.backtrace.join("\n")
     ensure
       begin
-        response.stream.close if response.stream&.respond_to?(:close)
-      rescue => e
+        response.stream.close if response.stream.respond_to?(:close)
+      rescue StandardError => e
         Rails.logger.error "Error closing SSE stream: #{e.message}"
       end
     end
@@ -123,7 +125,7 @@ module DataDrip
       session[:user_timezone] = params[:timezone] if params[:timezone].present?
       respond_to do |format|
         format.json { render json: { success: true } }
-        format.html { redirect_back(fallback_location: backfill_runs_path) }
+        format.html { redirect_back_or_to(backfill_runs_path) }
       end
     end
 
@@ -131,7 +133,7 @@ module DataDrip
       backfill_class_name = params[:backfill_class_name]
 
       if backfill_class_name.blank? ||
-           backfill_class_name == "Select a backfill class"
+         backfill_class_name == "Select a backfill class"
         render json: { html: "" }
         return
       end
@@ -148,8 +150,7 @@ module DataDrip
       temp_run =
         DataDrip::BackfillRun.new(
           backfill_class_name: backfill_class_name,
-          options: {
-          }
+          options: {}
         )
 
       html = helpers.backfill_option_inputs(temp_run)
@@ -164,6 +165,7 @@ module DataDrip
       unless respond_to?(DataDrip.current_backfiller_method, true)
         raise "Invalid DataDrip.current_backfiller_method: #{DataDrip.current_backfiller_method}. Maybe you need to change the `base_controller_class` for DataDrip (currently: #{DataDrip.base_controller_class})?"
       end
+
       send(DataDrip.current_backfiller_method)
     end
 
@@ -178,7 +180,7 @@ module DataDrip
             locals: {
               status: @backfill_run.status
             },
-            formats: [:html]
+            formats: [ :html ]
           ),
         processed_count: @backfill_run.processed_count,
         total_count: @backfill_run.total_count,
@@ -188,12 +190,12 @@ module DataDrip
             locals: {
               backfill_run: @backfill_run
             },
-            formats: [:html]
+            formats: [ :html ]
           )
       }
 
       response.stream.write("data: #{data.to_json}\n\n")
-    rescue => e
+    rescue StandardError => e
       Rails.logger.error "Error sending initial SSE data: #{e.message}"
       response.stream.write(
         "data: {\"error\": \"Failed to send initial data\"}\n\n"
@@ -219,7 +221,7 @@ module DataDrip
                Errno::ECONNRESET
           Rails.logger.info "SSE client disconnected during monitoring for backfill run #{@backfill_run.id}"
           break
-        rescue => e
+        rescue StandardError => e
           Rails.logger.error "SSE connection error: #{e.class} - #{e.message}"
           break
         end
@@ -228,7 +230,7 @@ module DataDrip
           @backfill_run.reload
 
           if @backfill_run.processed_count != last_processed_count ||
-               @backfill_run.status != last_status
+             @backfill_run.status != last_status
             data = {
               status: @backfill_run.status,
               status_html:
@@ -237,7 +239,7 @@ module DataDrip
                   locals: {
                     status: @backfill_run.status
                   },
-                  formats: [:html]
+                  formats: [ :html ]
                 ),
               processed_count: @backfill_run.processed_count,
               total_count: @backfill_run.total_count,
@@ -247,7 +249,7 @@ module DataDrip
                   locals: {
                     backfill_run: @backfill_run
                   },
-                  formats: [:html]
+                  formats: [ :html ]
                 )
             }
 
@@ -259,7 +261,7 @@ module DataDrip
           end
 
           sleep 2
-        rescue => e
+        rescue StandardError => e
           Rails.logger.error "Error in SSE monitoring loop: #{e.message}"
           response.stream.write("data: {\"error\": \"Monitoring error\"}\n\n")
           break
@@ -276,13 +278,12 @@ module DataDrip
     end
 
     def backfill_run_params
-      params.require(:backfill_run).permit(
-        :backfill_class_name,
-        :batch_size,
-        :start_at,
-        :amount_of_elements,
-        options: {
-        }
+      params.expect(
+        backfill_run: [ :backfill_class_name,
+                       :batch_size,
+                       :start_at,
+                       :amount_of_elements,
+                       { options: {} } ]
       )
     end
 

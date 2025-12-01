@@ -19,6 +19,7 @@ gem "rspec", "~> 3.0"
 gem "rspec-rails", ">= 8.0"
 
 gem "rubocop", "~> 1.21"
+gem "rubocop-rails-omakase"
 
 gem "byebug"
 

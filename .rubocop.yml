@@ -1,8 +1,13 @@
+inherit_gem:
+  rubocop-rails-omakase: rubocop.yml
+
 AllCops:
   TargetRubyVersion: 3.1
 
-Style/StringLiterals:
-  EnforcedStyle: double_quotes
+# Project-specific overrides
+Style/Documentation:
+  Enabled: false
 
-Style/StringLiteralsInInterpolation:
-  EnforcedStyle: double_quotes
+# Allow RSpec block lengths for test descriptions
+Metrics/BlockLength:
+  AllowedMethods: ['describe', 'context', 'it', 'specify', 'example', 'scenario', 'feature']
