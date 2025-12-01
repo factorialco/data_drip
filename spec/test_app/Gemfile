@@ -61,4 +61,4 @@ group :test do
   gem "capybara"
   gem "selenium-webdriver"
 end
-gem "data_drip", path: "/Users/avalonvanderhorst/Code/data_drip"
+gem "data_drip", path: "../.."
