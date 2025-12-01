@@ -12,8 +12,8 @@ module DataDrip
 
         routes_file = Rails.root.join("config/routes.rb")
         if File
-             .readlines(routes_file)
-             .any? { |line| line.include?(route_config) }
+           .readlines(routes_file)
+           .any? { |line| line.include?(route_config) }
           say_status(
             "skipped",
             "DataDrip route already present in routes.rb",

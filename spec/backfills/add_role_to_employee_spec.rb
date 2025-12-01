@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 require "spec_helper"
 
 RSpec.describe AddRoleToEmployee, type: :model do
@@ -124,7 +126,7 @@ RSpec.describe AddRoleToEmployee, type: :model do
   describe "#process_batch" do
     it "updates all records in the batch to have role 'intern'" do
       employees = Employee.where(role: nil).limit(2)
-      employee_ids = employees.pluck(:id)
+      employee_ids = employees.ids
       backfill = AddRoleToEmployee.new
 
       backfill.process_batch(employees)
