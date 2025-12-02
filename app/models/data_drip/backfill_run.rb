@@ -67,6 +67,7 @@ module DataDrip
     end
 
     def validate_scope
+      return unless backfill_class_name.present?
       return unless backfill_class
 
       begin
@@ -78,7 +79,9 @@ module DataDrip
           )
         scope = backfill.scope
 
-        scope = scope.limit(amount_of_elements) if amount_of_elements.present? && amount_of_elements.positive?
+        scope =
+          scope.limit(amount_of_elements) if amount_of_elements.present? &&
+          amount_of_elements.positive?
 
         final_count = scope.count
         return unless final_count.zero?
