@@ -5,7 +5,7 @@ require "data_drip"
 ENV["RAILS_ENV"] ||= "test"
 
 require "rails"
-require "spec/test_app/config/environment"
+require_relative "test_app/config/environment"
 require "rspec/rails"
 
 ActiveRecord::Migration.maintain_test_schema!
