@@ -41,6 +41,6 @@ jobs:
       - name: Setup test database
         run: |
           cd spec/test_app
-          bin/rails db:setup
+          bundle exec rails db:create db:migrate db:seed
       - name: Run tests
         run: bundle exec rspec
