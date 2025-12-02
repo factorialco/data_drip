@@ -39,4 +39,6 @@ jobs:
           cd spec/test_app
           bundle install
       - name: Run tests
-        run: bundle exec rspec
+        run: |
+          cd spec/test_app
+          bundle exec rspec ../../spec
