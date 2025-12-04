@@ -2,6 +2,8 @@
 
 module DataDrip
   class BackfillRunsController < DataDrip.base_controller_class.constantize
+    include DataDrip::Paginatable
+
     layout "data_drip/layouts/application"
     helper_method :backfill_class_names, :find_current_backfiller
     helper DataDrip::BackfillRunsHelper
@@ -9,7 +11,14 @@ module DataDrip
     before_action :set_user_timezone
 
     def index
-      @backfill_runs = DataDrip::BackfillRun.all
+      pagination_data =
+        paginate_collection(
+          DataDrip::BackfillRun.order(created_at: :desc),
+          per_page: 10
+        )
+
+      @backfill_runs = pagination_data[:collection]
+      @pagination = pagination_data
     end
 
     def new
@@ -45,6 +54,16 @@ module DataDrip
 
     def show
       @backfill_run = DataDrip::BackfillRun.find(params[:id])
+
+      batch_pagination_data =
+        paginate_collection(
+          @backfill_run.batches.order(created_at: :desc),
+          per_page: 20,
+          page_param: :batch_page
+        )
+
+      @batches = batch_pagination_data[:collection]
+      @batch_pagination = batch_pagination_data
     end
 
     def destroy
@@ -76,8 +95,8 @@ module DataDrip
       @backfill_run = DataDrip::BackfillRun.find(params[:id])
 
       render json: {
-        status: @backfill_run.status,
-        status_html:
+               status: @backfill_run.status,
+               status_html:
                  render_to_string(
                    partial: "status_tag",
                    locals: {
@@ -85,9 +104,9 @@ module DataDrip
                    },
                    formats: [ :html ]
                  ),
-        processed_count: @backfill_run.processed_count,
-        total_count: @backfill_run.total_count,
-        batches_html:
+               processed_count: @backfill_run.processed_count,
+               total_count: @backfill_run.total_count,
+               batches_html:
                  render_to_string(
                    partial: "batches_table",
                    locals: {
@@ -95,7 +114,7 @@ module DataDrip
                    },
                    formats: [ :html ]
                  )
-      }
+             }
     end
 
     def stream
@@ -133,7 +152,7 @@ module DataDrip
       backfill_class_name = params[:backfill_class_name]
 
       if backfill_class_name.blank? ||
-         backfill_class_name == "Select a backfill class"
+           backfill_class_name == "Select a backfill class"
         render json: { html: "" }
         return
       end
@@ -230,7 +249,7 @@ module DataDrip
           @backfill_run.reload
 
           if @backfill_run.processed_count != last_processed_count ||
-             @backfill_run.status != last_status
+               @backfill_run.status != last_status
             data = {
               status: @backfill_run.status,
               status_html:
@@ -279,11 +298,13 @@ module DataDrip
 
     def backfill_run_params
       params.expect(
-        backfill_run: [ :backfill_class_name,
-                       :batch_size,
-                       :start_at,
-                       :amount_of_elements,
-                       { options: {} } ]
+        backfill_run: [
+          :backfill_class_name,
+          :batch_size,
+          :start_at,
+          :amount_of_elements,
+          { options: {} }
+        ]
       )
     end
 

@@ -133,6 +133,11 @@
             </tbody>
           </table>
         </div>
+        
+        <%= render 'data_drip/shared/pagination', 
+            pagination: @batch_pagination, 
+            item_name: "batches", 
+            page_param: :batch_page %>
       </div>
     </div>
   </div>

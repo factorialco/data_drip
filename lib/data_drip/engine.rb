@@ -3,6 +3,7 @@
 require "importmap-rails"
 require "turbo-rails"
 require "stimulus-rails"
+require_relative "concerns/paginatable"
 
 module DataDrip
   class Engine < ::Rails::Engine
