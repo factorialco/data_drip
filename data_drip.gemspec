@@ -5,10 +5,10 @@ require_relative "lib/data_drip/version"
 Gem::Specification.new do |spec|
   spec.name = "data_drip"
   spec.version = DataDrip::VERSION
-  spec.authors = ["Avalon van der Horst"]
-  spec.email = ["avalonvdhorst@gmail.com"]
-  spec.authors = ["Oriol Gual Oliva"]
-  spec.email = ["oriol.gual@gmail.com"]
+  spec.authors = [ "Avalon van der Horst" ]
+  spec.email = [ "avalonvdhorst@gmail.com" ]
+  spec.authors = [ "Oriol Gual Oliva" ]
+  spec.email = [ "oriol.gual@gmail.com" ]
 
   spec.summary = ""
   spec.description = ""
