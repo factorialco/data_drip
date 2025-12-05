@@ -1,5 +1,9 @@
-ENV['BUNDLE_GEMFILE'] ||= File.expand_path('../Gemfile', __dir__)
-require 'bundler/setup' if File.exist?(ENV['BUNDLE_GEMFILE'])
+ENGINE_ROOT = File.expand_path("..", __dir__)
+ENGINE_PATH = File.expand_path("../lib/data_drip/engine", __dir__)
+APP_PATH = File.expand_path("../spec/test_app/config/application", __dir__)
 
-require 'rails/all'
-require 'rails/engine/commands'
+ENV["BUNDLE_GEMFILE"] ||= File.expand_path("../Gemfile", __dir__)
+require "bundler/setup" if File.exist?(ENV["BUNDLE_GEMFILE"])
+
+require "rails/all"
+require "rails/engine/commands"

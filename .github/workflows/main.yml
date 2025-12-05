@@ -41,9 +41,5 @@ jobs:
         with:
           ruby-version: ${{ matrix.ruby-version }}
           bundler-cache: true
-      - name: Setup test database
-        run: |
-          cd spec/test_app
-          bundle exec rails db:create db:migrate
       - name: Run tests
-        run: bundle exec rspec
+        run: bin/rspec

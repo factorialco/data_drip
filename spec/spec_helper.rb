@@ -1,19 +1,22 @@
 # frozen_string_literal: true
 
-require "data_drip"
-
-original_dir = Dir.pwd
-test_app_dir = File.join(__dir__, "test_app")
-Dir.chdir(test_app_dir)
-
 ENV["RAILS_ENV"] = "test"
-require File.join(test_app_dir, "config", "environment")
+
+Dir.chdir(File.join(__dir__, "test_app")) do
+  require_relative "test_app/config/environment"
+end
+
+ActiveRecord::Migrator.migrations_paths = [
+  File.expand_path("../spec/test_app/db/migrate", __dir__)
+]
+ActiveRecord::Migrator.migrations_paths << File.expand_path(
+  "../db/migrate",
+  __dir__
+)
 
 require "rspec/rails"
 
 ActiveRecord::Migration.maintain_test_schema!
-
-Dir.chdir(original_dir)
 
 RSpec.configure do |config|
   # Enable flags like --only-failures and --next-failure
