@@ -8,8 +8,9 @@ Bundler.require(*Rails.groups)
 
 module TestApp
   class Application < Rails::Application
-    # Initialize configuration defaults for originally generated Rails version.
-    config.load_defaults 8.0
+    # Load defaults for current Rails version (minimum 7.0 for compatibility)
+    version = Rails.version[/\d+\.\d+/].to_f
+    config.load_defaults [version, 7.0].max
 
     # Please, add to the `ignore` list any other `lib` subdirectories that do
     # not contain `.rb` files, or that should not be reloaded or eager loaded.
