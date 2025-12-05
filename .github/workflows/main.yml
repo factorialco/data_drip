@@ -21,10 +21,12 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
+        gemfile: [Gemfile, Gemfile-Rails-7-2, Gemfile-Rails-8-0, Gemfile-Rails-main]
         ruby-version: [3.3, 3.4 ]
         database: [sqlite]
     env:
       TARGET_DB: ${{ matrix.database }}
+      BUNDLE_GEMFILE: ${{ matrix.gemfile }}
       CI: true
     steps:
       - name: Checkout code
