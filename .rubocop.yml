@@ -11,3 +11,7 @@ Style/Documentation:
 # Allow RSpec block lengths for test descriptions
 Metrics/BlockLength:
   AllowedMethods: ['describe', 'context', 'it', 'specify', 'example', 'scenario', 'feature']
+
+# Keep old params syntax for Rails 7.2 compatibility
+Rails/DotSeparatedKeys:
+  Enabled: false

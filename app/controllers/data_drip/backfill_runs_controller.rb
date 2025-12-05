@@ -297,14 +297,12 @@ module DataDrip
     end
 
     def backfill_run_params
-      params.expect(
-        backfill_run: [
-          :backfill_class_name,
-          :batch_size,
-          :start_at,
-          :amount_of_elements,
-          { options: {} }
-        ]
+      params.require(:backfill_run).permit(
+        :backfill_class_name,
+        :batch_size,
+        :start_at,
+        :amount_of_elements,
+        options: {}
       )
     end
 
