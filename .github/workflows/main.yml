@@ -25,6 +25,7 @@ jobs:
           - Gemfile
           - gemfiles/Gemfile-Rails-7-2
           - gemfiles/Gemfile-Rails-8-0
+          - gemfiles/Gemfile-Rails-8-1
           - gemfiles/Gemfile-Rails-main
         ruby-version: [3.3, 3.4]
         database: [sqlite]

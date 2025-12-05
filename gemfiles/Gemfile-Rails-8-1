@@ -11,7 +11,7 @@ gem "irb"
 
 gem "rake", "~> 13.0"
 
-gem "rails", "~> 8.0"
+gem "rails", "~> 8.1"
 gem "sqlite3"
 
 gem "rspec", "~> 3.0"
