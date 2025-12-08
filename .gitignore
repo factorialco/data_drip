@@ -6,6 +6,7 @@
 /pkg/
 /spec/reports/
 /tmp/
+/log/
 /node_modules/
 my_data_drip_dummy/
 .DS_Store
@@ -13,6 +14,7 @@ my_data_drip_dummy/
 # Rails cache files and secrets
 spec/test_app/tmp/
 spec/test_app/log/
+spec/test_app/storage/
 spec/test_app/config/master.key
 spec/test_app/config/credentials/
 
