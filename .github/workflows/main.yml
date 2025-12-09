@@ -42,4 +42,4 @@ jobs:
           ruby-version: ${{ matrix.ruby-version }}
           bundler-cache: true
       - name: Run tests
-        run: bin/rspec
+        run: bundle exec rake
