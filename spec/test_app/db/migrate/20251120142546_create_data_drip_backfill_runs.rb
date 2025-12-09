@@ -1,4 +1,4 @@
-class CreateDataDripBackfillRuns < ActiveRecord::Migration[8.0]
+class CreateDataDripBackfillRuns < ActiveRecord::Migration[7.0]
   def change
     create_table :data_drip_backfill_runs, id: :bigint do |t|
       t.string :backfill_class_name, null: false
