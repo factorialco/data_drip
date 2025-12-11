@@ -11,11 +11,18 @@ module DataDrip
     before_action :set_user_timezone
 
     def index
+      @current_tab = params[:tab] || "my_runs"
+
+      base_scope =
+        case @current_tab
+        when "my_runs"
+          DataDrip::BackfillRun.where(backfiller: find_current_backfiller)
+        else
+          DataDrip::BackfillRun.all
+        end
+
       pagination_data =
-        paginate_collection(
-          DataDrip::BackfillRun.order(created_at: :desc),
-          per_page: 10
-        )
+        paginate_collection(base_scope.order(created_at: :desc), per_page: 10)
 
       @backfill_runs = pagination_data[:collection]
       @pagination = pagination_data
@@ -44,7 +51,7 @@ module DataDrip
 
       if @run.save
         local_time = @run.start_at.in_time_zone(@user_timezone)
-        redirect_to backfill_runs_path,
+        redirect_to backfill_runs_path(tab: "my_runs"),
                     notice:
                       "Backfill job for #{@run.backfill_class_name} has been enqueued. Will run at #{local_time.strftime("%d-%m-%Y, %H:%M:%S %Z")}."
       else
@@ -76,7 +83,7 @@ module DataDrip
           :alert
         ] = "Backfill run cannot be deleted as it is not in an enqueued state."
       end
-      redirect_to backfill_runs_path
+      redirect_to backfill_runs_path(tab: params[:tab] || "my_runs")
     end
 
     def stop
