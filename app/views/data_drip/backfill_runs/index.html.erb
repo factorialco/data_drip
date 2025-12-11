@@ -43,11 +43,22 @@
           bg-white rounded-lg border border-gray-200 p-6 flex-1 flex flex-col
         "
       >
-        <div class="flex justify-between items-center mb-6">
-          <div>
-            <h2 class="text-lg font-semibold text-gray-700">Backfill Runs</h2>
-            <p class="text-sm text-gray-400 pt-2">Check all your available backfill runs</p>
-          </div>
+    
+        
+        <!-- Tab Navigation -->
+        <div class="mb-6">
+          <nav class="flex" aria-label="Tabs" style="gap: 2rem;">
+            <%= link_to backfill_runs_path(tab: 'all'), 
+                class: "tab-link py-2 px-1 font-semibold text-sm #{@current_tab == 'all' ? 'active-tab' : 'inactive-tab'}",
+                data: { tab: 'all' } do %>
+              All Runs
+            <% end %>
+            <%= link_to backfill_runs_path(tab: 'my_runs'), 
+                class: "tab-link py-2 px-1 font-semibold text-sm #{@current_tab == 'my_runs' ? 'active-tab' : 'inactive-tab'}",
+                data: { tab: 'my_runs' } do %>
+              My Runs
+            <% end %>
+          </nav>
         </div>
         <div class="overflow-x-auto">
           <table class="w-full text-left">
@@ -75,7 +86,8 @@
         <%= render 'data_drip/shared/pagination', 
             pagination: @pagination, 
             item_name: "backfill runs", 
-            page_param: :page %>
+            page_param: :page,
+            additional_params: { tab: @current_tab } %>
       </div>
     </div>
   </div>
@@ -96,5 +108,25 @@
         body: JSON.stringify({ timezone: userTimezone })
       });
     }
+    
+      var tabLinks = document.querySelectorAll('nav[aria-label="Tabs"] a');
+      var tableContainer = document.querySelector('.overflow-x-auto');
+      
+      tabLinks.forEach(function(link) {
+        link.addEventListener('click', function(e) {
+          if (tableContainer) {
+            tableContainer.style.opacity = '0.6';
+            tableContainer.style.pointerEvents = 'none';
+          }
+          
+          tabLinks.forEach(function(tab) {
+            tab.classList.remove('active-tab');
+            tab.classList.add('inactive-tab');
+          });
+          
+          this.classList.remove('inactive-tab');
+          this.classList.add('active-tab');
+        });
+      });
   });
 </script>
