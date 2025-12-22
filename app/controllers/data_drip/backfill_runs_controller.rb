@@ -11,7 +11,7 @@ module DataDrip
     before_action :set_user_timezone
 
     def index
-      @current_tab = params[:tab] || "all"
+      @current_tab = params[:tab] || "my_runs"
 
       base_scope =
         case @current_tab
@@ -83,7 +83,7 @@ module DataDrip
           :alert
         ] = "Backfill run cannot be deleted as it is not in an enqueued state."
       end
-      redirect_to backfill_runs_path(tab: params[:tab] || "all")
+      redirect_to backfill_runs_path(tab: params[:tab] || "my_runs")
     end
 
     def stop

@@ -48,15 +48,15 @@
         <!-- Tab Navigation -->
         <div class="mb-6">
           <nav class="flex" aria-label="Tabs" style="gap: 2rem;">
-            <%= link_to backfill_runs_path(tab: 'all'), 
-                class: "tab-link py-2 px-1 font-semibold text-sm #{@current_tab == 'all' ? 'active-tab' : 'inactive-tab'}",
-                data: { tab: 'all' } do %>
-              All Runs
-            <% end %>
             <%= link_to backfill_runs_path(tab: 'my_runs'), 
                 class: "tab-link py-2 px-1 font-semibold text-sm #{@current_tab == 'my_runs' ? 'active-tab' : 'inactive-tab'}",
                 data: { tab: 'my_runs' } do %>
               My Runs
+            <% end %>
+            <%= link_to backfill_runs_path(tab: 'all'), 
+                class: "tab-link py-2 px-1 font-semibold text-sm #{@current_tab == 'all' ? 'active-tab' : 'inactive-tab'}",
+                data: { tab: 'all' } do %>
+              All Runs
             <% end %>
           </nav>
         </div>
