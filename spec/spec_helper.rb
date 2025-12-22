@@ -1,11 +1,19 @@
 # frozen_string_literal: true
 
-require "data_drip"
+ENV["RAILS_ENV"] = "test"
 
-ENV["RAILS_ENV"] ||= "test"
+Dir.chdir(File.join(__dir__, "test_app")) do
+  require_relative "test_app/config/environment"
+end
 
-require "rails"
-require "test_app/config/environment"
+ActiveRecord::Migrator.migrations_paths = [
+  File.expand_path("../spec/test_app/db/migrate", __dir__)
+]
+ActiveRecord::Migrator.migrations_paths << File.expand_path(
+  "../db/migrate",
+  __dir__
+)
+
 require "rspec/rails"
 
 ActiveRecord::Migration.maintain_test_schema!
