@@ -145,7 +145,7 @@ RSpec.describe DataDrip::BackfillRunsController, type: :controller do
         delete :destroy, params: { id: backfill_run.id }
 
         expect(DataDrip::BackfillRun.exists?(backfill_run.id)).to be_falsey
-        expect(response).to redirect_to(backfill_runs_path(tab: "all"))
+        expect(response).to redirect_to(backfill_runs_path(tab: "my_runs"))
         expect(flash[:notice]).to eq("Backfill run has been deleted.")
       end
     end
@@ -157,7 +157,7 @@ RSpec.describe DataDrip::BackfillRunsController, type: :controller do
         delete :destroy, params: { id: backfill_run.id }
 
         expect(DataDrip::BackfillRun.exists?(backfill_run.id)).to be_truthy
-        expect(response).to redirect_to(backfill_runs_path(tab: "all"))
+        expect(response).to redirect_to(backfill_runs_path(tab: "my_runs"))
         expect(flash[:alert]).to eq(
           "Backfill run cannot be deleted as it is not in an enqueued state."
         )
