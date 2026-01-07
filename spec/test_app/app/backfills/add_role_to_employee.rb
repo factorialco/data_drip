@@ -33,6 +33,14 @@ class AddRoleToEmployee < DataDrip::Backfill
   #   element.update!(role: 'new_role')
   # end
 
+  def self.on_run_completed(run)
+    HookNotifier.instance.set('AddRoleToEmployee_run_completed', run.id)
+  end
+
+  def self.on_batch_completed(batch)
+    HookNotifier.instance.set('AddRoleToEmployee_batch_completed', batch.id)
+  end
+
   def process_batch(batch)
     batch.update_all(role: "intern")
   end

@@ -36,6 +36,7 @@ RSpec.configure do |config|
     DataDrip::BackfillRun.delete_all if defined?(DataDrip::BackfillRun)
     Employee.delete_all if defined?(Employee)
     User.delete_all if defined?(User)
+    HookNotifier.instance.clear
 
     if ActiveRecord::Base.connection.adapter_name == "SQLite"
       ActiveRecord::Base.connection.execute(

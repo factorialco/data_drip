@@ -17,6 +17,7 @@ module DataDrip
     )
 
     after_commit :enqueue, on: :create
+    after_commit :run_hooks
 
     def enqueue
       return unless pending?
@@ -44,6 +45,17 @@ module DataDrip
           migration.send(:process_batch, batch)
           sleep 5
         end
+    end
+
+    private
+
+    def run_hooks
+      return unless status_previously_changed?
+
+      hook_name = "on_batch_#{status}"
+      if backfill_run.backfill_class.respond_to?(hook_name)
+        backfill_run.backfill_class.send(hook_name, self)
+      end
     end
   end
 end

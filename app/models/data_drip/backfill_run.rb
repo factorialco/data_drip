@@ -23,6 +23,7 @@ module DataDrip
               allow_nil: true
 
     after_commit :enqueue
+    after_commit :run_hooks
 
     DataDrip.cross_rails_enum(
       self,
@@ -48,6 +49,15 @@ module DataDrip
     end
 
     private
+
+    def run_hooks
+      return unless status_previously_changed?
+
+      hook_name = "on_run_#{status}"
+      if backfill_class.respond_to?(hook_name)
+        backfill_class.send(hook_name, self)
+      end
+    end
 
     def backfill_class_exists
       return if backfill_class
