@@ -1,6 +1,6 @@
 module DataDrip
   class DripperChild < ActiveJob::Base
-    queue_as :data_drip_child
+    queue_as :within_24_hours
 
     def perform(backfill_run_batch)
       parent = backfill_run_batch.backfill_run
