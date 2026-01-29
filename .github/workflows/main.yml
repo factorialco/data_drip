@@ -27,7 +27,7 @@ jobs:
           - gemfiles/Gemfile-Rails-8-0
           - gemfiles/Gemfile-Rails-8-1
           - gemfiles/Gemfile-Rails-main
-        ruby-version: [3.3, 3.4]
+        ruby-version: [3.3, 3.4, 4.0]
         database: [sqlite]
     env:
       TARGET_DB: ${{ matrix.database }}
