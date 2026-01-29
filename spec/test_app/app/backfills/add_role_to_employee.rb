@@ -1,13 +1,11 @@
 class AddRoleToEmployee < DataDrip::Backfill
-  attribute :age, :integer
-  attribute :name, :string
 
+  attribute :employee_id, :integer
+  
   def scope
-    scope = Employee.where(role: nil)
-    scope = scope.where(age: age) if age.present?
-    scope = scope.where(name: name) if name.present?
-    scope
+    Employee.where(role: nil)
   end
+
 
   #######################################################
   ## YOU DON'T NEED TO IMPLEMENT BOTH METHODS          ##
@@ -22,8 +20,8 @@ class AddRoleToEmployee < DataDrip::Backfill
   #
   # Example:
   # def process_batch(batch)
-  #   batch.update_all(role: 'intern')
-  # end
+#   batch.update_all(role: 'intern')
+# end
 
   # If you need to process each element individually, implement this method.
   # This is useful when you need to perform more complex operations on each element.
@@ -34,7 +32,7 @@ class AddRoleToEmployee < DataDrip::Backfill
   # end
 
   def process_batch(batch)
-    batch.update_all(role: "intern")
+    batch.update_all(role: 'intern')
   end
 
   def process_element(element)

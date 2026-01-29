@@ -1,45 +1,27 @@
-name: Build
-on: [push]
+name: Ruby
+
+on:
+  push:
+    branches:
+      - master
+
+  pull_request:
 
 jobs:
-  rubocop:
-    name: Rubocop
+  build:
     runs-on: ubuntu-latest
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v2
-      - name: Setup Ruby and install gems
-        uses: ruby/setup-ruby@v1
-        with:
-          ruby-version: 3.4
-          bundler-cache: true
-      - name: Run rubocop
-        run: |
-          bundle exec rubocop --parallel
-  tests:
-    name: Tests
-    runs-on: ubuntu-latest
+    name: Ruby ${{ matrix.ruby }}
     strategy:
       matrix:
-        gemfile:
-          - Gemfile
-          - gemfiles/Gemfile-Rails-7-2
-          - gemfiles/Gemfile-Rails-8-0
-          - gemfiles/Gemfile-Rails-8-1
-          - gemfiles/Gemfile-Rails-main
-        ruby-version: [3.3, 3.4]
-        database: [sqlite]
-    env:
-      TARGET_DB: ${{ matrix.database }}
-      BUNDLE_GEMFILE: ${{ matrix.gemfile }}
-      CI: true
+        ruby:
+          - '3.3.0'
+
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v2
-      - name: Setup Ruby and install gems
+      - uses: actions/checkout@v4
+      - name: Set up Ruby
         uses: ruby/setup-ruby@v1
         with:
-          ruby-version: ${{ matrix.ruby-version }}
+          ruby-version: ${{ matrix.ruby }}
           bundler-cache: true
-      - name: Run tests
+      - name: Run the default task
         run: bundle exec rake

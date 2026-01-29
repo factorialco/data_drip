@@ -1,5 +1,3 @@
-# frozen_string_literal: true
-
 require "spec_helper"
 
 RSpec.describe DataDrip::BackfillRun, type: :model do
@@ -12,7 +10,7 @@ RSpec.describe DataDrip::BackfillRun, type: :model do
       {
         backfill_class_name: "AddRoleToEmployee",
         batch_size: 100,
-        start_at: 1.hour.from_now,
+        start_at: Time.current + 1.hour,
         backfiller: backfiller
       }
     end
@@ -78,7 +76,7 @@ RSpec.describe DataDrip::BackfillRun, type: :model do
       it "validates presence of backfill_class_name" do
         backfill_run =
           DataDrip::BackfillRun.new(
-            start_at: 1.hour.from_now,
+            start_at: Time.current + 1.hour,
             batch_size: 100,
             backfiller: backfiller
           )
@@ -103,7 +101,7 @@ RSpec.describe DataDrip::BackfillRun, type: :model do
         backfill_run =
           DataDrip::BackfillRun.new(
             backfill_class_name: "AddRoleToEmployee",
-            start_at: 1.hour.from_now,
+            start_at: Time.current + 1.hour,
             backfiller: backfiller,
             batch_size: nil
           )
@@ -154,9 +152,10 @@ RSpec.describe DataDrip::BackfillRun, type: :model do
       backfill_run.assign_attributes(
         backfill_class_name: "AddRoleToEmployee",
         batch_size: 100,
-        start_at: 1.hour.from_now,
+        start_at: Time.current + 1.hour,
         backfiller: backfiller,
-        options: {}
+        options: {
+        }
       )
 
       expect(backfill_run.status).to eq("pending")

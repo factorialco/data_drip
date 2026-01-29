@@ -5,18 +5,14 @@
 /doc/
 /pkg/
 /spec/reports/
+/spec/test_app/log
+/spec/test_app/storage
 /tmp/
-/log/
 /node_modules/
 my_data_drip_dummy/
+spec/test_app/
+spec/test_app/**/*
 .DS_Store
-
-# Rails cache files and secrets
-spec/test_app/tmp/
-spec/test_app/log/
-spec/test_app/storage/
-spec/test_app/config/master.key
-spec/test_app/config/credentials/
 
 # rspec failure tracking
 .rspec_status

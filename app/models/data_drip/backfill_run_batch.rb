@@ -1,5 +1,3 @@
-# frozen_string_literal: true
-
 module DataDrip
   class BackfillRunBatch < ApplicationRecord
     self.table_name = "data_drip_backfill_run_batches"

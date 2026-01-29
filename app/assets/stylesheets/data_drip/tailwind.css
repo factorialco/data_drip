@@ -613,34 +613,6 @@
   .gradient-btn:hover {
     background: linear-gradient(135deg, #f72585 0%, #b5179e 60%, #560bad 100%);
   }
-  
-  /* Tab Navigation Styles */
-  .tab-link {
-    border-bottom: 2px solid transparent;
-    white-space: nowrap;
-    transition: all 0.2s ease-in-out;
-    text-decoration: none;
-  }
-
-  .active-tab {
-    border-bottom-color: #7209b7; 
-    color: #7209b7; 
-  }
-
-  .inactive-tab {
-    color: #6b7280; /* gray-500 */
-  }
-
-  .inactive-tab:hover {
-    color: #374151; /* gray-700 */
-    border-bottom-color: #d1d5db; /* gray-300 */
-  }
-  
-  /* Pagination Styles */
-  .pagination-current {
-    background-color: #7209b7; /* purple to match branding */
-    color: white;
-  }
 }
 @property --tw-border-style {
   syntax: "*";

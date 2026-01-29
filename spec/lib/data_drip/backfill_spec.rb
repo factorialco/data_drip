@@ -1,5 +1,3 @@
-# frozen_string_literal: true
-
 require "spec_helper"
 
 RSpec.describe DataDrip::Backfill, type: :model do
@@ -20,9 +18,9 @@ RSpec.describe DataDrip::Backfill, type: :model do
     end
 
     it "raises error when trying to define an existing method" do
-      expect do
+      expect {
         Class.new(DataDrip::Backfill) { attribute :scope, :string }
-      end.to raise_error(/Method scope already defined/)
+      }.to raise_error(/Method scope already defined/)
     end
   end
 
@@ -94,7 +92,7 @@ RSpec.describe DataDrip::Backfill, type: :model do
   end
 
   describe "abstract methods" do
-    let(:minimal_backfill_class) { Class.new(DataDrip::Backfill) { } }
+    let(:minimal_backfill_class) { Class.new(DataDrip::Backfill) {} }
 
     it "raises NotImplementedError for scope when not defined" do
       backfill = minimal_backfill_class.new

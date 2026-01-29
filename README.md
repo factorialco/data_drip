@@ -118,51 +118,6 @@ class FixUserEmails < DataDrip::Backfill
 end
 ```
 
-### Adding Options to Backfills
-
-You can make your backfills configurable by adding attributes that users can set when creating a backfill run. This allows for dynamic filtering and let's you customize your backfill runs:
-
-```ruby
-class AddRoleToEmployee < DataDrip::Backfill
-  # Define configurable attributes
-  attribute :age, :integer
-  attribute :name, :string
-  attribute :department, :string
-  attribute :active_only, :boolean, default: true
-
-  def scope
-    scope = Employee.where(role: nil)
-    
-    # Now you can use the attributes to filter the scope dynamically
-    scope = scope.where(age: age) if age.present?
-    scope = scope.where(name: name) if name.present?
-    scope = scope.where(department: department) if department.present?
-    scope = scope.where(active: true) if active_only
-    
-    scope
-  end
-
-  def process_batch(batch)
-    batch.update_all(role: 'intern')
-  end
-end
-```
-
-When creating a backfill run through the form in the UI, you will see form fields for each attribute, allowing you to customize the backfill's behavior without modifying code.
-This way, it's easy to create a backfill run for different scenarios with different scopes. 
-
-#### Supported Attribute Types
-
-DataDrip supports various attribute types that automatically generate appropriate form fields:
-
-- **`:string`** - Text input field
-- **`:integer`** - Number input (whole numbers)
-- **`:decimal`** / **`:float`** - Number input with decimal support
-- **`:boolean`** - Checkbox
-- **`:date`** - Date picker
-- **`:time`** - Time picker  
-- **`:datetime`** - Date and time picker
-
 ### Backfill Structure
 
 Every backfill must inherit from `DataDrip::Backfill` and implement:
@@ -194,13 +149,11 @@ end
 Navigate to `/data_drip/backfill_runs` in your application to access the DataDrip dashboard where you can:
 
 - View all available backfills
-- Create new backfill runs with configurable options
-- Monitor progress and status  
+- Create new backfill runs
+- Monitor progress and status
 - View error messages and logs
 - Stop running backfills
 - Schedule backfills for future execution
-
-When creating a new backfill run, the interface dynamically generates form fields based on the attributes defined in your backfill class, making it easy to customize each run without code changes.
 
 ## Contributing
 

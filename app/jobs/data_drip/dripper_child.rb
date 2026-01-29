@@ -1,7 +1,5 @@
-# frozen_string_literal: true
-
 module DataDrip
-  class DripperChild < ApplicationJob
+  class DripperChild < ActiveJob::Base
     queue_as :data_drip_child
 
     def perform(backfill_run_batch)
@@ -15,10 +13,10 @@ module DataDrip
       backfill_run_batch.completed!
 
       parent.increment!(:processed_count, backfill_run_batch.batch_size)
-      parent.completed! if parent.batches.where.not(status: :completed).count.zero?
+      parent.completed! if parent.batches.where.not(status: :completed).count == 0
     rescue StandardError => e
       backfill_run_batch.failed!
-      backfill_run_batch.update!(error_message: e.message)
+      backfill_run_batch.update(error_message: e.message)
       raise e
     end
   end

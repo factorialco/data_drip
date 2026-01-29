@@ -1,5 +1,3 @@
-# frozen_string_literal: true
-
 require "spec_helper"
 
 RSpec.describe DataDrip::BackfillRunsController, type: :controller do
@@ -17,7 +15,7 @@ RSpec.describe DataDrip::BackfillRunsController, type: :controller do
       {
         backfill_class_name: "AddRoleToEmployee",
         batch_size: 100,
-        start_at: 1.hour.from_now
+        start_at: Time.current + 1.hour
       }
     end
 
@@ -36,7 +34,7 @@ RSpec.describe DataDrip::BackfillRunsController, type: :controller do
 
       expect(backfill_run.backfiller).to eq(backfiller)
 
-      expect(response).to redirect_to(backfill_runs_path(tab: "my_runs"))
+      expect(response).to redirect_to(backfill_runs_path)
       expect(flash[:notice]).to match(/Backfill job for/)
     end
 
@@ -75,7 +73,7 @@ RSpec.describe DataDrip::BackfillRunsController, type: :controller do
                backfill_run: timezone_attributes,
                user_timezone: "America/New_York"
              }
-        expect(response).to redirect_to(backfill_runs_path(tab: "my_runs"))
+        expect(response).to redirect_to(backfill_runs_path)
         expect(flash[:notice]).to include(
           "Will run at 15-01-2024, 10:30:00 EST"
         )
@@ -87,7 +85,7 @@ RSpec.describe DataDrip::BackfillRunsController, type: :controller do
                backfill_run: timezone_attributes,
                user_timezone: nil
              }
-        expect(response).to redirect_to(backfill_runs_path(tab: "my_runs"))
+        expect(response).to redirect_to(backfill_runs_path)
         expect(flash[:notice]).to include("Will run at")
       end
     end
@@ -98,13 +96,13 @@ RSpec.describe DataDrip::BackfillRunsController, type: :controller do
       DataDrip::BackfillRun.create!(
         backfill_class_name: "AddRoleToEmployee",
         batch_size: 100,
-        start_at: 1.hour.from_now,
+        start_at: Time.current + 1.hour,
         backfiller: backfiller
       )
     end
 
     context "when the backfill run is running" do
-      before { backfill_run.update!(status: "running") }
+      before { backfill_run.update(status: "running") }
 
       it "stops the backfill run and redirects" do
         post :stop, params: { id: backfill_run.id }
@@ -116,7 +114,7 @@ RSpec.describe DataDrip::BackfillRunsController, type: :controller do
     end
 
     context "when the backfill run is not running" do
-      before { backfill_run.update!(status: "completed") }
+      before { backfill_run.update(status: "completed") }
 
       it "does not change the status and redirects" do
         post :stop, params: { id: backfill_run.id }
@@ -133,31 +131,31 @@ RSpec.describe DataDrip::BackfillRunsController, type: :controller do
       DataDrip::BackfillRun.create!(
         backfill_class_name: "AddRoleToEmployee",
         batch_size: 100,
-        start_at: 1.hour.from_now,
+        start_at: Time.current + 1.hour,
         backfiller: backfiller
       )
     end
 
     context "when the backfill run is enqueued" do
-      before { backfill_run.update!(status: "enqueued") }
+      before { backfill_run.update(status: "enqueued") }
 
       it "deletes the backfill run and redirects" do
         delete :destroy, params: { id: backfill_run.id }
 
         expect(DataDrip::BackfillRun.exists?(backfill_run.id)).to be_falsey
-        expect(response).to redirect_to(backfill_runs_path(tab: "my_runs"))
+        expect(response).to redirect_to(backfill_runs_path)
         expect(flash[:notice]).to eq("Backfill run has been deleted.")
       end
     end
 
     context "when the backfill run is not enqueued" do
-      before { backfill_run.update!(status: "running") }
+      before { backfill_run.update(status: "running") }
 
       it "does not delete the backfill run and redirects with an alert" do
         delete :destroy, params: { id: backfill_run.id }
 
         expect(DataDrip::BackfillRun.exists?(backfill_run.id)).to be_truthy
-        expect(response).to redirect_to(backfill_runs_path(tab: "my_runs"))
+        expect(response).to redirect_to(backfill_runs_path)
         expect(flash[:alert]).to eq(
           "Backfill run cannot be deleted as it is not in an enqueued state."
         )
@@ -189,7 +187,7 @@ RSpec.describe DataDrip::BackfillRunsController, type: :controller do
       {
         backfill_class_name: "AddRoleToEmployee",
         batch_size: 100,
-        start_at: 1.hour.from_now
+        start_at: Time.current + 1.hour
       }
     end
 
@@ -204,7 +202,7 @@ RSpec.describe DataDrip::BackfillRunsController, type: :controller do
 
         backfill_run = DataDrip::BackfillRun.last!
         expect(backfill_run.options).to eq({ "age" => "25" })
-        expect(response).to redirect_to(backfill_runs_path(tab: "my_runs"))
+        expect(response).to redirect_to(backfill_runs_path)
       end
     end
 
@@ -218,7 +216,7 @@ RSpec.describe DataDrip::BackfillRunsController, type: :controller do
 
         backfill_run = DataDrip::BackfillRun.last!
         expect(backfill_run.options).to eq({})
-        expect(response).to redirect_to(backfill_runs_path(tab: "my_runs"))
+        expect(response).to redirect_to(backfill_runs_path)
       end
     end
 

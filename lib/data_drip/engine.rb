@@ -1,9 +1,6 @@
-# frozen_string_literal: true
-
 require "importmap-rails"
 require "turbo-rails"
 require "stimulus-rails"
-require_relative "concerns/paginatable"
 
 module DataDrip
   class Engine < ::Rails::Engine
@@ -15,7 +12,7 @@ module DataDrip
       app.config.assets.precompile << "data_drip_manifest.js"
     end
 
-    initializer "data_drip.importmap", after: "importmap" do |_app|
+    initializer "data_drip.importmap", after: "importmap" do |app|
       DataDrip.importmap.draw(root.join("config/importmap.rb"))
       DataDrip.importmap.cache_sweeper(watches: root.join("app/javascript"))
 
@@ -25,7 +22,7 @@ module DataDrip
     end
 
     initializer "data_drip.eager_load" do |app|
-      if !app.config.eager_load && Rails.root.join("app/backfills").exist?
+      if !app.config.eager_load && Dir.exist?(Rails.root.join("app/backfills"))
         app.config.to_prepare do
           Rails.autoloaders.main.eager_load_dir("#{Rails.root}/app/backfills")
         end

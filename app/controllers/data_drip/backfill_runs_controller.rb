@@ -1,9 +1,5 @@
-# frozen_string_literal: true
-
 module DataDrip
   class BackfillRunsController < DataDrip.base_controller_class.constantize
-    include DataDrip::Paginatable
-
     layout "data_drip/layouts/application"
     helper_method :backfill_class_names, :find_current_backfiller
     helper DataDrip::BackfillRunsHelper
@@ -11,21 +7,7 @@ module DataDrip
     before_action :set_user_timezone
 
     def index
-      @current_tab = params[:tab] || "my_runs"
-
-      base_scope =
-        case @current_tab
-        when "my_runs"
-          DataDrip::BackfillRun.where(backfiller: find_current_backfiller)
-        else
-          DataDrip::BackfillRun.all
-        end
-
-      pagination_data =
-        paginate_collection(base_scope.order(created_at: :desc), per_page: 10)
-
-      @backfill_runs = pagination_data[:collection]
-      @pagination = pagination_data
+      @backfill_runs = DataDrip::BackfillRun.all
     end
 
     def new
@@ -51,7 +33,7 @@ module DataDrip
 
       if @run.save
         local_time = @run.start_at.in_time_zone(@user_timezone)
-        redirect_to backfill_runs_path(tab: "my_runs"),
+        redirect_to backfill_runs_path,
                     notice:
                       "Backfill job for #{@run.backfill_class_name} has been enqueued. Will run at #{local_time.strftime("%d-%m-%Y, %H:%M:%S %Z")}."
       else
@@ -61,16 +43,6 @@ module DataDrip
 
     def show
       @backfill_run = DataDrip::BackfillRun.find(params[:id])
-
-      batch_pagination_data =
-        paginate_collection(
-          @backfill_run.batches.order(created_at: :desc),
-          per_page: 20,
-          page_param: :batch_page
-        )
-
-      @batches = batch_pagination_data[:collection]
-      @batch_pagination = batch_pagination_data
     end
 
     def destroy
@@ -83,7 +55,7 @@ module DataDrip
           :alert
         ] = "Backfill run cannot be deleted as it is not in an enqueued state."
       end
-      redirect_to backfill_runs_path(tab: params[:tab] || "my_runs")
+      redirect_to backfill_runs_path
     end
 
     def stop
@@ -109,7 +81,7 @@ module DataDrip
                    locals: {
                      status: @backfill_run.status
                    },
-                   formats: [ :html ]
+                   formats: [:html]
                  ),
                processed_count: @backfill_run.processed_count,
                total_count: @backfill_run.total_count,
@@ -119,7 +91,7 @@ module DataDrip
                    locals: {
                      backfill_run: @backfill_run
                    },
-                   formats: [ :html ]
+                   formats: [:html]
                  )
              }
     end
@@ -136,13 +108,13 @@ module DataDrip
       monitor_backfill_run
     rescue IOError, ActionController::Live::ClientDisconnected
       Rails.logger.info "SSE client disconnected for backfill run #{@backfill_run&.id}"
-    rescue StandardError => e
+    rescue => e
       Rails.logger.error "SSE error for backfill run #{@backfill_run&.id}: #{e.message}"
       Rails.logger.error e.backtrace.join("\n")
     ensure
       begin
-        response.stream.close if response.stream.respond_to?(:close)
-      rescue StandardError => e
+        response.stream.close if response.stream&.respond_to?(:close)
+      rescue => e
         Rails.logger.error "Error closing SSE stream: #{e.message}"
       end
     end
@@ -151,7 +123,7 @@ module DataDrip
       session[:user_timezone] = params[:timezone] if params[:timezone].present?
       respond_to do |format|
         format.json { render json: { success: true } }
-        format.html { redirect_back_or_to(backfill_runs_path) }
+        format.html { redirect_back(fallback_location: backfill_runs_path) }
       end
     end
 
@@ -176,7 +148,8 @@ module DataDrip
       temp_run =
         DataDrip::BackfillRun.new(
           backfill_class_name: backfill_class_name,
-          options: {}
+          options: {
+          }
         )
 
       html = helpers.backfill_option_inputs(temp_run)
@@ -191,7 +164,6 @@ module DataDrip
       unless respond_to?(DataDrip.current_backfiller_method, true)
         raise "Invalid DataDrip.current_backfiller_method: #{DataDrip.current_backfiller_method}. Maybe you need to change the `base_controller_class` for DataDrip (currently: #{DataDrip.base_controller_class})?"
       end
-
       send(DataDrip.current_backfiller_method)
     end
 
@@ -206,7 +178,7 @@ module DataDrip
             locals: {
               status: @backfill_run.status
             },
-            formats: [ :html ]
+            formats: [:html]
           ),
         processed_count: @backfill_run.processed_count,
         total_count: @backfill_run.total_count,
@@ -216,12 +188,12 @@ module DataDrip
             locals: {
               backfill_run: @backfill_run
             },
-            formats: [ :html ]
+            formats: [:html]
           )
       }
 
       response.stream.write("data: #{data.to_json}\n\n")
-    rescue StandardError => e
+    rescue => e
       Rails.logger.error "Error sending initial SSE data: #{e.message}"
       response.stream.write(
         "data: {\"error\": \"Failed to send initial data\"}\n\n"
@@ -247,7 +219,7 @@ module DataDrip
                Errno::ECONNRESET
           Rails.logger.info "SSE client disconnected during monitoring for backfill run #{@backfill_run.id}"
           break
-        rescue StandardError => e
+        rescue => e
           Rails.logger.error "SSE connection error: #{e.class} - #{e.message}"
           break
         end
@@ -265,7 +237,7 @@ module DataDrip
                   locals: {
                     status: @backfill_run.status
                   },
-                  formats: [ :html ]
+                  formats: [:html]
                 ),
               processed_count: @backfill_run.processed_count,
               total_count: @backfill_run.total_count,
@@ -275,7 +247,7 @@ module DataDrip
                   locals: {
                     backfill_run: @backfill_run
                   },
-                  formats: [ :html ]
+                  formats: [:html]
                 )
             }
 
@@ -287,7 +259,7 @@ module DataDrip
           end
 
           sleep 2
-        rescue StandardError => e
+        rescue => e
           Rails.logger.error "Error in SSE monitoring loop: #{e.message}"
           response.stream.write("data: {\"error\": \"Monitoring error\"}\n\n")
           break
@@ -309,7 +281,8 @@ module DataDrip
         :batch_size,
         :start_at,
         :amount_of_elements,
-        options: {}
+        options: {
+        }
       )
     end
 

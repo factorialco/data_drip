@@ -1,5 +1,3 @@
-# frozen_string_literal: true
-
 module DataDrip
   module BackfillRunsHelper
     def status_tag(status)

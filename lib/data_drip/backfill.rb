@@ -1,10 +1,11 @@
-# frozen_string_literal: true
 # typed: strict
 
 module DataDrip
   class Backfill
     def self.attribute(name, type = nil, default: nil, **options)
-      raise "Method #{name} already defined in #{self.class.name}" if instance_methods.include?(name.to_sym)
+      if instance_methods.include?(name.to_sym)
+        raise "Method #{name} already defined in #{self.class.name}"
+      end
 
       backfill_options_class.attribute(name, type, default: default, **options)
       define_method(name) { backfill_options.public_send(name) }
@@ -41,10 +42,12 @@ module DataDrip
       end
     end
 
-    delegate :count, to: :scope
+    def count
+      scope.count
+    end
 
     def explain
-      Rails.logger.debug scope.explain
+      pp scope.explain
     end
 
     attr_reader :backfill_options

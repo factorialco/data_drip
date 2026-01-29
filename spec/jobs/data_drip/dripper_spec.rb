@@ -1,5 +1,3 @@
-# frozen_string_literal: true
-
 require "spec_helper"
 
 RSpec.describe DataDrip::Dripper, type: :job do
@@ -14,7 +12,7 @@ RSpec.describe DataDrip::Dripper, type: :job do
       DataDrip::BackfillRun.create!(
         backfill_class_name: "AddRoleToEmployee",
         batch_size: 2,
-        start_at: 1.hour.from_now,
+        start_at: Time.current + 1.hour,
         backfiller: backfiller,
         options: {
           age: 25
@@ -75,9 +73,10 @@ RSpec.describe DataDrip::Dripper, type: :job do
         DataDrip::BackfillRun.create!(
           backfill_class_name: "AddRoleToEmployee",
           batch_size: 2,
-          start_at: 1.hour.from_now,
+          start_at: Time.current + 1.hour,
           backfiller: backfiller,
-          options: {}
+          options: {
+          }
         )
       end
 

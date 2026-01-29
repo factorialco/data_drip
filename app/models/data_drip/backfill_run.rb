@@ -1,5 +1,3 @@
-# frozen_string_literal: true
-
 module DataDrip
   class BackfillRun < ApplicationRecord
     self.table_name = "data_drip_backfill_runs"
@@ -67,7 +65,6 @@ module DataDrip
     end
 
     def validate_scope
-      return unless backfill_class_name.present?
       return unless backfill_class
 
       begin
@@ -79,9 +76,9 @@ module DataDrip
           )
         scope = backfill.scope
 
-        scope =
-          scope.limit(amount_of_elements) if amount_of_elements.present? &&
-          amount_of_elements.positive?
+        if amount_of_elements.present? && amount_of_elements > 0
+          scope = scope.limit(amount_of_elements)
+        end
 
         final_count = scope.count
         return unless final_count.zero?

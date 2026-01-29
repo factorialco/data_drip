@@ -1,8 +1,7 @@
-# frozen_string_literal: true
-
 # rails_template.rb
 
 # Set application name
+app_name = "data_drip_dummy"
 
 possible_paths = [
   File.expand_path("..", Dir.pwd),

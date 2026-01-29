@@ -1,5 +1,3 @@
-# frozen_string_literal: true
-
 DataDrip::Engine.routes.draw do
   root to: "backfill_runs#index"
 

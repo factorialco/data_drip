@@ -5,6 +5,4 @@ set -vx
 
 bundle install
 
-#echo "Creating databases..."
-
-rails db:setup TARGET_DB=sqlite
+# Do any other automated setup that you need to do here

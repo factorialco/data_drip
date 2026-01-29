@@ -1,5 +1,3 @@
-# frozen_string_literal: true
-
 require "spec_helper"
 
 RSpec.describe DataDrip::BackfillRunBatch, type: :model do
@@ -16,7 +14,7 @@ RSpec.describe DataDrip::BackfillRunBatch, type: :model do
         DataDrip::BackfillRun.new(
           backfill_class_name: "AddRoleToEmployee",
           batch_size: 10,
-          start_at: 1.hour.from_now,
+          start_at: Time.current + 1.hour,
           backfiller: backfiller,
           options: {
             age: 25
@@ -88,9 +86,10 @@ RSpec.describe DataDrip::BackfillRunBatch, type: :model do
           DataDrip::BackfillRun.new(
             backfill_class_name: "AddRoleToEmployee",
             batch_size: 10,
-            start_at: 1.hour.from_now,
+            start_at: Time.current + 1.hour,
             backfiller: backfiller,
-            options: {}
+            options: {
+            }
           )
         backfill_run.save!(validate: false)
         backfill_run
@@ -127,9 +126,10 @@ RSpec.describe DataDrip::BackfillRunBatch, type: :model do
         DataDrip::BackfillRun.new(
           backfill_class_name: "AddRoleToEmployee",
           batch_size: 10,
-          start_at: 1.hour.from_now,
+          start_at: Time.current + 1.hour,
           backfiller: backfiller,
-          options: {}
+          options: {
+          }
         )
       backfill_run.save!(validate: false)
       backfill_run
