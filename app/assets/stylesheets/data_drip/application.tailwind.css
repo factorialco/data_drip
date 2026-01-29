@@ -613,6 +613,33 @@
   .gradient-btn:hover {
     background: linear-gradient(135deg, #f72585 0%, #b5179e 60%, #560bad 100%);
   }
+  
+  /* Tab Navigation Styles */
+  .tab-link {
+    border-bottom: 2px solid transparent;
+    white-space: nowrap;
+    transition: all 0.2s ease-in-out;
+    text-decoration: none;
+  }
+
+  .active-tab {
+    border-bottom-color: #7209b7; 
+    color: #7209b7; 
+  }
+
+  .inactive-tab {
+    color: #6b7280; 
+  }
+
+  .inactive-tab:hover {
+    color: #374151; 
+    border-bottom-color: #d1d5db; 
+  }
+  
+  .pagination-current {
+    background-color: #7209b7; 
+    color: white;
+  }
 }
 @property --tw-border-style {
   syntax: "*";
