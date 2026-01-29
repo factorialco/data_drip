@@ -5,35 +5,19 @@ module DataDrip
     def perform(backfill_run)
       backfill_run.running!
 
-      new_backfill =
-        backfill_run.backfill_class.new(
-          batch_size: backfill_run.batch_size,
-          sleep_time: 5,
-          backfill_options: backfill_run.options || {}
-        )
+      new_backfill = backfill_run.backfill_class.new(batch_size: backfill_run.batch_size, sleep_time: 5)
       scope = new_backfill.scope
 
-      scope =
-        scope.limit(
-          backfill_run.amount_of_elements
-        ) if backfill_run.amount_of_elements.present? &&
-        backfill_run.amount_of_elements > 0
+      scope = scope.limit(backfill_run.amount_of_elements) if backfill_run.amount_of_elements.present? && backfill_run.amount_of_elements > 0
 
-      batch_ids =
-        scope
-          .find_in_batches(batch_size: backfill_run.batch_size)
-          .map do |batch|
-            {
-              finish_id: batch.last.id,
-              start_id: batch.first.id,
-              actual_size: batch.size
-            }
-          end
+      batch_ids = scope.find_in_batches(batch_size: backfill_run.batch_size).map do |batch| 
+        { finish_id: batch.last.id,
+          start_id: batch.first.id }
+      end
 
-      backfill_run.update(total_count: scope.count)
+      backfill_run.update(total_count: new_backfill.count)
 
-      if backfill_run.amount_of_elements.present? &&
-           backfill_run.amount_of_elements < backfill_run.batch_size
+      if backfill_run.amount_of_elements.present? && backfill_run.amount_of_elements < backfill_run.batch_size
         backfill_run.batch_size = backfill_run.amount_of_elements
         backfill_run.save
       end
@@ -43,7 +27,7 @@ module DataDrip
           BackfillRunBatch.create!(
             backfill_run: backfill_run,
             status: :pending,
-            batch_size: batch[:actual_size],
+            batch_size: backfill_run.batch_size,
             start_id: batch[:start_id],
             finish_id: batch[:finish_id]
           )

@@ -1,7 +1,6 @@
-
-<div class="min-h-screen flex items-center justify-center m-8 bg-gradient-to-r from-slate-700 to-gray-900">
+<div class="min-h-screen flex items-center justify-center bg-gradient-to-r from-slate-700 to-gray-900">
   <div class="w-full max-w-lg">
-    <%= form_with model: @run, url: backfill_runs_path, local: true, html: { class: "bg-white p-10 md:p-14 rounded-lg", "data-turbo": "false" } do |f| %>
+    <%= form_with model: @run, url: backfill_runs_path, local: true, html: { class: "bg-white p-10 md:p-14 rounded-lg" } do |f| %>
       <h1 class="text-4xl md:text-5xl font-semibold text-center mb-10 text-gray-700">New Backfill Run</h1>
       <% if @run.errors.any? %>
         <div class="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-6">
@@ -36,93 +35,25 @@
         <%= f.number_field :amount_of_elements, class: "block w-full mt-1 rounded border border-gray-200  focus:ring focus:ring-blue-200 focus:border-blue-400 px-3 py-2", min: 0, step: 10 %>
       </div>
 
-      <div id="backfill-options-container"></div>
-
       <div class="mb-6">
         <%= f.label :start_at, "RUN SHOULD START AT", class: "block text-gray-500 font-semibold mb-2" %>
         <%= f.datetime_field :start_at, value: "", class: "block w-full mt-1 rounded border border-gray-200 focus:ring focus:ring-blue-200 focus:border-blue-400 px-3 py-2" %>
       </div>
       <%= hidden_field_tag :user_timezone, "", id: "user_timezone" %>
       <div class="flex justify-center">
-        <%= f.submit "Create Backfill Run", id: "submit-btn", class: "text-white font-bold py-2 px-4 rounded gradient-btn" %>
+        <%= f.submit "Create Backfill Run", class: "text-white font-bold py-2 px-4 rounded gradient-btn" %>
       </div>
     <% end %>
   </div>
 </div>
 <script>
-  function initializeBackfillForm() {
+  document.addEventListener("DOMContentLoaded", function() {
     var timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
     var timeZoneInput = document.getElementById("user_timezone");
     if (timeZoneInput) { 
       timeZoneInput.value = timeZone; 
     }
-
-    var backfillClassSelect = document.getElementById("backfill_run_backfill_class_name");
-    var optionsContainer = document.getElementById("backfill-options-container");
-    
-    if (backfillClassSelect && optionsContainer) {
-      backfillClassSelect.removeEventListener("change", handleBackfillClassChange);
-      backfillClassSelect.addEventListener("change", handleBackfillClassChange);
-    } else {
-      setTimeout(initializeBackfillForm, 100);
-    }
-  }
-  
-  function handleBackfillClassChange() {
-    var selectedClass = this.value;
-    var optionsContainer = document.getElementById("backfill-options-container");
-    
-    if (!optionsContainer) {
-      return;
-    }
-    
-    optionsContainer.innerHTML = "";
-    
-    if (selectedClass && selectedClass !== "Select a backfill class") {
-      fetch("<%= backfill_options_backfill_runs_path %>?backfill_class_name=" + encodeURIComponent(selectedClass), {
-        method: "GET",
-        headers: {
-          "Accept": "application/json",
-          "X-Requested-With": "XMLHttpRequest",
-          "X-CSRF-Token": document.querySelector('meta[name="csrf-token"]')?.getAttribute('content')
-        }
-      })
-      .then(response => {
-        if (!response.ok) {
-          throw new Error('Network response was not ok: ' + response.status);
-        }
-        return response.json();
-      })
-      .then(data => {
-        if (data.html) {
-          optionsContainer.innerHTML = data.html;
-        }
-      })
-      .catch(error => {
-        console.error("Error fetching backfill options:", error);
-      });
-    }
-  }
-
-  document.addEventListener("DOMContentLoaded", initializeBackfillForm);
-  
-  if (document.readyState !== "loading") {
-    initializeBackfillForm();
-  }
-
-  document.addEventListener("DOMContentLoaded", function() {
-    var form = document.querySelector('form[action*="backfill_runs"]');
-    var submitBtn = document.getElementById("submit-btn");
-    
-    if (form && submitBtn) {
-      form.addEventListener("submit", function() {
-        submitBtn.disabled = true;
-        submitBtn.textContent = "Creating...";
-        submitBtn.classList.add("opacity-50", "cursor-not-allowed");
-      });
-    }
   });
-  
 </script>
 
 

@@ -8,11 +8,7 @@ module DataDrip
     validates :finish_id, presence: true
     validates :batch_size, presence: true, numericality: { greater_than: 0 }
 
-    DataDrip.cross_rails_enum(
-      self,
-      :status,
-      %i[pending enqueued running completed failed stopped]
-    )
+    DataDrip.cross_rails_enum(self, :status, %i[pending enqueued running completed failed stopped])
 
     after_commit :enqueue, on: :create
 
@@ -25,23 +21,9 @@ module DataDrip
 
     def run!
       running!
-      migration =
-        backfill_run.backfill_class.new(
-          batch_size: batch_size,
-          sleep_time: 5,
-          backfill_options: backfill_run.options
-        )
-
-      migration
-        .scope
-        .in_batches(
-          of: batch_size,
-          start: start_id,
-          finish: finish_id
-        ) do |batch|
-          migration.send(:process_batch, batch)
-          sleep 5
-        end
+      backfill =
+        backfill_run.backfill_class.new(batch_size: batch_size, sleep_time: 5)
+      backfill.call(start_id: start_id, finish_id: finish_id)
     end
   end
 end

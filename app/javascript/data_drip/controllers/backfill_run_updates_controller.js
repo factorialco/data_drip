@@ -7,8 +7,7 @@ export default class extends Controller {
   }
 
   connect() {
-    // Temporarily disabled SSE to fix connection issues
-    // this.startSSE()
+    this.startSSE()
   }
 
   disconnect() {

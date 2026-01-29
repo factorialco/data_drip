@@ -1,7 +1,4 @@
 class AddRoleToEmployee < DataDrip::Backfill
-
-  attribute :employee_id, :integer
-  
   def scope
     Employee.where(role: nil)
   end

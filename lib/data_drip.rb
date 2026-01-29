@@ -2,7 +2,6 @@
 
 require_relative "data_drip/version"
 require "rails"
-require "active_model"
 require "data_drip/engine"
 require "data_drip/backfill"
 

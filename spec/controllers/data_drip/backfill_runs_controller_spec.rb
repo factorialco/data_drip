@@ -5,10 +5,7 @@ RSpec.describe DataDrip::BackfillRunsController, type: :controller do
 
   let!(:backfiller) { User.create!(name: "Suzie") }
 
-  before do
-    Employee.create!(name: "Pepe", role: nil, age: 25)
-    Employee.create!(name: "John", role: nil, age: 30)
-  end
+  before { Employee.create!(name: "Pepe", role: nil) }
 
   describe "POST #create" do
     let(:valid_attributes) do
@@ -44,6 +41,7 @@ RSpec.describe DataDrip::BackfillRunsController, type: :controller do
       end.not_to change(DataDrip::BackfillRun, :count)
 
       expect(response.body).to include("Error")
+      expect(flash[:alert]).to eq("Error creating backfill run")
     end
 
     it "renders new template when backfill class name is invalid" do
@@ -55,6 +53,7 @@ RSpec.describe DataDrip::BackfillRunsController, type: :controller do
       end.not_to change(DataDrip::BackfillRun, :count)
 
       expect(response.body).to include("Error")
+      expect(flash[:alert]).to eq("Error creating backfill run")
     end
 
     context "with timezone conversion" do
@@ -179,72 +178,6 @@ RSpec.describe DataDrip::BackfillRunsController, type: :controller do
       expect(controller.send(:backfill_class_names)).to include(
         "AddRoleToEmployee"
       )
-    end
-  end
-
-  describe "POST #create with options" do
-    let(:base_attributes) do
-      {
-        backfill_class_name: "AddRoleToEmployee",
-        batch_size: 100,
-        start_at: Time.current + 1.hour
-      }
-    end
-
-    context "with valid options" do
-      it "creates BackfillRun with options stored" do
-        options = { age: "25" }
-        attributes = base_attributes.merge(options: options)
-
-        expect do
-          post :create, params: { backfill_run: attributes }
-        end.to change(DataDrip::BackfillRun, :count).by(1)
-
-        backfill_run = DataDrip::BackfillRun.last!
-        expect(backfill_run.options).to eq({ "age" => "25" })
-        expect(response).to redirect_to(backfill_runs_path)
-      end
-    end
-
-    context "with empty options" do
-      it "creates BackfillRun with empty options hash" do
-        attributes = base_attributes.merge(options: {})
-
-        expect do
-          post :create, params: { backfill_run: attributes }
-        end.to change(DataDrip::BackfillRun, :count).by(1)
-
-        backfill_run = DataDrip::BackfillRun.last!
-        expect(backfill_run.options).to eq({})
-        expect(response).to redirect_to(backfill_runs_path)
-      end
-    end
-
-    context "with invalid option keys" do
-      it "rejects BackfillRun with unknown attributes" do
-        options = { invalid_key: "some_value", another_invalid: "123" }
-        attributes = base_attributes.merge(options: options)
-
-        expect do
-          post :create, params: { backfill_run: attributes }
-        end.not_to change(DataDrip::BackfillRun, :count)
-
-        expect(response).to have_http_status(:ok)
-      end
-    end
-
-    context "options parameter permitting" do
-      it "allows any keys in options hash" do
-        options = { age: "25" }
-        attributes = base_attributes.merge(options: options)
-
-        expect do
-          post :create, params: { backfill_run: attributes }
-        end.to change(DataDrip::BackfillRun, :count).by(1)
-
-        backfill_run = DataDrip::BackfillRun.last!
-        expect(backfill_run.options).to eq({ "age" => "25" })
-      end
     end
   end
 end
