@@ -14,8 +14,15 @@ module DataDrip
   mattr_accessor :importmap, default: Importmap::Map.new
   mattr_accessor :before_backfill, default: nil
   mattr_accessor :sleep_time, default: 0.1
+  mattr_accessor :hooks_handler_class_name, default: nil
 
   class Error < StandardError
+  end
+
+  def self.hooks_handler_class
+    return nil unless hooks_handler_class_name.present?
+
+    hooks_handler_class_name.safe_constantize
   end
 
   def self.all

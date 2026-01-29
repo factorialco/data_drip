@@ -33,6 +33,7 @@ rails generate data_drip:install
 ```
 
 This will:
+
 - Mount the DataDrip engine at `/data_drip` in your routes
 - Create the `app/backfills` directory
 - Generate and run migrations for `data_drip_backfill_runs` and `data_drip_backfill_run_batches` tables
@@ -41,7 +42,7 @@ This will:
 
 - **Ruby**: >= 3.1.0
 - **Rails**: >= 7.1
-- **Dependencies**: 
+- **Dependencies**:
   - `importmap-rails` >= 1.2.1
   - `stimulus-rails` >= 1.0
   - `turbo-rails`
@@ -60,16 +61,19 @@ Create a DataDrip initializer file to customize the gem's behavior:
 Rails.application.configure do
   # The model class that represents users who can run backfills
   DataDrip.backfiller_class = 'Access'  # default: "::User"
-  
+
   # The attribute on the backfiller model to display the user's name
   DataDrip.backfiller_name_attribute = 'first_name'  # default: :name
-  
+
   # The controller method that returns the current authenticated user
   DataDrip.current_backfiller_method = :current_access  # default: :current_user
-  
+
   # The base controller class that DataDrip controllers should inherit from
   DataDrip.base_controller_class = 'ApiController'  # default: "::ApplicationController"
-  
+
+  # The class that handles lifecycle hooks for backfill runs and batches
+  DataDrip.hooks_handler_class_name = 'HookHandler'  # default: nil
+
   # Optional: Sleep time between batches in seconds (default: 0.1)
   DataDrip.sleep_time = 0.5
 end
@@ -85,7 +89,157 @@ end
 
 - **`base_controller_class`**: The controller class that DataDrip's controllers should inherit from. This is crucial for ensuring that DataDrip controllers have access to your application's authentication, authorization, and other controller concerns.
 
+- **`hooks_handler_class_name`**: The name of the class that handles lifecycle hooks for backfill runs and batches. When configured, this class will receive callbacks when backfills change status (e.g., `on_run_completed`, `on_batch_failed`). This is useful for sending notifications, tracking metrics, or integrating with external systems. See the [Hooks](#hooks) section for more details.
+
 This configuration is particularly useful when your application uses custom authentication systems, non-standard naming conventions, or when you need DataDrip to integrate with existing API controllers or admin interfaces.
+
+## Hooks
+
+DataDrip provides a powerful hooks system that allows you to respond to lifecycle events during backfill execution. Hooks are triggered when backfill runs or batches change status, enabling you to integrate with external systems, send notifications, track metrics, or perform any custom logic.
+
+### Setting Up a Global Hook Handler
+
+The recommended approach is to create a global hook handler class that responds to lifecycle events across all backfills.
+
+First, configure the hook handler in your initializer:
+
+```ruby
+# config/initializers/data_drip.rb
+DataDrip.hooks_handler_class_name = 'HookHandler'
+```
+
+Then create your hook handler class:
+
+```ruby
+# app/services/hook_handler.rb
+class HookHandler
+  # Run hooks - triggered when a BackfillRun changes status
+  def self.on_run_pending(run)
+    # Called when a run is created
+  end
+
+  def self.on_run_enqueued(run)
+    # Called when a run is enqueued for execution
+    # Example: Track metrics
+    Metrics.increment('backfill.enqueued', tags: { backfill: run.backfill_class_name })
+  end
+
+  def self.on_run_running(run)
+    # Called when a run starts processing
+  end
+
+  def self.on_run_completed(run)
+    # Called when a run completes successfully
+    # Example: Send notification
+    SlackNotifier.notify("Backfill #{run.backfill_class_name} completed!")
+  end
+
+  def self.on_run_failed(run)
+    # Called when a run fails
+    # Example: Send error alert
+    ErrorTracker.notify("Backfill failed: #{run.error_message}")
+  end
+
+  def self.on_run_stopped(run)
+    # Called when a run is manually stopped
+  end
+
+  # Batch hooks - triggered when a BackfillRunBatch changes status
+  def self.on_batch_pending(batch)
+    # Called when a batch is created
+  end
+
+  def self.on_batch_enqueued(batch)
+    # Called when a batch is enqueued
+  end
+
+  def self.on_batch_running(batch)
+    # Called when a batch starts processing
+  end
+
+  def self.on_batch_completed(batch)
+    # Called when a batch completes
+    # Example: Update progress tracking
+    ProgressTracker.update(batch.backfill_run_id, batch.id)
+  end
+
+  def self.on_batch_failed(batch)
+    # Called when a batch fails
+  end
+
+  def self.on_batch_stopped(batch)
+    # Called when a batch is stopped
+  end
+end
+```
+
+**Note:** You can implement any logic inside these hooks, such as sending Slack messages, tracking metrics in DataDog, updating external systems, or logging to custom services.
+
+### Available Hooks
+
+DataDrip provides hooks for both backfill runs (entire backfill execution) and batches (individual batch processing):
+
+#### Run Hooks
+
+These hooks receive a `BackfillRun` object as a parameter:
+
+| Hook               | Triggered When                    |
+| ------------------ | --------------------------------- |
+| `on_run_pending`   | Run is created                    |
+| `on_run_enqueued`  | Run is enqueued for execution     |
+| `on_run_running`   | Run starts processing batches     |
+| `on_run_completed` | All batches complete successfully |
+| `on_run_failed`    | Run encounters an error           |
+| `on_run_stopped`   | Run is manually stopped           |
+
+#### Batch Hooks
+
+These hooks receive a `BackfillRunBatch` object as a parameter:
+
+| Hook                 | Triggered When                   |
+| -------------------- | -------------------------------- |
+| `on_batch_pending`   | Batch is created                 |
+| `on_batch_enqueued`  | Batch is enqueued for processing |
+| `on_batch_running`   | Batch starts processing records  |
+| `on_batch_completed` | Batch completes successfully     |
+| `on_batch_failed`    | Batch encounters an error        |
+| `on_batch_stopped`   | Batch is stopped                 |
+
+### Per-Backfill Hooks
+
+You can also define hooks directly in your backfill classes for backfill-specific behavior. These hooks take precedence over the global handler:
+
+```ruby
+class SendWelcomeEmails < DataDrip::Backfill
+  def scope
+    User.where(welcome_email_sent: false)
+  end
+
+  def process_batch(batch)
+    batch.each { |user| WelcomeMailer.send_welcome(user).deliver_later }
+    batch.update_all(welcome_email_sent: true)
+  end
+
+  # Backfill-specific hook
+  def self.on_run_completed(run)
+    AdminMailer.backfill_summary(run).deliver_now
+  end
+
+  def self.on_batch_completed(batch)
+    # Track progress for this specific backfill
+    Rails.logger.info("Sent #{batch.batch_size} welcome emails")
+  end
+end
+```
+
+### Hook Precedence
+
+When a status change occurs, DataDrip checks for hooks in the following order:
+
+1. **Backfill class hooks** - If the backfill class defines the hook method, it will be called
+2. **Global handler hooks** - If the backfill class doesn't define the hook and a global handler is configured, the handler's method will be called
+
+This allows you to provide default behavior in the global handler while still allowing individual backfills to override specific hooks when needed.
 
 ## Creating Backfills
 
@@ -132,13 +286,13 @@ class AddRoleToEmployee < DataDrip::Backfill
 
   def scope
     scope = Employee.where(role: nil)
-    
+
     # Now you can use the attributes to filter the scope dynamically
     scope = scope.where(age: age) if age.present?
     scope = scope.where(name: name) if name.present?
     scope = scope.where(department: department) if department.present?
     scope = scope.where(active: true) if active_only
-    
+
     scope
   end
 
@@ -149,7 +303,7 @@ end
 ```
 
 When creating a backfill run through the form in the UI, you will see form fields for each attribute, allowing you to customize the backfill's behavior without modifying code.
-This way, it's easy to create a backfill run for different scenarios with different scopes. 
+This way, it's easy to create a backfill run for different scenarios with different scopes.
 
 #### Supported Attribute Types
 
@@ -160,7 +314,7 @@ DataDrip supports various attribute types that automatically generate appropriat
 - **`:decimal`** / **`:float`** - Number input with decimal support
 - **`:boolean`** - Checkbox
 - **`:date`** - Date picker
-- **`:time`** - Time picker  
+- **`:time`** - Time picker
 - **`:datetime`** - Date and time picker
 
 ### Backfill Structure
@@ -175,6 +329,7 @@ Every backfill must inherit from `DataDrip::Backfill` and implement:
 ### Examples
 
 #### Simple Update (Batch Processing)
+
 ```ruby
 class AddDefaultRoleToUsers < DataDrip::Backfill
   def scope
@@ -195,7 +350,7 @@ Navigate to `/data_drip/backfill_runs` in your application to access the DataDri
 
 - View all available backfills
 - Create new backfill runs with configurable options
-- Monitor progress and status  
+- Monitor progress and status
 - View error messages and logs
 - Stop running backfills
 - Schedule backfills for future execution

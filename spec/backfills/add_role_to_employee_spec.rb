@@ -7,7 +7,62 @@ RSpec.describe AddRoleToEmployee, type: :model do
   let!(:employee2) { Employee.create!(name: "Jane", role: nil, age: 30) }
   let!(:employee3) { Employee.create!(name: "Bob", role: nil, age: 25) }
   let!(:employee4) { Employee.create!(name: "Alice", role: "manager", age: 25) }
+  let(:backfill_run) do
+    DataDrip::BackfillRun.create!({
+      backfill_class_name: "AddRoleToEmployee",
+      batch_size: 100,
+      start_at: 1.hour.from_now,
+      backfiller: User.create!(name: "Test User")
+    })
+  end
 
+  let(:batch) do
+    batch =
+      DataDrip::BackfillRunBatch.new(
+        backfill_run: backfill_run,
+        batch_size: 10,
+        start_id: employee1.id,
+        finish_id: employee3.id,
+        status: :pending
+      )
+    batch.save!(validate: false)
+    batch.update_column(:status, 0)
+    batch
+  end
+
+  describe "hooks" do
+    context "when the run is completed" do
+      it "calls on_run_completed hook" do
+        backfill_run.completed!
+
+        expect(HookNotifier.instance.get('AddRoleToEmployee_run_completed')).to eq(backfill_run.id)
+      end
+    end
+
+    context "when the backfill run gets updated with anything else but the status" do
+      it "does not call any of the hooks" do
+        backfill_run.update!(batch_size: 99)
+
+        expect(HookNotifier.instance).to be_empty
+      end
+    end
+
+    context "when the status changes but no hook is defined for that status" do
+      it "does not raise an error" do
+        backfill_run.stopped!
+
+        expect(HookNotifier.instance).to be_empty
+      end
+    end
+
+    context "when the batch is completed" do
+      it "calls on_batch_completed hook" do
+        batch.completed!
+
+        expect(HookNotifier.instance.get('AddRoleToEmployee_batch_completed')).to eq(batch.id)
+      end
+    end
+  end
   describe "attributes" do
     it "can create an instance and access attributes" do
       backfill = AddRoleToEmployee.new
