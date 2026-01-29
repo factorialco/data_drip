@@ -55,6 +55,9 @@ module DataDrip
       hook_name = "on_batch_#{status}"
       if backfill_run.backfill_class.respond_to?(hook_name)
         backfill_run.backfill_class.send(hook_name, self)
+      elsif DataDrip.hooks_handler_class.present? &&
+            DataDrip.hooks_handler_class.respond_to?(hook_name)
+        DataDrip.hooks_handler_class.send(hook_name, self)
       end
     end
   end
