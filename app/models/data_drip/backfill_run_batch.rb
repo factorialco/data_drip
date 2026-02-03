@@ -26,18 +26,20 @@ module DataDrip
       enqueued!
     end
 
-    def run!
-      running!
-      migration =
-        backfill_run.backfill_class.new(
-          batch_size: batch_size,
-          sleep_time: 5,
-          backfill_options: backfill_run.options
-        )
+  def run!
+    running!
+    DataDrip.before_backfill&.call
 
-      migration
-        .scope
-        .in_batches(
+    migration =
+      backfill_run.backfill_class.new(
+        batch_size: batch_size,
+        sleep_time: 5,
+        backfill_options: backfill_run.options
+      )
+
+    migration
+      .scope
+      .in_batches(
           of: batch_size,
           start: start_id,
           finish: finish_id
