@@ -27,6 +27,9 @@ module DataDrip
         yield
       end
       run_hook(:after, status_value)
+    rescue
+      @__hooks_ran_for_status_change = false if defined?(@__hooks_ran_for_status_change) && @__hooks_ran_for_status_change
+      raise
     ensure
       @__hooks_in_action = false
     end
