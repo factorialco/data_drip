@@ -2,6 +2,8 @@
 
 module DataDrip
   class BackfillRun < ApplicationRecord
+    include DataDrip::Hookable
+
     self.table_name = "data_drip_backfill_runs"
 
     has_many :batches,
@@ -23,13 +25,37 @@ module DataDrip
               allow_nil: true
 
     after_commit :enqueue
-    after_commit :run_hooks
+    after_commit :run_status_change_hooks
 
     DataDrip.cross_rails_enum(
       self,
       :status,
       %i[pending enqueued running completed failed stopped]
     )
+
+    def pending!(*args, &block)
+      with_action_hooks(:pending) { super(*args, &block) }
+    end
+
+    def enqueued!(*args, &block)
+      with_action_hooks(:enqueued) { super(*args, &block) }
+    end
+
+    def running!(*args, &block)
+      with_action_hooks(:running) { super(*args, &block) }
+    end
+
+    def completed!(*args, &block)
+      with_action_hooks(:completed) { super(*args, &block) }
+    end
+
+    def failed!(*args, &block)
+      with_action_hooks(:failed) { super(*args, &block) }
+    end
+
+    def stopped!(*args, &block)
+      with_action_hooks(:stopped) { super(*args, &block) }
+    end
 
     def backfiller_name
       @backfiller_name ||=
@@ -44,22 +70,31 @@ module DataDrip
     def enqueue
       return unless pending?
 
-      DataDrip::Dripper.set(wait_until: start_at).perform_later(self)
-      enqueued!
+      with_action_hooks(:enqueued) do
+        DataDrip::Dripper.set(wait_until: start_at).perform_later(self)
+        enqueued!
+      end
+    end
+
+    def with_run_hooks(status_value)
+      with_action_hooks(status_value) { yield }
     end
 
     private
 
-    def run_hooks
-      return unless status_previously_changed?
+    def hook_target_for(hook_name)
+      return backfill_class if backfill_class.respond_to?(hook_name)
 
-      hook_name = "on_run_#{status}"
-      if backfill_class.respond_to?(hook_name)
-        backfill_class.send(hook_name, self)
-      elsif DataDrip.hooks_handler_class.present? && DataDrip.hooks_handler_class.respond_to?(hook_name)
-        DataDrip.hooks_handler_class.send(hook_name, self)
-      end
+      handler = DataDrip.hooks_handler_class
+      return handler if handler&.respond_to?(hook_name)
+
+      nil
     end
+
+    def hook_prefix
+      "run"
+    end
+
 
     def backfill_class_exists
       return if backfill_class

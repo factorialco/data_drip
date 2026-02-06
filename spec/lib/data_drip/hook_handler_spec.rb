@@ -18,9 +18,19 @@ RSpec.describe "HookHandler" do
     before { DataDrip.hooks_handler_class_name = "HookHandler" }
 
     it "calls the expected hook" do
-      expect(HookHandler).to receive(:on_run_enqueued).and_call_original
+      expect(HookHandler).to receive(:after_run_enqueued).and_call_original
       backfill_run.update_column(:status, :pending)
-      backfill_run.enqueued!
+      backfill_run.enqueue
+    end
+
+    it "runs before hooks and wraps the enqueue action with around hooks" do
+      backfill_run.update_column(:status, :pending)
+      HookNotifier.instance.set("handler_run_enqueued_sequence", [])
+      backfill_run.enqueue
+
+      expect(
+        HookNotifier.instance.get("handler_run_enqueued_sequence")
+      ).to eq(%w[before around_before around_after after])
     end
 
     it "Doesn't raise an error if a hook method is not implemented" do
@@ -28,7 +38,7 @@ RSpec.describe "HookHandler" do
     end
 
     it "Doesn't call the hook handler if the hook is implemented in the backfill class" do
-      expect(HookHandler).not_to receive(:on_run_completed)
+      expect(HookHandler).not_to receive(:after_run_completed)
       backfill_run.completed!
     end
 
@@ -45,7 +55,7 @@ RSpec.describe "HookHandler" do
       end
 
       it "calls the expected batch hook from handler" do
-        expect(HookHandler).to receive(:on_batch_enqueued).and_call_original
+        expect(HookHandler).to receive(:after_batch_enqueued).and_call_original
         batch.update_column(:status, :pending)
         batch.enqueued!
       end
@@ -55,8 +65,19 @@ RSpec.describe "HookHandler" do
       end
 
       it "doesn't call the hook handler if the hook is implemented in the backfill class" do
-        expect(HookHandler).not_to receive(:on_batch_completed)
+        expect(HookHandler).not_to receive(:after_batch_completed)
         batch.completed!
+      end
+
+      it "wraps batch run with around hooks" do
+        HookNotifier.instance.set("handler_batch_running_sequence", [])
+        allow(batch).to receive(:sleep)
+
+        batch.run!
+
+        expect(
+          HookNotifier.instance.get("handler_batch_running_sequence")
+        ).to eq(%w[before around_before around_after after])
       end
     end
   end
@@ -65,7 +86,7 @@ RSpec.describe "HookHandler" do
     before { DataDrip.hooks_handler_class_name = nil }
 
     it "does not call any hooks" do
-      expect(HookHandler).not_to receive(:on_run_enqueued)
+      expect(HookHandler).not_to receive(:after_run_enqueued)
       backfill_run.enqueued!
     end
 
@@ -79,7 +100,7 @@ RSpec.describe "HookHandler" do
             batch_size: 100
           }
         )
-      expect(HookHandler).not_to receive(:on_batch_enqueued)
+      expect(HookHandler).not_to receive(:after_batch_enqueued)
       batch.update_column(:status, :pending)
       batch.enqueued!
     end
