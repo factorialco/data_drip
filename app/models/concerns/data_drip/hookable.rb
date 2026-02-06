@@ -13,7 +13,8 @@ module DataDrip
       end
 
       run_hook(:before, status)
-      run_around_hook(status) { run_hook(:after, status) }
+      run_around_hook(status) {}
+      run_hook(:after, status)
     end
 
     def with_action_hooks(status_value)
