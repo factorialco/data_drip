@@ -71,6 +71,9 @@ Rails.application.configure do
   # The base controller class that DataDrip controllers should inherit from
   DataDrip.base_controller_class = 'ApiController'  # default: "::ApplicationController"
 
+  # The base job class that DataDrip jobs should inherit from
+  DataDrip.base_job_class = '::ApplicationJob'  # default: "ActiveJob::Base"
+
   # The class that handles lifecycle hooks for backfill runs and batches
   DataDrip.hooks_handler_class_name = 'HookHandler'  # default: nil
 
@@ -88,6 +91,8 @@ end
 - **`current_backfiller_method`**: The method name that your base controller uses to get the currently authenticated user. DataDrip controllers will call this method to determine who is creating backfills.
 
 - **`base_controller_class`**: The controller class that DataDrip's controllers should inherit from. This is crucial for ensuring that DataDrip controllers have access to your application's authentication, authorization, and other controller concerns.
+
+- **`base_job_class`**: The base job class that DataDrip's job classes (`Dripper` and `DripperChild`) should inherit from. This allows you to use a custom job class instead of the default `ActiveJob::Base`. Useful if your application has a custom job base class with additional functionality or configuration. The class must be a subclass of `ActiveJob::Base`.
 
 - **`hooks_handler_class_name`**: The name of the class that handles lifecycle hooks for backfill runs and batches. When configured, this class will receive callbacks when backfills change status (e.g., `on_run_completed`, `on_batch_failed`). This is useful for sending notifications, tracking metrics, or integrating with external systems. See the [Hooks](#hooks) section for more details.
 

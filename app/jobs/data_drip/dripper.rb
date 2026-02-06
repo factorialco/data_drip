@@ -1,7 +1,7 @@
 # frozen_string_literal: true
 
 module DataDrip
-  class Dripper < ApplicationJob
+  class Dripper < DataDrip.base_job_class.safe_constantize
     queue_as :data_drip
 
     def perform(backfill_run)
@@ -16,28 +16,25 @@ module DataDrip
       scope = new_backfill.scope
 
       if backfill_run.amount_of_elements.present? &&
-         backfill_run.amount_of_elements.positive?
-        scope =
-          scope.limit(
-            backfill_run.amount_of_elements
-          )
+           backfill_run.amount_of_elements.positive?
+        scope = scope.limit(backfill_run.amount_of_elements)
       end
 
       batch_ids =
         scope
-        .find_in_batches(batch_size: backfill_run.batch_size)
-        .map do |batch|
-          {
-            finish_id: batch.last.id,
-            start_id: batch.first.id,
-            actual_size: batch.size
-          }
-        end
+          .find_in_batches(batch_size: backfill_run.batch_size)
+          .map do |batch|
+            {
+              finish_id: batch.last.id,
+              start_id: batch.first.id,
+              actual_size: batch.size
+            }
+          end
 
       backfill_run.update!(total_count: scope.count)
 
       if backfill_run.amount_of_elements.present? &&
-         backfill_run.amount_of_elements < backfill_run.batch_size
+           backfill_run.amount_of_elements < backfill_run.batch_size
         backfill_run.batch_size = backfill_run.amount_of_elements
         backfill_run.save!
       end
