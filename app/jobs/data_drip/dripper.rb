@@ -5,52 +5,54 @@ module DataDrip
     queue_as :data_drip
 
     def perform(backfill_run)
-      backfill_run.running!
+      backfill_run.with_run_hooks(:running) do
+        backfill_run.running!
 
-      new_backfill =
-        backfill_run.backfill_class.new(
-          batch_size: backfill_run.batch_size,
-          sleep_time: 5,
-          backfill_options: backfill_run.options || {}
-        )
-      scope = new_backfill.scope
-
-      if backfill_run.amount_of_elements.present? &&
-         backfill_run.amount_of_elements.positive?
-        scope =
-          scope.limit(
-            backfill_run.amount_of_elements
+        new_backfill =
+          backfill_run.backfill_class.new(
+            batch_size: backfill_run.batch_size,
+            sleep_time: 5,
+            backfill_options: backfill_run.options || {}
           )
-      end
+        scope = new_backfill.scope
 
-      batch_ids =
-        scope
-        .find_in_batches(batch_size: backfill_run.batch_size)
-        .map do |batch|
-          {
-            finish_id: batch.last.id,
-            start_id: batch.first.id,
-            actual_size: batch.size
-          }
+        if backfill_run.amount_of_elements.present? &&
+           backfill_run.amount_of_elements.positive?
+          scope =
+            scope.limit(
+              backfill_run.amount_of_elements
+            )
         end
 
-      backfill_run.update!(total_count: scope.count)
+        batch_ids =
+          scope
+          .find_in_batches(batch_size: backfill_run.batch_size)
+          .map do |batch|
+            {
+              finish_id: batch.last.id,
+              start_id: batch.first.id,
+              actual_size: batch.size
+            }
+          end
 
-      if backfill_run.amount_of_elements.present? &&
-         backfill_run.amount_of_elements < backfill_run.batch_size
-        backfill_run.batch_size = backfill_run.amount_of_elements
-        backfill_run.save!
-      end
+        backfill_run.update!(total_count: scope.count)
 
-      BackfillRun.transaction do
-        batch_ids.each do |batch|
-          BackfillRunBatch.create!(
-            backfill_run: backfill_run,
-            status: :pending,
-            batch_size: batch[:actual_size],
-            start_id: batch[:start_id],
-            finish_id: batch[:finish_id]
-          )
+        if backfill_run.amount_of_elements.present? &&
+           backfill_run.amount_of_elements < backfill_run.batch_size
+          backfill_run.batch_size = backfill_run.amount_of_elements
+          backfill_run.save!
+        end
+
+        BackfillRun.transaction do
+          batch_ids.each do |batch|
+            BackfillRunBatch.create!(
+              backfill_run: backfill_run,
+              status: :pending,
+              batch_size: batch[:actual_size],
+              start_id: batch[:start_id],
+              finish_id: batch[:finish_id]
+            )
+          end
         end
       end
     rescue StandardError => e
