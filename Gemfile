@@ -14,6 +14,7 @@ gem "rake", "~> 13.0"
 gem "rails"
 gem "sqlite3", ">= 2.9.0"
 gem "nokogiri", ">= 1.19.0"
+gem "unicode-emoji", ">= 4.2.0"
 
 gem "rspec", "~> 3.0"
 
