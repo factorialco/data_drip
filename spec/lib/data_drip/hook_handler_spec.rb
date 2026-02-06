@@ -75,10 +75,10 @@ RSpec.describe "HookHandler" do
 
         batch.run!
 
-      expect(
-        HookNotifier.instance.get("handler_batch_running_sequence")
-      ).to eq(%w[before around_before around_after after])
-    end
+        expect(
+          HookNotifier.instance.get("handler_batch_running_sequence")
+        ).to eq(%w[before around_before around_after after])
+      end
     end
   end
 
