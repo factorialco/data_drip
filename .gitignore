@@ -8,6 +8,7 @@
 /tmp/
 /log/
 /node_modules/
+/vendor/
 my_data_drip_dummy/
 .DS_Store
 
