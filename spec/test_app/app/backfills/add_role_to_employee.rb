@@ -33,12 +33,46 @@ class AddRoleToEmployee < DataDrip::Backfill
   #   element.update!(role: 'new_role')
   # end
 
-  def self.on_run_completed(run)
-    HookNotifier.instance.set('AddRoleToEmployee_run_completed', run.id)
+  def self.before_run_completed(run)
+    HookNotifier.instance.set("AddRoleToEmployee_run_completed_sequence", [ "before" ])
   end
 
-  def self.on_batch_completed(batch)
-    HookNotifier.instance.set('AddRoleToEmployee_batch_completed', batch.id)
+  def self.around_run_completed(run)
+    sequence = HookNotifier.instance.get("AddRoleToEmployee_run_completed_sequence") || []
+    sequence << "around_before"
+    HookNotifier.instance.set("AddRoleToEmployee_run_completed_sequence", sequence)
+    yield
+    sequence = HookNotifier.instance.get("AddRoleToEmployee_run_completed_sequence") || []
+    sequence << "around_after"
+    HookNotifier.instance.set("AddRoleToEmployee_run_completed_sequence", sequence)
+  end
+
+  def self.after_run_completed(run)
+    sequence = HookNotifier.instance.get("AddRoleToEmployee_run_completed_sequence") || []
+    sequence << "after"
+    HookNotifier.instance.set("AddRoleToEmployee_run_completed_sequence", sequence)
+    HookNotifier.instance.set("AddRoleToEmployee_run_completed", run.id)
+  end
+
+  def self.before_batch_completed(batch)
+    HookNotifier.instance.set("AddRoleToEmployee_batch_completed_sequence", [ "before" ])
+  end
+
+  def self.around_batch_completed(batch)
+    sequence = HookNotifier.instance.get("AddRoleToEmployee_batch_completed_sequence") || []
+    sequence << "around_before"
+    HookNotifier.instance.set("AddRoleToEmployee_batch_completed_sequence", sequence)
+    yield
+    sequence = HookNotifier.instance.get("AddRoleToEmployee_batch_completed_sequence") || []
+    sequence << "around_after"
+    HookNotifier.instance.set("AddRoleToEmployee_batch_completed_sequence", sequence)
+  end
+
+  def self.after_batch_completed(batch)
+    sequence = HookNotifier.instance.get("AddRoleToEmployee_batch_completed_sequence") || []
+    sequence << "after"
+    HookNotifier.instance.set("AddRoleToEmployee_batch_completed_sequence", sequence)
+    HookNotifier.instance.set("AddRoleToEmployee_batch_completed", batch.id)
   end
 
   def process_batch(batch)
