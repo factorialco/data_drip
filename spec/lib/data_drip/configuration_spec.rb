@@ -53,7 +53,16 @@ RSpec.describe "DataDrip Configuration" do
 
   describe "queue_name" do
     it "defaults to :default when DATA_DRIP_QUEUE is not set" do
-      expect(DataDrip.queue_name).to be_a(Symbol)
+      original_value = DataDrip.queue_name
+      original_env = ENV["DATA_DRIP_QUEUE"]
+      begin
+        ENV.delete("DATA_DRIP_QUEUE")
+        DataDrip.queue_name = (ENV["DATA_DRIP_QUEUE"].presence || "default").to_sym
+        expect(DataDrip.queue_name).to eq(:default)
+      ensure
+        ENV["DATA_DRIP_QUEUE"] = original_env
+        DataDrip.queue_name = original_value
+      end
     end
 
     it "can be configured" do
