@@ -51,6 +51,48 @@ RSpec.describe "DataDrip Configuration" do
     end
   end
 
+  describe "queue_name" do
+    it "defaults to :default when DATA_DRIP_QUEUE is not set" do
+      expect(DataDrip.queue_name).to be_a(Symbol)
+    end
+
+    it "can be configured" do
+      original_value = DataDrip.queue_name
+      begin
+        DataDrip.queue_name = :custom_queue
+        expect(DataDrip.queue_name).to eq(:custom_queue)
+      ensure
+        DataDrip.queue_name = original_value
+      end
+    end
+
+    it "is resolved dynamically at enqueue time for Dripper" do
+      original_value = DataDrip.queue_name
+      begin
+        DataDrip.queue_name = :backfills
+        expect(DataDrip::Dripper.new.queue_name).to eq("backfills")
+
+        DataDrip.queue_name = :low_priority
+        expect(DataDrip::Dripper.new.queue_name).to eq("low_priority")
+      ensure
+        DataDrip.queue_name = original_value
+      end
+    end
+
+    it "is resolved dynamically at enqueue time for DripperChild" do
+      original_value = DataDrip.queue_name
+      begin
+        DataDrip.queue_name = :backfills
+        expect(DataDrip::DripperChild.new.queue_name).to eq("backfills")
+
+        DataDrip.queue_name = :low_priority
+        expect(DataDrip::DripperChild.new.queue_name).to eq("low_priority")
+      ensure
+        DataDrip.queue_name = original_value
+      end
+    end
+  end
+
   describe "base_controller_class" do
     it "defaults to ApplicationController" do
       expect(DataDrip.base_controller_class).to eq("::ApplicationController")
