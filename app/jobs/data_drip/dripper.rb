@@ -2,7 +2,7 @@
 
 module DataDrip
   class Dripper < DataDrip.base_job_class.safe_constantize
-    queue_as :data_drip
+    queue_as :within_24_hours
 
     def perform(backfill_run)
       backfill_run.running!

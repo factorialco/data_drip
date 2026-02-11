@@ -2,7 +2,7 @@
 
 module DataDrip
   class DripperChild < DataDrip.base_job_class.safe_constantize
-    queue_as :data_drip_child
+    queue_as :within_24_hours
 
     def perform(backfill_run_batch)
       parent = backfill_run_batch.backfill_run
