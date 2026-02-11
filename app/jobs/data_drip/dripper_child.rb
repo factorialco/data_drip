@@ -2,7 +2,7 @@
 
 module DataDrip
   class DripperChild < DataDrip.base_job_class.safe_constantize
-    queue_as { DataDrip.queue_name }
+    queue_as { DataDrip.child_queue_name }
 
     def perform(backfill_run_batch)
       parent = backfill_run_batch.backfill_run

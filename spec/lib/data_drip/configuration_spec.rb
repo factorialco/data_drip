@@ -52,13 +52,13 @@ RSpec.describe "DataDrip Configuration" do
   end
 
   describe "queue_name" do
-    it "defaults to :default when DATA_DRIP_QUEUE is not set" do
+    it "defaults to :data_drip when DATA_DRIP_QUEUE is not set" do
       original_value = DataDrip.queue_name
       original_env = ENV["DATA_DRIP_QUEUE"]
       begin
         ENV.delete("DATA_DRIP_QUEUE")
-        DataDrip.queue_name = (ENV["DATA_DRIP_QUEUE"].presence || "default").to_sym
-        expect(DataDrip.queue_name).to eq(:default)
+        DataDrip.queue_name = (ENV["DATA_DRIP_QUEUE"].presence || "data_drip").to_sym
+        expect(DataDrip.queue_name).to eq(:data_drip)
       ensure
         ENV["DATA_DRIP_QUEUE"] = original_env
         DataDrip.queue_name = original_value
@@ -78,8 +78,8 @@ RSpec.describe "DataDrip Configuration" do
     it "is resolved dynamically at enqueue time for Dripper" do
       original_value = DataDrip.queue_name
       begin
-        DataDrip.queue_name = :backfills
-        expect(DataDrip::Dripper.new.queue_name).to eq("backfills")
+        DataDrip.queue_name = :within_24_hours
+        expect(DataDrip::Dripper.new.queue_name).to eq("within_24_hours")
 
         DataDrip.queue_name = :low_priority
         expect(DataDrip::Dripper.new.queue_name).to eq("low_priority")
@@ -87,17 +87,42 @@ RSpec.describe "DataDrip Configuration" do
         DataDrip.queue_name = original_value
       end
     end
+  end
+
+  describe "child_queue_name" do
+    it "defaults to :data_drip_child when DATA_DRIP_CHILD_QUEUE is not set" do
+      original_value = DataDrip.child_queue_name
+      original_env = ENV["DATA_DRIP_CHILD_QUEUE"]
+      begin
+        ENV.delete("DATA_DRIP_CHILD_QUEUE")
+        DataDrip.child_queue_name = (ENV["DATA_DRIP_CHILD_QUEUE"].presence || "data_drip_child").to_sym
+        expect(DataDrip.child_queue_name).to eq(:data_drip_child)
+      ensure
+        ENV["DATA_DRIP_CHILD_QUEUE"] = original_env
+        DataDrip.child_queue_name = original_value
+      end
+    end
+
+    it "can be configured" do
+      original_value = DataDrip.child_queue_name
+      begin
+        DataDrip.child_queue_name = :custom_child_queue
+        expect(DataDrip.child_queue_name).to eq(:custom_child_queue)
+      ensure
+        DataDrip.child_queue_name = original_value
+      end
+    end
 
     it "is resolved dynamically at enqueue time for DripperChild" do
-      original_value = DataDrip.queue_name
+      original_value = DataDrip.child_queue_name
       begin
-        DataDrip.queue_name = :backfills
-        expect(DataDrip::DripperChild.new.queue_name).to eq("backfills")
+        DataDrip.child_queue_name = :within_24_hours
+        expect(DataDrip::DripperChild.new.queue_name).to eq("within_24_hours")
 
-        DataDrip.queue_name = :low_priority
+        DataDrip.child_queue_name = :low_priority
         expect(DataDrip::DripperChild.new.queue_name).to eq("low_priority")
       ensure
-        DataDrip.queue_name = original_value
+        DataDrip.child_queue_name = original_value
       end
     end
   end
