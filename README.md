@@ -74,9 +74,6 @@ Rails.application.configure do
   # The base job class that DataDrip jobs should inherit from
   DataDrip.base_job_class = '::ApplicationJob'  # default: "ActiveJob::Base"
 
-  # The Active Job queue name for backfill jobs (default: ENV["DATA_DRIP_QUEUE"] or :default)
-  DataDrip.queue_name = :backfills  # or set DATA_DRIP_QUEUE env var in your deployment
-
   # The class that handles lifecycle hooks for backfill runs and batches
   DataDrip.hooks_handler_class_name = 'HookHandler'  # default: nil
 
@@ -97,7 +94,6 @@ end
 
 - **`base_job_class`**: The base job class that DataDrip's job classes (`Dripper` and `DripperChild`) should inherit from. This allows you to use a custom job class instead of the default `ActiveJob::Base`. Useful if your application has a custom job base class with additional functionality or configuration. The class must be a subclass of `ActiveJob::Base`.
 
-- **`queue_name`**: The Active Job queue name used by `Dripper` and `DripperChild`. Defaults to `ENV["DATA_DRIP_QUEUE"]` if set, otherwise `:default`. The queue is resolved dynamically at enqueue time (not class load time), so changes to this value are picked up immediately. You can set it in the initializer (e.g. `DataDrip.queue_name = :backfills`) or configure it via the `DATA_DRIP_QUEUE` environment variable in your deployment.
 
 - **`hooks_handler_class_name`**: The name of the class that handles lifecycle hooks for backfill runs and batches. When configured, this class will receive callbacks when backfills change status (e.g., `on_run_completed`, `on_batch_failed`). This is useful for sending notifications, tracking metrics, or integrating with external systems. See the [Hooks](#hooks) section for more details.
 
