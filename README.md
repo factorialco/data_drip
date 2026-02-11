@@ -94,7 +94,6 @@ end
 
 - **`base_job_class`**: The base job class that DataDrip's job classes (`Dripper` and `DripperChild`) should inherit from. This allows you to use a custom job class instead of the default `ActiveJob::Base`. Useful if your application has a custom job base class with additional functionality or configuration. The class must be a subclass of `ActiveJob::Base`.
 
-
 - **`hooks_handler_class_name`**: The name of the class that handles lifecycle hooks for backfill runs and batches. When configured, this class will receive callbacks when backfills change status (e.g., `on_run_completed`, `on_batch_failed`). This is useful for sending notifications, tracking metrics, or integrating with external systems. See the [Hooks](#hooks) section for more details.
 
 This configuration is particularly useful when your application uses custom authentication systems, non-standard naming conventions, or when you need DataDrip to integrate with existing API controllers or admin interfaces.
