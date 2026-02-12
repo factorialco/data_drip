@@ -12,6 +12,8 @@ module DataDrip
   mattr_accessor :current_backfiller_method, default: :current_user
   mattr_accessor :base_controller_class, default: "::ApplicationController"
   mattr_accessor :base_job_class, default: "ActiveJob::Base"
+  mattr_accessor :queue_name, default: (ENV["DATA_DRIP_QUEUE"].presence || "data_drip").to_sym
+  mattr_accessor :child_queue_name, default: (ENV["DATA_DRIP_CHILD_QUEUE"].presence || "data_drip_child").to_sym
   mattr_accessor :importmap, default: Importmap::Map.new
   mattr_accessor :before_backfill, default: nil
   mattr_accessor :sleep_time, default: 0.1
