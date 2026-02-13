@@ -22,3 +22,4 @@ spec/test_app/config/credentials/
 # rspec failure tracking
 .rspec_status
 .byebug_history
+/vendor/bundle/

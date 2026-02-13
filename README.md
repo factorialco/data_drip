@@ -104,13 +104,13 @@ end
 
 - **`child_queue_name`**: The Active Job queue for the `DripperChild` batch job. Defaults to `ENV["DATA_DRIP_CHILD_QUEUE"]` if set, otherwise `:data_drip_child`. This is separate from `queue_name` so you can route parent and child jobs to different queues for priority or resource management.
 
-- **`hooks_handler_class_name`**: The name of the class that handles lifecycle hooks for backfill runs and batches. When configured, this class will receive callbacks when backfills change status (e.g., `on_run_completed`, `on_batch_failed`). This is useful for sending notifications, tracking metrics, or integrating with external systems. See the [Hooks](#hooks) section for more details.
+- **`hooks_handler_class_name`**: The name of the class that handles lifecycle hooks for backfill runs and batches. When configured, this class will receive callbacks when backfills change status (e.g., `after_run_completed`, `after_batch_failed`). This is useful for sending notifications, tracking metrics, or integrating with external systems. See the [Hooks](#hooks) section for more details.
 
 This configuration is particularly useful when your application uses custom authentication systems, non-standard naming conventions, or when you need DataDrip to integrate with existing API controllers or admin interfaces.
 
 ## Hooks
 
-DataDrip provides a powerful hooks system that allows you to respond to lifecycle events during backfill execution. Hooks are triggered when backfill runs or batches change status, enabling you to integrate with external systems, send notifications, track metrics, or perform any custom logic.
+DataDrip provides a powerful hooks system that allows you to respond to lifecycle events during backfill execution. Hooks are tied to status transitions and run around the action that changes the status, enabling you to integrate with external systems, send notifications, track metrics, or perform any custom logic.
 
 ### Setting Up a Global Hook Handler
 
@@ -128,62 +128,39 @@ Then create your hook handler class:
 ```ruby
 # app/services/hook_handler.rb
 class HookHandler
-  # Run hooks - triggered when a BackfillRun changes status
-  def self.on_run_pending(run)
-    # Called when a run is created
+  # Run hooks - triggered when a BackfillRun changes status or action starts
+  def self.before_run_enqueued(run)
+    # Called before the run is enqueued
   end
 
-  def self.on_run_enqueued(run)
+  def self.around_run_enqueued(run)
+    # Called around the enqueue action
+    yield
+  end
+
+  def self.after_run_enqueued(run)
     # Called when a run is enqueued for execution
     # Example: Track metrics
     Metrics.increment('backfill.enqueued', tags: { backfill: run.backfill_class_name })
   end
 
-  def self.on_run_running(run)
-    # Called when a run starts processing
-  end
-
-  def self.on_run_completed(run)
+  def self.after_run_completed(run)
     # Called when a run completes successfully
     # Example: Send notification
     SlackNotifier.notify("Backfill #{run.backfill_class_name} completed!")
   end
 
-  def self.on_run_failed(run)
+  def self.after_run_failed(run)
     # Called when a run fails
     # Example: Send error alert
     ErrorTracker.notify("Backfill failed: #{run.error_message}")
   end
 
-  def self.on_run_stopped(run)
-    # Called when a run is manually stopped
-  end
-
   # Batch hooks - triggered when a BackfillRunBatch changes status
-  def self.on_batch_pending(batch)
-    # Called when a batch is created
-  end
-
-  def self.on_batch_enqueued(batch)
-    # Called when a batch is enqueued
-  end
-
-  def self.on_batch_running(batch)
-    # Called when a batch starts processing
-  end
-
-  def self.on_batch_completed(batch)
+  def self.after_batch_completed(batch)
     # Called when a batch completes
     # Example: Update progress tracking
     ProgressTracker.update(batch.backfill_run_id, batch.id)
-  end
-
-  def self.on_batch_failed(batch)
-    # Called when a batch fails
-  end
-
-  def self.on_batch_stopped(batch)
-    # Called when a batch is stopped
   end
 end
 ```
@@ -196,29 +173,25 @@ DataDrip provides hooks for both backfill runs (entire backfill execution) and b
 
 #### Run Hooks
 
-These hooks receive a `BackfillRun` object as a parameter:
+These hooks receive a `BackfillRun` object as a parameter. For every status, you can define any or all of the following:
 
-| Hook               | Triggered When                    |
-| ------------------ | --------------------------------- |
-| `on_run_pending`   | Run is created                    |
-| `on_run_enqueued`  | Run is enqueued for execution     |
-| `on_run_running`   | Run starts processing batches     |
-| `on_run_completed` | All batches complete successfully |
-| `on_run_failed`    | Run encounters an error           |
-| `on_run_stopped`   | Run is manually stopped           |
+- `before_run_<status>` (runs first)
+- `around_run_<status>` (wraps the action and must `yield`)
+- `after_run_<status>` (runs last)
+
+Valid statuses: `pending`, `enqueued`, `running`, `completed`, `failed`, `stopped`.
+Hooks always wrap the action that performs the status transition. The `around_*` hook wraps the transition itself, and the `after_*` hook runs after the status update and after the `around_*` hook completes.
 
 #### Batch Hooks
 
-These hooks receive a `BackfillRunBatch` object as a parameter:
+These hooks receive a `BackfillRunBatch` object as a parameter. For every status, you can define any or all of the following:
 
-| Hook                 | Triggered When                   |
-| -------------------- | -------------------------------- |
-| `on_batch_pending`   | Batch is created                 |
-| `on_batch_enqueued`  | Batch is enqueued for processing |
-| `on_batch_running`   | Batch starts processing records  |
-| `on_batch_completed` | Batch completes successfully     |
-| `on_batch_failed`    | Batch encounters an error        |
-| `on_batch_stopped`   | Batch is stopped                 |
+- `before_batch_<status>` (runs first)
+- `around_batch_<status>` (wraps the action and must `yield`)
+- `after_batch_<status>` (runs last)
+
+Valid statuses: `pending`, `enqueued`, `running`, `completed`, `failed`, `stopped`.
+Hooks always wrap the action that performs the status transition. The `around_*` hook wraps the transition itself, and the `after_*` hook runs after the status update and after the `around_*` hook completes.
 
 ### Per-Backfill Hooks
 
@@ -236,11 +209,11 @@ class SendWelcomeEmails < DataDrip::Backfill
   end
 
   # Backfill-specific hook
-  def self.on_run_completed(run)
+  def self.after_run_completed(run)
     AdminMailer.backfill_summary(run).deliver_now
   end
 
-  def self.on_batch_completed(batch)
+  def self.after_batch_completed(batch)
     # Track progress for this specific backfill
     Rails.logger.info("Sent #{batch.batch_size} welcome emails")
   end
