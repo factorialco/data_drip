@@ -42,6 +42,12 @@ module DataDrip
         backfill_run.backfill_class.backfill_options_class.attribute_types
       return "" if attribute_types.empty?
 
+      # Create an instance to get default values
+      options_instance =
+        backfill_run.backfill_class.backfill_options_class.new(
+          backfill_run.options || {}
+        )
+
       input_class =
         "block w-full mt-1 rounded border border-gray-200 focus:ring focus:ring-blue-200 focus:border-blue-400 px-3 py-2"
 
@@ -60,21 +66,24 @@ module DataDrip
                             name.to_s.upcase,
                             class: "block text-gray-500 font-semibold mb-2"
 
+                # Get the value from the options instance to include defaults
+                value = options_instance.public_send(name)
+
                 input_content =
                   case type
                   when ActiveModel::Type::String,
                        ActiveModel::Type::ImmutableString
                     text_field_tag "backfill_run[options][#{name}]",
-                                   backfill_run.options[name],
+                                   value,
                                    class: input_class
                   when ActiveModel::Type::Integer, ActiveModel::Type::BigInteger
                     number_field_tag "backfill_run[options][#{name}]",
-                                     backfill_run.options[name],
+                                     value,
                                      class: input_class,
                                      step: 1
                   when ActiveModel::Type::Decimal, ActiveModel::Type::Float
                     number_field_tag "backfill_run[options][#{name}]",
-                                     backfill_run.options[name],
+                                     value,
                                      class: input_class,
                                      step: 0.01
                   when ActiveModel::Type::Boolean
@@ -82,7 +91,7 @@ module DataDrip
                       check_box_tag(
                         "backfill_run[options][#{name}]",
                         "1",
-                        backfill_run.options[name],
+                        value,
                         class: "mr-2"
                       ) +
                         label_tag(
@@ -93,19 +102,19 @@ module DataDrip
                     end
                   when ActiveModel::Type::Date
                     date_field_tag "backfill_run[options][#{name}]",
-                                   backfill_run.options[name],
+                                   value,
                                    class: input_class
                   when ActiveModel::Type::Time
                     time_field_tag "backfill_run[options][#{name}]",
-                                   backfill_run.options[name],
+                                   value,
                                    class: input_class
                   when ActiveModel::Type::DateTime
                     datetime_field_tag "backfill_run[options][#{name}]",
-                                       backfill_run.options[name],
+                                       value,
                                        class: input_class
                   else
                     text_area_tag "backfill_run[options][#{name}]",
-                                  backfill_run.options[name],
+                                  value,
                                   class: input_class,
                                   rows: 3
                   end
