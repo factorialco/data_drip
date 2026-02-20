@@ -10,6 +10,66 @@ RSpec.describe DataDrip::BackfillRunBatch, type: :model do
   let!(:employee4) { Employee.create!(name: "Alice", role: "manager", age: 25) }
 
   describe "#run!" do
+    describe "before_backfill callback" do
+      let(:backfill_run) do
+        backfill_run =
+          DataDrip::BackfillRun.new(
+            backfill_class_name: "AddRoleToEmployee",
+            batch_size: 10,
+            start_at: 1.hour.from_now,
+            backfiller: backfiller,
+            options: {}
+          )
+        backfill_run.save!(validate: false)
+        backfill_run
+      end
+
+      let(:batch) do
+        batch =
+          DataDrip::BackfillRunBatch.new(
+            backfill_run: backfill_run,
+            batch_size: 10,
+            start_id: employee1.id,
+            finish_id: employee3.id,
+            status: :pending
+          )
+        batch.save!(validate: false)
+        batch.update_column(:status, 0)
+        batch
+      end
+
+      it "calls DataDrip.before_backfill before processing" do
+        callback_called = false
+        original_callback = DataDrip.before_backfill
+
+        DataDrip.before_backfill = -> { callback_called = true }
+
+        batch.run!
+
+        expect(callback_called).to be true
+      ensure
+        DataDrip.before_backfill = original_callback
+      end
+
+      it "calls before_backfill before accessing scope" do
+        call_order = []
+        original_callback = DataDrip.before_backfill
+
+        DataDrip.before_backfill = -> { call_order << :before_backfill }
+
+        allow_any_instance_of(AddRoleToEmployee).to receive(:scope).and_wrap_original do |original_method|
+          call_order << :scope_accessed
+          original_method.call
+        end
+
+        batch.run!
+
+        expect(call_order).to eq([:before_backfill, :scope_accessed])
+      ensure
+        DataDrip.before_backfill = original_callback
+      end
+    end
+
     let(:backfill_run) do
       # Skip validation to allow creation for testing
       backfill_run =
