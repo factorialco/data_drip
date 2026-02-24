@@ -54,24 +54,22 @@ RSpec.describe DataDrip::Backfill, type: :model do
       expect(instance.color).to eq("red,green")
     end
 
-    it "stores form_default in attribute_metadata" do
+    it "uses ActiveModel default: for form pre-fill values" do
       klass = Class.new(DataDrip::Backfill) do
-        attribute :start_date, :date, form_default: "2010-01-01"
+        attribute :start_date, :date, default: -> { Date.new(2010, 1, 1) }
       end
 
-      expect(klass.attribute_metadata[:start_date]).to eq({ form_default: "2010-01-01" })
+      instance = klass.new
+      expect(instance.start_date).to eq(Date.new(2010, 1, 1))
     end
 
-    it "stores callable form_default in attribute_metadata" do
+    it "allows overriding default values via backfill_options" do
       klass = Class.new(DataDrip::Backfill) do
-        attribute :end_date, :date, form_default: -> { Date.current }
+        attribute :start_date, :date, default: -> { Date.new(2010, 1, 1) }
       end
 
-      expect(klass.attribute_metadata[:end_date][:form_default]).to respond_to(:call)
-    end
-
-    it "does not store metadata for plain attributes" do
-      expect(test_backfill_class.attribute_metadata).to be_empty
+      instance = klass.new(backfill_options: { start_date: "2020-06-15" })
+      expect(instance.start_date).to eq(Date.new(2020, 6, 15))
     end
   end
 

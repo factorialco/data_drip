@@ -38,12 +38,11 @@ module DataDrip
     def backfill_option_inputs(backfill_run)
       return "" unless backfill_run.backfill_class&.backfill_options_class
 
-      attribute_types =
-        backfill_run.backfill_class.backfill_options_class.attribute_types
+      options_class = backfill_run.backfill_class.backfill_options_class
+      attribute_types = options_class.attribute_types
       return "" if attribute_types.empty?
 
-      metadata = backfill_run.backfill_class.respond_to?(:attribute_metadata) ?
-        backfill_run.backfill_class.attribute_metadata : {}
+      defaults = options_class.new
 
       input_class =
         "block w-full mt-1 rounded border border-gray-200 focus:ring focus:ring-blue-200 focus:border-blue-400 px-3 py-2"
@@ -57,8 +56,6 @@ module DataDrip
         inputs_content =
           attribute_types
             .map do |name, type|
-              meta = metadata[name.to_sym] || {}
-
               content_tag :div, class: "mb-6" do
                 label_content =
                   label_tag "backfill_run[options][#{name}]",
@@ -67,9 +64,10 @@ module DataDrip
 
                 input_content =
                   if type.is_a?(DataDrip::Types::Enum)
-                    build_enum_input(name, type, backfill_run, input_class)
+                    build_enum_input(name, type, backfill_run)
                   else
-                    value = resolve_option_value(backfill_run.options[name], meta[:form_default])
+                    current = backfill_run.options[name]
+                    value = current.nil? ? defaults.public_send(name) : current
                     build_standard_input(name, type, value, input_class)
                   end
 
@@ -84,11 +82,6 @@ module DataDrip
     end
 
     private
-
-    def resolve_option_value(current_value, form_default)
-      return current_value unless current_value.nil? && form_default
-      form_default.respond_to?(:call) ? form_default.call : form_default
-    end
 
     def build_standard_input(name, type, value, input_class)
       case type
@@ -141,7 +134,7 @@ module DataDrip
       end
     end
 
-    def build_enum_input(name, type, backfill_run, _input_class)
+    def build_enum_input(name, type, backfill_run)
       choices = type.available_values
       field_name = "backfill_run[options][#{name}]"
       field_id = "enum_#{name}"
