@@ -66,8 +66,8 @@ module DataDrip
                             class: "block text-gray-500 font-semibold mb-2"
 
                 input_content =
-                  if meta[:choices]
-                    build_multi_select_input(name, meta[:choices], backfill_run, input_class)
+                  if type.is_a?(DataDrip::Types::Enum)
+                    build_enum_input(name, type, backfill_run, input_class)
                   else
                     value = resolve_option_value(backfill_run.options[name], meta[:form_default])
                     build_standard_input(name, type, value, input_class)
@@ -141,21 +141,29 @@ module DataDrip
       end
     end
 
-    def build_multi_select_input(name, choices_source, backfill_run, input_class)
-      choices = choices_source.respond_to?(:call) ? choices_source.call : choices_source
+    def build_enum_input(name, type, backfill_run, _input_class)
+      choices = type.available_values
       field_name = "backfill_run[options][#{name}]"
-      field_id = "multi_select_#{name}"
+      field_id = "enum_#{name}"
       current_value = backfill_run.options[name].to_s
       selected = current_value.present? ? current_value.split(/[,;\s]+/).map(&:strip) : choices
 
       hidden = hidden_field_tag field_name, selected.join(","), id: "#{field_id}_hidden"
 
       select_all_id = "#{field_id}_select_all"
+      clear_id = "#{field_id}_clear"
       all_checked = selected.sort == choices.sort
 
-      select_all_row = content_tag(:div, class: "flex items-center mb-2 pb-2 border-b border-gray-200") do
-        check_box_tag(select_all_id, "1", all_checked, class: "mr-2") +
-          label_tag(select_all_id, "Select All", class: "text-gray-700 font-medium")
+      toolbar = content_tag(:div, class: "flex items-center gap-4 mb-2 pb-2 border-b border-gray-200") do
+        select_all = check_box_tag(select_all_id, "1", all_checked, class: "mr-1") +
+          label_tag(select_all_id, "Select All", class: "text-gray-700 font-medium text-sm")
+
+        clear_btn = content_tag(:button, "Clear",
+          type: "button",
+          id: clear_id,
+          class: "text-sm text-blue-600 hover:text-blue-800 underline")
+
+        select_all + clear_btn
       end
 
       checkboxes = choices.map do |choice|
@@ -164,7 +172,7 @@ module DataDrip
         content_tag(:div, class: "flex items-center mb-1") do
           check_box_tag(cb_id, choice, checked,
             class: "mr-2 #{field_id}_cb",
-            data: { multi_select: field_id }) +
+            data: { enum_field: field_id }) +
             label_tag(cb_id, choice, class: "text-gray-700 text-sm")
         end
       end.join.html_safe
@@ -177,6 +185,7 @@ module DataDrip
           (function() {
             var hiddenField = document.getElementById('#{field_id}_hidden');
             var selectAll = document.getElementById('#{select_all_id}');
+            var clearBtn = document.getElementById('#{clear_id}');
             var checkboxes = document.querySelectorAll('.#{field_id}_cb');
 
             function syncToHidden() {
@@ -191,6 +200,11 @@ module DataDrip
               syncToHidden();
             });
 
+            clearBtn.addEventListener('click', function() {
+              checkboxes.forEach(function(cb) { cb.checked = false; });
+              syncToHidden();
+            });
+
             checkboxes.forEach(function(cb) {
               cb.addEventListener('change', syncToHidden);
             });
@@ -198,7 +212,7 @@ module DataDrip
         JS
       end
 
-      hidden + select_all_row + choices_container + js
+      hidden + toolbar + choices_container + js
     end
   end
 end

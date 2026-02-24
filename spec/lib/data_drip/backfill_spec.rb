@@ -25,12 +25,33 @@ RSpec.describe DataDrip::Backfill, type: :model do
       end.to raise_error(/Method scope already defined/)
     end
 
-    it "stores choices in attribute_metadata" do
+    it "registers :enum as a DataDrip::Types::Enum type" do
       klass = Class.new(DataDrip::Backfill) do
-        attribute :color, :string, choices: %w[red green blue]
+        attribute :color, :enum, values: %w[red green blue]
       end
 
-      expect(klass.attribute_metadata[:color]).to eq({ choices: %w[red green blue] })
+      attr_type = klass.backfill_options_class.attribute_types["color"]
+      expect(attr_type).to be_a(DataDrip::Types::Enum)
+      expect(attr_type.available_values).to eq(%w[red green blue])
+    end
+
+    it "supports callable values for :enum type" do
+      klass = Class.new(DataDrip::Backfill) do
+        attribute :items, :enum, values: -> { %w[a b c] }
+      end
+
+      attr_type = klass.backfill_options_class.attribute_types["items"]
+      expect(attr_type).to be_a(DataDrip::Types::Enum)
+      expect(attr_type.available_values).to eq(%w[a b c])
+    end
+
+    it "casts :enum values as strings" do
+      klass = Class.new(DataDrip::Backfill) do
+        attribute :color, :enum, values: %w[red green blue]
+      end
+
+      instance = klass.new(backfill_options: { color: "red,green" })
+      expect(instance.color).to eq("red,green")
     end
 
     it "stores form_default in attribute_metadata" do
@@ -39,15 +60,6 @@ RSpec.describe DataDrip::Backfill, type: :model do
       end
 
       expect(klass.attribute_metadata[:start_date]).to eq({ form_default: "2010-01-01" })
-    end
-
-    it "stores callable choices in attribute_metadata" do
-      choices_proc = -> { %w[a b c] }
-      klass = Class.new(DataDrip::Backfill) do
-        attribute :items, :string, choices: choices_proc
-      end
-
-      expect(klass.attribute_metadata[:items][:choices]).to eq(choices_proc)
     end
 
     it "stores callable form_default in attribute_metadata" do
