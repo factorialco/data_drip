@@ -3,8 +3,6 @@
 module DataDrip
   module Types
     class Enum < ActiveModel::Type::String
-      attr_reader :values_source
-
       def initialize(values: [], **options)
         @values_source = values
         super(**options)
@@ -20,5 +18,3 @@ module DataDrip
     end
   end
 end
-
-ActiveModel::Type.register(:enum, DataDrip::Types::Enum)
