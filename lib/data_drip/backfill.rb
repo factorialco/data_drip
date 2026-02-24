@@ -3,11 +3,21 @@
 
 module DataDrip
   class Backfill
-    def self.attribute(name, type = nil, default: nil, **options)
+    def self.attribute(name, type = nil, default: nil, choices: nil, form_default: nil, **options)
       raise "Method #{name} already defined in #{self.class.name}" if instance_methods.include?(name.to_sym)
 
       backfill_options_class.attribute(name, type, default: default, **options)
+
+      if choices || !form_default.nil?
+        @attribute_metadata ||= {}
+        @attribute_metadata[name.to_sym] = { choices: choices, form_default: form_default }.compact
+      end
+
       define_method(name) { backfill_options.public_send(name) }
+    end
+
+    def self.attribute_metadata
+      @attribute_metadata || {}
     end
 
     def self.backfill_options_class

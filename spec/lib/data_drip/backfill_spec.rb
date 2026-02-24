@@ -24,6 +24,43 @@ RSpec.describe DataDrip::Backfill, type: :model do
         Class.new(DataDrip::Backfill) { attribute :scope, :string }
       end.to raise_error(/Method scope already defined/)
     end
+
+    it "stores choices in attribute_metadata" do
+      klass = Class.new(DataDrip::Backfill) do
+        attribute :color, :string, choices: %w[red green blue]
+      end
+
+      expect(klass.attribute_metadata[:color]).to eq({ choices: %w[red green blue] })
+    end
+
+    it "stores form_default in attribute_metadata" do
+      klass = Class.new(DataDrip::Backfill) do
+        attribute :start_date, :date, form_default: "2010-01-01"
+      end
+
+      expect(klass.attribute_metadata[:start_date]).to eq({ form_default: "2010-01-01" })
+    end
+
+    it "stores callable choices in attribute_metadata" do
+      choices_proc = -> { %w[a b c] }
+      klass = Class.new(DataDrip::Backfill) do
+        attribute :items, :string, choices: choices_proc
+      end
+
+      expect(klass.attribute_metadata[:items][:choices]).to eq(choices_proc)
+    end
+
+    it "stores callable form_default in attribute_metadata" do
+      klass = Class.new(DataDrip::Backfill) do
+        attribute :end_date, :date, form_default: -> { Date.current }
+      end
+
+      expect(klass.attribute_metadata[:end_date][:form_default]).to respond_to(:call)
+    end
+
+    it "does not store metadata for plain attributes" do
+      expect(test_backfill_class.attribute_metadata).to be_empty
+    end
   end
 
   describe ".backfill_options_class" do
