@@ -136,7 +136,7 @@ module DataDrip
     def build_enum_input(name, type, backfill_run)
       raw_choices = type.available_values
       # Normalize to [label, value] pairs — supports both ["a","b"] and [["Label","val"],...]
-      pairs = raw_choices.map { |c| c.is_a?(Array) ? c : [c, c] }
+      pairs = raw_choices.map { |c| c.is_a?(Array) ? c : [ c, c ] }
       all_values = pairs.map(&:last).map(&:to_s)
 
       field_name = "backfill_run[options][#{name}]"
