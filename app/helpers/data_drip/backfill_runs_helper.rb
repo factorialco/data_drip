@@ -134,13 +134,17 @@ module DataDrip
     end
 
     def build_enum_input(name, type, backfill_run)
-      choices = type.available_values
+      raw_choices = type.available_values
+      # Normalize to [label, value] pairs — supports both ["a","b"] and [["Label","val"],...]
+      pairs = raw_choices.map { |c| c.is_a?(Array) ? c : [c, c] }
+      all_values = pairs.map(&:last).map(&:to_s)
+
       field_name = "backfill_run[options][#{name}]"
       field_id = "enum_#{name}"
       current_value = backfill_run.options[name].to_s
-      selected = current_value.present? ? current_value.split(",") : choices
+      selected_values = current_value.present? ? current_value.split(",") : all_values
 
-      hidden = hidden_field_tag field_name, selected.join(","), id: "#{field_id}_hidden"
+      hidden = hidden_field_tag field_name, selected_values.join(","), id: "#{field_id}_hidden"
 
       search_id = "#{field_id}_search"
       select_all_id = "#{field_id}_select_all"
@@ -163,14 +167,15 @@ module DataDrip
                "background-position: 8px center; background-size: 16px 16px;"
       )
 
-      counter = content_tag(:span, "#{selected.length}/#{choices.length} selected",
+      selected_count = selected_values.length
+      counter = content_tag(:span, "#{selected_count}/#{pairs.length} selected",
         id: counter_id,
         style: "font-size: 12px; color: #6b7280;")
 
       toolbar = content_tag(:div,
         style: "display: flex; align-items: center; gap: 10px; margin-bottom: 6px; " \
                "padding-bottom: 6px; border-bottom: 1px solid #e5e7eb;") do
-        select_all_cb = check_box_tag(select_all_id, "1", selected.length == choices.length,
+        select_all_cb = check_box_tag(select_all_id, "1", selected_count == pairs.length,
           style: "margin-right: 4px; cursor: pointer; accent-color: #3b82f6;")
         select_all_label = label_tag(select_all_id, "Select All",
           style: "font-size: 13px; color: #374151; font-weight: 500; cursor: pointer;")
@@ -187,17 +192,18 @@ module DataDrip
       end
 
       checkboxes = safe_join(
-        choices.map do |choice|
-          cb_id = "#{field_id}_#{choice.parameterize(separator: '_')}"
-          checked = selected.include?(choice)
+        pairs.map do |label, value|
+          val_str = value.to_s
+          cb_id = "#{field_id}_#{val_str.parameterize(separator: '_')}"
+          checked = selected_values.include?(val_str)
           content_tag(:div,
-            data: { value: choice.downcase },
+            data: { search: label.to_s.downcase },
             style: "display: flex; align-items: center; padding: 4px 6px; " \
                    "border-radius: 4px; transition: background-color 0.1s;") do
-            check_box_tag(cb_id, choice, checked,
+            check_box_tag(cb_id, val_str, checked,
               class: "#{field_id}_cb",
               style: "margin-right: 8px; cursor: pointer; accent-color: #3b82f6;") +
-              label_tag(cb_id, choice,
+              label_tag(cb_id, label,
                 style: "font-size: 13px; color: #374151; cursor: pointer; user-select: none;")
           end
         end
@@ -223,7 +229,7 @@ module DataDrip
             var counter = document.getElementById('#{counter_id}');
             var noResults = document.getElementById('#{no_results_id}');
             var checkboxes = document.querySelectorAll('.#{field_id}_cb');
-            var rows = document.querySelectorAll('##{field_id}_list > div[data-value]');
+            var rows = document.querySelectorAll('##{field_id}_list > div[data-search]');
             var total = checkboxes.length;
 
             function syncToHidden() {
@@ -236,21 +242,26 @@ module DataDrip
               selectAll.indeterminate = (count > 0 && count < total);
             }
 
+            var debounceTimer;
             searchInput.addEventListener('input', function() {
-              var query = this.value.toLowerCase().trim();
-              var visible = 0;
-              rows.forEach(function(row) {
-                var match = !query || row.getAttribute('data-value').indexOf(query) !== -1;
-                row.style.display = match ? 'flex' : 'none';
-                if (match) visible++;
-              });
-              noResults.style.display = visible === 0 ? 'block' : 'none';
+              clearTimeout(debounceTimer);
+              var input = this;
+              debounceTimer = setTimeout(function() {
+                var query = input.value.toLowerCase().trim();
+                var visible = 0;
+                rows.forEach(function(row) {
+                  var match = !query || row.getAttribute('data-search').indexOf(query) !== -1;
+                  row.style.display = match ? 'flex' : 'none';
+                  if (match) visible++;
+                });
+                noResults.style.display = visible === 0 ? 'block' : 'none';
+              }, 150);
             });
 
             selectAll.addEventListener('change', function() {
               var checked = selectAll.checked;
               checkboxes.forEach(function(cb) {
-                if (cb.closest('div[data-value]').style.display !== 'none') {
+                if (cb.closest('div[data-search]').style.display !== 'none') {
                   cb.checked = checked;
                 }
               });
