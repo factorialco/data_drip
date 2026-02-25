@@ -171,7 +171,7 @@ module DataDrip
       )
 
       choices_container = content_tag(:div, checkboxes,
-        class: "max-h-48 overflow-y-auto border border-gray-200 rounded p-2")
+        style: "max-height: 240px; overflow-y: auto; border: 1px solid #e5e7eb; border-radius: 0.25rem; padding: 0.5rem;")
 
       js = content_tag(:script) do
         raw(<<~JS)
