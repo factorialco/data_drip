@@ -96,6 +96,11 @@
       .then(data => {
         if (data.html) {
           optionsContainer.innerHTML = data.html;
+          optionsContainer.querySelectorAll('script').forEach(function(oldScript) {
+            var newScript = document.createElement('script');
+            newScript.textContent = oldScript.textContent;
+            oldScript.parentNode.replaceChild(newScript, oldScript);
+          });
         }
       })
       .catch(error => {
@@ -104,9 +109,9 @@
     }
   }
 
-  document.addEventListener("DOMContentLoaded", initializeBackfillForm);
-  
-  if (document.readyState !== "loading") {
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", initializeBackfillForm);
+  } else {
     initializeBackfillForm();
   }
 

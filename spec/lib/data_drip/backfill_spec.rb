@@ -24,6 +24,53 @@ RSpec.describe DataDrip::Backfill, type: :model do
         Class.new(DataDrip::Backfill) { attribute :scope, :string }
       end.to raise_error(/Method scope already defined/)
     end
+
+    it "registers :enum as a DataDrip::Types::Enum type" do
+      klass = Class.new(DataDrip::Backfill) do
+        attribute :color, :enum, values: %w[red green blue]
+      end
+
+      attr_type = klass.backfill_options_class.attribute_types["color"]
+      expect(attr_type).to be_a(DataDrip::Types::Enum)
+      expect(attr_type.available_values).to eq(%w[red green blue])
+    end
+
+    it "supports callable values for :enum type" do
+      klass = Class.new(DataDrip::Backfill) do
+        attribute :items, :enum, values: -> { %w[a b c] }
+      end
+
+      attr_type = klass.backfill_options_class.attribute_types["items"]
+      expect(attr_type).to be_a(DataDrip::Types::Enum)
+      expect(attr_type.available_values).to eq(%w[a b c])
+    end
+
+    it "casts :enum values as strings" do
+      klass = Class.new(DataDrip::Backfill) do
+        attribute :color, :enum, values: %w[red green blue]
+      end
+
+      instance = klass.new(backfill_options: { color: "red,green" })
+      expect(instance.color).to eq("red,green")
+    end
+
+    it "uses ActiveModel default: for form pre-fill values" do
+      klass = Class.new(DataDrip::Backfill) do
+        attribute :start_date, :date, default: -> { Date.new(2010, 1, 1) }
+      end
+
+      instance = klass.new
+      expect(instance.start_date).to eq(Date.new(2010, 1, 1))
+    end
+
+    it "allows overriding default values via backfill_options" do
+      klass = Class.new(DataDrip::Backfill) do
+        attribute :start_date, :date, default: -> { Date.new(2010, 1, 1) }
+      end
+
+      instance = klass.new(backfill_options: { start_date: "2020-06-15" })
+      expect(instance.start_date).to eq(Date.new(2020, 6, 15))
+    end
   end
 
   describe ".backfill_options_class" do

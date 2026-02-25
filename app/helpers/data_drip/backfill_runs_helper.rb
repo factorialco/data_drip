@@ -38,9 +38,11 @@ module DataDrip
     def backfill_option_inputs(backfill_run)
       return "" unless backfill_run.backfill_class&.backfill_options_class
 
-      attribute_types =
-        backfill_run.backfill_class.backfill_options_class.attribute_types
+      options_class = backfill_run.backfill_class.backfill_options_class
+      attribute_types = options_class.attribute_types
       return "" if attribute_types.empty?
+
+      defaults = options_class.new
 
       input_class =
         "block w-full mt-1 rounded border border-gray-200 focus:ring focus:ring-blue-200 focus:border-blue-400 px-3 py-2"
@@ -52,8 +54,8 @@ module DataDrip
                       class: "block text-gray-500 font-semibold mb-2"
 
         inputs_content =
-          attribute_types
-            .map do |name, type|
+          safe_join(
+            attribute_types.map do |name, type|
               content_tag :div, class: "mb-6" do
                 label_content =
                   label_tag "backfill_run[options][#{name}]",
@@ -61,63 +63,234 @@ module DataDrip
                             class: "block text-gray-500 font-semibold mb-2"
 
                 input_content =
-                  case type
-                  when ActiveModel::Type::String,
-                       ActiveModel::Type::ImmutableString
-                    text_field_tag "backfill_run[options][#{name}]",
-                                   backfill_run.options[name],
-                                   class: input_class
-                  when ActiveModel::Type::Integer, ActiveModel::Type::BigInteger
-                    number_field_tag "backfill_run[options][#{name}]",
-                                     backfill_run.options[name],
-                                     class: input_class,
-                                     step: 1
-                  when ActiveModel::Type::Decimal, ActiveModel::Type::Float
-                    number_field_tag "backfill_run[options][#{name}]",
-                                     backfill_run.options[name],
-                                     class: input_class,
-                                     step: 0.01
-                  when ActiveModel::Type::Boolean
-                    content_tag :div, class: "flex items-center" do
-                      check_box_tag(
-                        "backfill_run[options][#{name}]",
-                        "1",
-                        backfill_run.options[name],
-                        class: "mr-2"
-                      ) +
-                        label_tag(
-                          "backfill_run[options][#{name}]",
-                          "Yes",
-                          class: "text-gray-700"
-                        )
-                    end
-                  when ActiveModel::Type::Date
-                    date_field_tag "backfill_run[options][#{name}]",
-                                   backfill_run.options[name],
-                                   class: input_class
-                  when ActiveModel::Type::Time
-                    time_field_tag "backfill_run[options][#{name}]",
-                                   backfill_run.options[name],
-                                   class: input_class
-                  when ActiveModel::Type::DateTime
-                    datetime_field_tag "backfill_run[options][#{name}]",
-                                       backfill_run.options[name],
-                                       class: input_class
+                  if type.is_a?(DataDrip::Types::Enum)
+                    build_enum_input(name, type, backfill_run)
                   else
-                    text_area_tag "backfill_run[options][#{name}]",
-                                  backfill_run.options[name],
-                                  class: input_class,
-                                  rows: 3
+                    current = backfill_run.options[name]
+                    value = current.nil? ? defaults.public_send(name) : current
+                    build_standard_input(name, type, value, input_class)
                   end
 
                 label_content + input_content
               end
             end
-            .join
-            .html_safe
+          )
 
         header_content + inputs_content
       end
+    end
+
+    private
+
+    def build_standard_input(name, type, value, input_class)
+      case type
+      when ActiveModel::Type::String,
+           ActiveModel::Type::ImmutableString
+        text_field_tag "backfill_run[options][#{name}]",
+                       value,
+                       class: input_class
+      when ActiveModel::Type::Integer, ActiveModel::Type::BigInteger
+        number_field_tag "backfill_run[options][#{name}]",
+                         value,
+                         class: input_class,
+                         step: 1
+      when ActiveModel::Type::Decimal, ActiveModel::Type::Float
+        number_field_tag "backfill_run[options][#{name}]",
+                         value,
+                         class: input_class,
+                         step: 0.01
+      when ActiveModel::Type::Boolean
+        content_tag :div, class: "flex items-center" do
+          check_box_tag(
+            "backfill_run[options][#{name}]",
+            "1",
+            value,
+            class: "mr-2"
+          ) +
+            label_tag(
+              "backfill_run[options][#{name}]",
+              "Yes",
+              class: "text-gray-700"
+            )
+        end
+      when ActiveModel::Type::Date
+        date_field_tag "backfill_run[options][#{name}]",
+                       value,
+                       class: input_class
+      when ActiveModel::Type::Time
+        time_field_tag "backfill_run[options][#{name}]",
+                       value,
+                       class: input_class
+      when ActiveModel::Type::DateTime
+        datetime_field_tag "backfill_run[options][#{name}]",
+                           value,
+                           class: input_class
+      else
+        text_area_tag "backfill_run[options][#{name}]",
+                      value,
+                      class: input_class,
+                      rows: 3
+      end
+    end
+
+    def build_enum_input(name, type, backfill_run)
+      raw_choices = type.available_values
+      # Normalize to [label, value] pairs — supports both ["a","b"] and [["Label","val"],...]
+      pairs = raw_choices.map { |c| c.is_a?(Array) ? c : [ c, c ] }
+      all_values = pairs.map(&:last).map(&:to_s)
+
+      field_name = "backfill_run[options][#{name}]"
+      field_id = "enum_#{name}"
+      current_value = backfill_run.options[name].to_s
+      selected_values = current_value.present? ? current_value.split(",") : all_values
+
+      hidden = hidden_field_tag field_name, selected_values.join(","), id: "#{field_id}_hidden"
+
+      search_id = "#{field_id}_search"
+      select_all_id = "#{field_id}_select_all"
+      clear_id = "#{field_id}_clear"
+      counter_id = "#{field_id}_counter"
+      no_results_id = "#{field_id}_no_results"
+
+      search_input = tag.input(
+        type: "text",
+        id: search_id,
+        placeholder: "Search...",
+        autocomplete: "off",
+        style: "display: block; width: 100%; padding: 6px 10px 6px 30px; margin-bottom: 8px; " \
+               "border: 1px solid #d1d5db; border-radius: 6px; font-size: 13px; " \
+               "outline: none; box-sizing: border-box; " \
+               "background-image: url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' " \
+               "fill='none' viewBox='0 0 20 20'%3E%3Cpath stroke='%239ca3af' stroke-linecap='round' " \
+               "stroke-width='2' d='m13 13 4 4M8.5 3a5.5 5.5 0 1 0 0 11 5.5 5.5 0 0 0 0-11Z'/" \
+               "%3E%3C/svg%3E\"); background-repeat: no-repeat; " \
+               "background-position: 8px center; background-size: 16px 16px;"
+      )
+
+      selected_count = selected_values.length
+      counter = content_tag(:span, "#{selected_count}/#{pairs.length} selected",
+        id: counter_id,
+        style: "font-size: 12px; color: #6b7280;")
+
+      toolbar = content_tag(:div,
+        style: "display: flex; align-items: center; gap: 10px; margin-bottom: 6px; " \
+               "padding-bottom: 6px; border-bottom: 1px solid #e5e7eb;") do
+        select_all_cb = check_box_tag(select_all_id, "1", selected_count == pairs.length,
+          style: "margin-right: 4px; cursor: pointer; accent-color: #3b82f6;")
+        select_all_label = label_tag(select_all_id, "Select All",
+          style: "font-size: 13px; color: #374151; font-weight: 500; cursor: pointer;")
+
+        clear_btn = content_tag(:button, "Clear",
+          type: "button",
+          id: clear_id,
+          style: "font-size: 12px; color: #3b82f6; background: none; border: none; " \
+                 "cursor: pointer; text-decoration: underline; padding: 0;")
+
+        spacer = content_tag(:span, "", style: "flex: 1;")
+
+        select_all_cb + select_all_label + spacer + counter + clear_btn
+      end
+
+      checkboxes = safe_join(
+        pairs.map do |label, value|
+          val_str = value.to_s
+          cb_id = "#{field_id}_#{val_str.parameterize(separator: '_')}"
+          checked = selected_values.include?(val_str)
+          content_tag(:div,
+            data: { search: label.to_s.downcase },
+            style: "display: flex; align-items: center; padding: 4px 6px; " \
+                   "border-radius: 4px; transition: background-color 0.1s;") do
+            check_box_tag(cb_id, val_str, checked,
+              class: "#{field_id}_cb",
+              style: "margin-right: 8px; cursor: pointer; accent-color: #3b82f6;") +
+              label_tag(cb_id, label,
+                style: "font-size: 13px; color: #374151; cursor: pointer; user-select: none;")
+          end
+        end
+      )
+
+      no_results = content_tag(:div, "No matches found",
+        id: no_results_id,
+        style: "display: none; padding: 12px; text-align: center; " \
+               "color: #9ca3af; font-size: 13px; font-style: italic;")
+
+      choices_container = content_tag(:div, checkboxes + no_results,
+        id: "#{field_id}_list",
+        style: "max-height: 260px; overflow-y: auto; border: 1px solid #e5e7eb; " \
+               "border-radius: 6px; padding: 4px;")
+
+      js = content_tag(:script) do
+        raw(<<~JS)
+          (function() {
+            var hiddenField = document.getElementById('#{field_id}_hidden');
+            var searchInput = document.getElementById('#{search_id}');
+            var selectAll = document.getElementById('#{select_all_id}');
+            var clearBtn = document.getElementById('#{clear_id}');
+            var counter = document.getElementById('#{counter_id}');
+            var noResults = document.getElementById('#{no_results_id}');
+            var checkboxes = document.querySelectorAll('.#{field_id}_cb');
+            var rows = document.querySelectorAll('##{field_id}_list > div[data-search]');
+            var total = checkboxes.length;
+
+            function syncToHidden() {
+              var values = [];
+              checkboxes.forEach(function(cb) { if (cb.checked) values.push(cb.value); });
+              hiddenField.value = values.join(',');
+              var count = values.length;
+              counter.textContent = count + '/' + total + ' selected';
+              selectAll.checked = (count === total);
+              selectAll.indeterminate = (count > 0 && count < total);
+            }
+
+            var debounceTimer;
+            searchInput.addEventListener('input', function() {
+              clearTimeout(debounceTimer);
+              var input = this;
+              debounceTimer = setTimeout(function() {
+                var query = input.value.toLowerCase().trim();
+                var visible = 0;
+                rows.forEach(function(row) {
+                  var match = !query || row.getAttribute('data-search').indexOf(query) !== -1;
+                  row.style.display = match ? 'flex' : 'none';
+                  if (match) visible++;
+                });
+                noResults.style.display = visible === 0 ? 'block' : 'none';
+              }, 150);
+            });
+
+            selectAll.addEventListener('change', function() {
+              var checked = selectAll.checked;
+              checkboxes.forEach(function(cb) {
+                if (cb.closest('div[data-search]').style.display !== 'none') {
+                  cb.checked = checked;
+                }
+              });
+              syncToHidden();
+            });
+
+            clearBtn.addEventListener('click', function() {
+              checkboxes.forEach(function(cb) { cb.checked = false; });
+              searchInput.value = '';
+              rows.forEach(function(row) { row.style.display = 'flex'; });
+              noResults.style.display = 'none';
+              syncToHidden();
+            });
+
+            checkboxes.forEach(function(cb) {
+              cb.addEventListener('change', syncToHidden);
+            });
+
+            rows.forEach(function(row) {
+              row.addEventListener('mouseenter', function() { row.style.backgroundColor = '#f3f4f6'; });
+              row.addEventListener('mouseleave', function() { row.style.backgroundColor = 'transparent'; });
+            });
+
+            syncToHidden();
+          })();
+        JS
+      end
+
+      hidden + search_input + toolbar + choices_container + js
     end
   end
 end

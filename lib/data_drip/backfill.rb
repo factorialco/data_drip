@@ -6,7 +6,13 @@ module DataDrip
     def self.attribute(name, type = nil, default: nil, **options)
       raise "Method #{name} already defined in #{self.class.name}" if instance_methods.include?(name.to_sym)
 
-      backfill_options_class.attribute(name, type, default: default, **options)
+      if type == :enum
+        enum_type = DataDrip::Types::Enum.new(values: options.delete(:values) || [])
+        backfill_options_class.attribute(name, enum_type, default: default, **options)
+      else
+        backfill_options_class.attribute(name, type, default: default, **options)
+      end
+
       define_method(name) { backfill_options.public_send(name) }
     end
 
