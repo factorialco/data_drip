@@ -32,10 +32,18 @@ RSpec.describe AddRoleToEmployee, type: :model do
 
   describe "hooks" do
     context "when the run is completed" do
-      it "calls on_run_completed hook" do
+      it "calls after_run_completed hook" do
         backfill_run.completed!
 
         expect(HookNotifier.instance.get('AddRoleToEmployee_run_completed')).to eq(backfill_run.id)
+      end
+
+      it "calls before/around/after run hooks in order" do
+        backfill_run.completed!
+
+        expect(
+          HookNotifier.instance.get("AddRoleToEmployee_run_completed_sequence")
+        ).to eq(%w[before around_before around_after after])
       end
     end
 
@@ -56,10 +64,18 @@ RSpec.describe AddRoleToEmployee, type: :model do
     end
 
     context "when the batch is completed" do
-      it "calls on_batch_completed hook" do
+      it "calls after_batch_completed hook" do
         batch.completed!
 
         expect(HookNotifier.instance.get('AddRoleToEmployee_batch_completed')).to eq(batch.id)
+      end
+
+      it "calls before/around/after batch hooks in order" do
+        batch.completed!
+
+        expect(
+          HookNotifier.instance.get("AddRoleToEmployee_batch_completed_sequence")
+        ).to eq(%w[before around_before around_after after])
       end
     end
   end
