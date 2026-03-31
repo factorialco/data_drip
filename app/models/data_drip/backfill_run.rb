@@ -78,18 +78,20 @@ module DataDrip
       errors.add(:backfill_class_name, "must inherit from DataDrip::Backfill")
     end
 
-    def validate_scope
-      return unless backfill_class_name.present?
-      return unless backfill_class
+  def validate_scope
+    return unless backfill_class_name.present?
+    return unless backfill_class
 
-      begin
-        backfill =
-          backfill_class.new(
-            batch_size: batch_size || 100,
-            sleep_time: 5,
-            backfill_options: options || {}
-          )
-        scope = backfill.scope
+    begin
+      DataDrip.before_backfill&.call
+
+      backfill =
+        backfill_class.new(
+          batch_size: batch_size || 100,
+          sleep_time: 5,
+          backfill_options: options || {}
+        )
+      scope = backfill.scope
 
         scope =
           scope.limit(amount_of_elements) if amount_of_elements.present? &&
