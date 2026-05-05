@@ -248,5 +248,28 @@ RSpec.describe DataDrip::BackfillRunsController, type: :controller do
         expect(backfill_run.options).to eq({ "age" => "25" })
       end
     end
+
+    context "with an unchecked boolean option" do
+      it "stores the explicit false value" do
+        attributes =
+          base_attributes.merge(
+            backfill_class_name: "BooleanDefaultBackfill",
+            options: {
+              dry_run: "0"
+            }
+          )
+
+        expect do
+          post :create, params: { backfill_run: attributes }
+        end.to change(DataDrip::BackfillRun, :count).by(1)
+
+        backfill_run = DataDrip::BackfillRun.last!
+        backfill =
+          BooleanDefaultBackfill.new(backfill_options: backfill_run.options)
+
+        expect(backfill_run.options).to eq({ "dry_run" => "0" })
+        expect(backfill.dry_run).to be(false)
+      end
+    end
   end
 end

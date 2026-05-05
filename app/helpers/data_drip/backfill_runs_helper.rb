@@ -101,14 +101,12 @@ module DataDrip
                          step: 0.01
       when ActiveModel::Type::Boolean
         content_tag :div, class: "flex items-center" do
-          check_box_tag(
-            "backfill_run[options][#{name}]",
-            "1",
-            value,
-            class: "mr-2"
-          ) +
+          field_name = "backfill_run[options][#{name}]"
+
+          hidden_field_tag(field_name, "0") +
+            check_box_tag(field_name, "1", value, class: "mr-2") +
             label_tag(
-              "backfill_run[options][#{name}]",
+              field_name,
               "Yes",
               class: "text-gray-700"
             )
