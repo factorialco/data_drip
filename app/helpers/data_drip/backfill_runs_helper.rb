@@ -102,9 +102,10 @@ module DataDrip
       when ActiveModel::Type::Boolean
         content_tag :div, class: "flex items-center" do
           field_name = "backfill_run[options][#{name}]"
+          checked = type.cast(value)
 
-          hidden_field_tag(field_name, "0") +
-            check_box_tag(field_name, "1", value, class: "mr-2") +
+          hidden_field_tag(field_name, "0", id: nil) +
+            check_box_tag(field_name, "1", checked, class: "mr-2") +
             label_tag(
               field_name,
               "Yes",
