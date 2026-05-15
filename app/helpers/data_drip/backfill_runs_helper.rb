@@ -100,18 +100,15 @@ module DataDrip
                          class: input_class,
                          step: 0.01
       when ActiveModel::Type::Boolean
+        # Pair the checkbox with a hidden "0" field so an unchecked box
+        # submits an explicit false instead of dropping the key entirely.
+        # Without this, the attribute's `default:` silently re-applies on the
+        # server, which is invisible from the persisted options.
+        field_name = "backfill_run[options][#{name}]"
         content_tag :div, class: "flex items-center" do
-          check_box_tag(
-            "backfill_run[options][#{name}]",
-            "1",
-            value,
-            class: "mr-2"
-          ) +
-            label_tag(
-              "backfill_run[options][#{name}]",
-              "Yes",
-              class: "text-gray-700"
-            )
+          hidden_field_tag(field_name, "0", id: nil) +
+            check_box_tag(field_name, "1", value, class: "mr-2") +
+            label_tag(field_name, "Yes", class: "text-gray-700")
         end
       when ActiveModel::Type::Date
         date_field_tag "backfill_run[options][#{name}]",
