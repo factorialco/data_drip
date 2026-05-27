@@ -16,45 +16,16 @@
 
       <div class="mb-6">
         <%= f.label :backfill_class_name, "BACKFILL CLASS", class: "block text-gray-500 font-semibold mb-2" %>
-        <div class="relative" id="backfill-class-combobox">
-          <%# Hidden field carries the actual submitted value %>
-          <%= f.hidden_field :backfill_class_name, id: "backfill_run_backfill_class_name" %>
-
-          <%# Visible text input for searching %>
-          <input
-            type="text"
-            id="backfill_class_search_input"
-            placeholder="Search backfill class…"
-            autocomplete="off"
-            aria-haspopup="listbox"
-            aria-expanded="false"
-            aria-controls="backfill_class_listbox"
-            class="block w-full mt-1 rounded border border-gray-200 focus:ring focus:ring-blue-200 focus:border-blue-400 px-3 py-2 pr-10"
-          />
-          <div class="pointer-events-none absolute inset-y-0 right-0 flex items-center px-3 text-gray-400" style="top: 4px;">
-            <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
-            </svg>
-          </div>
-
-          <%# Dropdown list of options %>
-          <ul
-            id="backfill_class_listbox"
-            role="listbox"
-            aria-label="Backfill class options"
-            class="absolute z-50 w-full bg-white border border-gray-200 rounded mt-1 max-h-60 overflow-y-auto shadow-lg hidden"
-          >
-            <% backfill_class_names.each do |name| %>
-              <li
-                role="option"
-                aria-selected="false"
-                data-value="<%= name %>"
-                class="px-3 py-2 cursor-pointer hover:bg-blue-50 text-gray-700 text-sm"
-              ><%= name %></li>
-            <% end %>
-            <li id="backfill_class_no_results" class="px-3 py-2 text-gray-400 text-sm italic hidden">No matches found</li>
-          </ul>
-        </div>
+        <%= f.text_field :backfill_class_name,
+              list: "backfill_class_options",
+              placeholder: "Search backfill class…",
+              autocomplete: "off",
+              class: "block w-full mt-1 rounded border border-gray-200 focus:ring focus:ring-blue-200 focus:border-blue-400 px-3 py-2" %>
+        <datalist id="backfill_class_options">
+          <% backfill_class_names.each do |name| %>
+            <option value="<%= name %>"></option>
+          <% end %>
+        </datalist>
       </div>
 
       <div class="mb-6">
@@ -81,151 +52,6 @@
   </div>
 </div>
 <script>
-  // ── Searchable backfill-class combobox ────────────────────────────────────
-  (function () {
-    function initCombobox() {
-      var hiddenInput  = document.getElementById("backfill_run_backfill_class_name");
-      var searchInput  = document.getElementById("backfill_class_search_input");
-      var listbox      = document.getElementById("backfill_class_listbox");
-      var noResults    = document.getElementById("backfill_class_no_results");
-
-      if (!hiddenInput || !searchInput || !listbox) {
-        setTimeout(initCombobox, 100);
-        return;
-      }
-
-      var items = Array.from(listbox.querySelectorAll("li[data-value]"));
-      var activeIndex = -1;
-
-      function openList() {
-        listbox.classList.remove("hidden");
-        searchInput.setAttribute("aria-expanded", "true");
-      }
-
-      function closeList() {
-        listbox.classList.add("hidden");
-        searchInput.setAttribute("aria-expanded", "false");
-        activeIndex = -1;
-        items.forEach(function (li) { li.classList.remove("bg-blue-100"); });
-      }
-
-      function selectItem(li) {
-        var value = li.getAttribute("data-value");
-        hiddenInput.value = value;
-        searchInput.value = value;
-        li.setAttribute("aria-selected", "true");
-        items.forEach(function (other) {
-          if (other !== li) other.setAttribute("aria-selected", "false");
-        });
-        closeList();
-
-        // Fire change event so handleBackfillClassChange still works
-        var evt = new Event("change", { bubbles: true });
-        hiddenInput.dispatchEvent(evt);
-      }
-
-      // ── Filtering ──────────────────────────────────────────────────────────
-      var debounceTimer;
-      searchInput.addEventListener("input", function () {
-        clearTimeout(debounceTimer);
-        var input = this;
-        debounceTimer = setTimeout(function () {
-          var query = input.value.toLowerCase().trim();
-          var visible = 0;
-          items.forEach(function (li) {
-            // Support wildcards: * matches any sequence, ? matches one char
-            var matches = query === "" || wildcardMatch(li.getAttribute("data-value").toLowerCase(), query);
-            li.style.display = matches ? "" : "none";
-            if (matches) visible++;
-          });
-          noResults.classList.toggle("hidden", visible > 0);
-          activeIndex = -1;
-          openList();
-        }, 100);
-      });
-
-      // Flexible wildcard matching: * = any chars, ? = one char; falls back to
-      // plain substring when no wildcards are present.
-      function wildcardMatch(str, pattern) {
-        if (pattern.indexOf("*") === -1 && pattern.indexOf("?") === -1) {
-          return str.indexOf(pattern) !== -1;
-        }
-        var regexStr = pattern
-          .replace(/[.+^${}()|[\]\\]/g, "\\$&") // escape regex specials
-          .replace(/\*/g, ".*")
-          .replace(/\?/g, ".");
-        return new RegExp(regexStr).test(str);
-      }
-
-      // ── Show/hide on focus/blur ────────────────────────────────────────────
-      searchInput.addEventListener("focus", function () {
-        filterAndOpen("");
-      });
-
-      function filterAndOpen(query) {
-        items.forEach(function (li) { li.style.display = ""; });
-        noResults.classList.add("hidden");
-        openList();
-      }
-
-      document.addEventListener("click", function (e) {
-        if (!listbox.contains(e.target) && e.target !== searchInput) {
-          closeList();
-        }
-      });
-
-      // ── Option click ──────────────────────────────────────────────────────
-      items.forEach(function (li) {
-        li.addEventListener("mousedown", function (e) {
-          e.preventDefault(); // prevent blur before click
-          selectItem(li);
-        });
-      });
-
-      // ── Keyboard navigation ───────────────────────────────────────────────
-      searchInput.addEventListener("keydown", function (e) {
-        var visibleItems = items.filter(function (li) { return li.style.display !== "none"; });
-        if (e.key === "ArrowDown") {
-          e.preventDefault();
-          activeIndex = Math.min(activeIndex + 1, visibleItems.length - 1);
-          highlightItem(visibleItems);
-        } else if (e.key === "ArrowUp") {
-          e.preventDefault();
-          activeIndex = Math.max(activeIndex - 1, 0);
-          highlightItem(visibleItems);
-        } else if (e.key === "Enter") {
-          e.preventDefault();
-          if (activeIndex >= 0 && visibleItems[activeIndex]) {
-            selectItem(visibleItems[activeIndex]);
-          }
-        } else if (e.key === "Escape") {
-          closeList();
-        }
-      });
-
-      function highlightItem(visibleItems) {
-        items.forEach(function (li) { li.classList.remove("bg-blue-100"); });
-        var target = visibleItems[activeIndex];
-        if (target) {
-          target.classList.add("bg-blue-100");
-          target.scrollIntoView({ block: "nearest" });
-        }
-      }
-
-      // Pre-fill display if there's an existing value (e.g. form re-render on error)
-      if (hiddenInput.value) {
-        searchInput.value = hiddenInput.value;
-      }
-    }
-
-    if (document.readyState === "loading") {
-      document.addEventListener("DOMContentLoaded", initCombobox);
-    } else {
-      initCombobox();
-    }
-  })();
-
-  // ── Backfill options fetch (unchanged logic) ──────────────────────────────
   function handleBackfillClassChange() {
     var selectedClass = this.value;
     var optionsContainer = document.getElementById("backfill-options-container");
@@ -270,12 +96,12 @@
       timeZoneInput.value = timeZone;
     }
 
-    var hiddenInput = document.getElementById("backfill_run_backfill_class_name");
+    var classInput = document.getElementById("backfill_run_backfill_class_name");
     var optionsContainer = document.getElementById("backfill-options-container");
 
-    if (hiddenInput && optionsContainer) {
-      hiddenInput.removeEventListener("change", handleBackfillClassChange);
-      hiddenInput.addEventListener("change", handleBackfillClassChange);
+    if (classInput && optionsContainer) {
+      classInput.removeEventListener("change", handleBackfillClassChange);
+      classInput.addEventListener("change", handleBackfillClassChange);
     } else {
       setTimeout(initializeBackfillForm, 100);
     }
