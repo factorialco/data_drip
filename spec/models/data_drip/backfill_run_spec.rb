@@ -18,6 +18,47 @@ RSpec.describe DataDrip::BackfillRun, type: :model do
     end
 
     describe "validate_scope" do
+      describe "before_backfill callback" do
+        it "calls DataDrip.before_backfill during validation" do
+          callback_called = false
+          original_callback = DataDrip.before_backfill
+
+          DataDrip.before_backfill = -> { callback_called = true }
+
+          backfill_run =
+            DataDrip::BackfillRun.new(
+              valid_attributes.merge(options: { age: 25 })
+            )
+          backfill_run.valid?
+
+          expect(callback_called).to be true
+        ensure
+          DataDrip.before_backfill = original_callback
+        end
+
+        it "calls before_backfill before accessing scope" do
+          call_order = []
+          original_callback = DataDrip.before_backfill
+
+          DataDrip.before_backfill = -> { call_order << :before_backfill }
+
+          allow_any_instance_of(AddRoleToEmployee).to receive(:scope).and_wrap_original do |original_method|
+            call_order << :scope_accessed
+            original_method.call
+          end
+
+          backfill_run =
+            DataDrip::BackfillRun.new(
+              valid_attributes.merge(options: { age: 25 })
+            )
+          backfill_run.valid?
+
+          expect(call_order).to eq([:before_backfill, :scope_accessed])
+        ensure
+          DataDrip.before_backfill = original_callback
+        end
+      end
+
       context "when scope has records" do
         it "is valid" do
           backfill_run =
