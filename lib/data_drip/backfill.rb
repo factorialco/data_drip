@@ -3,6 +3,10 @@
 
 module DataDrip
   class Backfill
+    def self.description
+      nil
+    end
+
     def self.attribute(name, type = nil, default: nil, **options)
       raise "Method #{name} already defined in #{self.class.name}" if instance_methods.include?(name.to_sym)
 

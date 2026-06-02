@@ -173,6 +173,38 @@ RSpec.describe DataDrip::BackfillRunsController, type: :controller do
     end
   end
 
+  describe "GET #backfill_options" do
+    it "returns description: nil when backfill class name is blank" do
+      get :backfill_options, params: { backfill_class_name: "" }
+      json = JSON.parse(response.body)
+      expect(json["description"]).to be_nil
+    end
+
+    it "returns description: nil when backfill class is not found" do
+      get :backfill_options, params: { backfill_class_name: "NonExistentClass" }
+      json = JSON.parse(response.body)
+      expect(json["description"]).to be_nil
+    end
+
+    it "returns description from the backfill class" do
+      get :backfill_options, params: { backfill_class_name: "AddRoleToEmployee" }
+      json = JSON.parse(response.body)
+      expect(json["description"]).to include("intern")
+    end
+
+    it "returns description: nil for a backfill with no description" do
+      stub_const("NoDescBackfill", Class.new(DataDrip::Backfill) {
+        def scope; Employee.none; end
+      })
+      allow(DataDrip).to receive(:all).and_return(
+        DataDrip.all + [ NoDescBackfill ]
+      )
+      get :backfill_options, params: { backfill_class_name: "NoDescBackfill" }
+      json = JSON.parse(response.body)
+      expect(json["description"]).to be_nil
+    end
+  end
+
   describe "#backfill_class_names" do
     it "returns sorted and unique backfill class names" do
       expect(controller.send(:backfill_class_names)).to include(

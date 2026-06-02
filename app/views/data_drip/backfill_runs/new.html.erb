@@ -28,6 +28,8 @@
         </datalist>
       </div>
 
+      <div id="backfill-description-container"></div>
+
       <div class="mb-6">
         <%= f.label :batch_size, "BATCH SIZE", class: "block text-gray-500 font-semibold mb-2" %>
         <%= f.number_field :batch_size, class: "block w-full mt-1 rounded border border-gray-200  focus:ring focus:ring-blue-200 focus:border-blue-400 px-3 py-2", min: 1 %>
@@ -55,10 +57,12 @@
   function handleBackfillClassChange() {
     var selectedClass = this.value;
     var optionsContainer = document.getElementById("backfill-options-container");
+    var descContainer = document.getElementById("backfill-description-container");
 
     if (!optionsContainer) return;
 
     optionsContainer.innerHTML = "";
+    if (descContainer) descContainer.innerHTML = "";
 
     if (selectedClass && selectedClass !== "Select a backfill class") {
       fetch("<%= backfill_options_backfill_runs_path %>?backfill_class_name=" + encodeURIComponent(selectedClass), {
@@ -74,6 +78,14 @@
         return response.json();
       })
       .then(function (data) {
+        if (data.description && descContainer) {
+          var escaped = data.description.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+          descContainer.innerHTML =
+            '<div class="mb-6 p-4 rounded-lg bg-blue-50 border border-blue-200">' +
+            '<h3 class="block text-blue-700 font-semibold mb-2">DESCRIPTION</h3>' +
+            '<div class="text-gray-700 text-sm whitespace-pre-wrap">' + escaped + '</div>' +
+            '</div>';
+        }
         if (data.html) {
           optionsContainer.innerHTML = data.html;
           optionsContainer.querySelectorAll("script").forEach(function (oldScript) {

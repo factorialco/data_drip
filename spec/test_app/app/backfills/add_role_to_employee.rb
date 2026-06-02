@@ -1,4 +1,11 @@
 class AddRoleToEmployee < DataDrip::Backfill
+  def self.description
+    "Assigns the 'intern' role to all employees without a role.\n\n" \
+    "Options:\n" \
+    "- age: Filter employees by age (optional)\n" \
+    "- name: Filter employees by name (optional)"
+  end
+
   attribute :age, :integer
   attribute :name, :string
 
