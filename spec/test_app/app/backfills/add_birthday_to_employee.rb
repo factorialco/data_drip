@@ -1,5 +1,7 @@
 
 class AddBirthdayToEmployee < DataDrip::Backfill
+  description "Backfills today's date as the birthday for employees missing one."
+
   attribute :employee_id, :integer
 def scope
     Employee.where(birthday: nil)

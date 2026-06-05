@@ -1,4 +1,6 @@
 class AddRoleToEmployee < DataDrip::Backfill
+  description "Assigns the default 'intern' role to employees that don't have one yet."
+
   attribute :age, :integer
   attribute :name, :string
 

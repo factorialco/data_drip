@@ -1,5 +1,8 @@
 <% if @sorbet_enabled %># typed: strict<% end %>
 class <%= class_name %> < DataDrip::Backfill
+  # Optional: a short description shown on the DataDrip catalog page.
+  # description "Short summary of what this backfill does"
+
 <% if @sorbet_enabled %>  extend T::Sig
 
   Elem = type_member { { fixed: YourModel } }

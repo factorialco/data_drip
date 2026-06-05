@@ -287,12 +287,28 @@ class FixUserEmails < DataDrip::Backfill
 end
 ```
 
+### Describing a Backfill
+
+Give a backfill a human-readable description with the `description` DSL. It is shown on the **Backfills Catalog** page (see [Web Interface](#web-interface)) so others can tell at a glance what each datadrip does:
+
+```ruby
+class FixUserEmails < DataDrip::Backfill
+  description "Marks unverified user emails as verified."
+
+  def scope
+    User.where(email_verified: false)
+  end
+end
+```
+
 ### Adding Options to Backfills
 
 You can make your backfills configurable by adding attributes that users can set when creating a backfill run. This allows for dynamic filtering and let's you customize your backfill runs:
 
 ```ruby
 class AddRoleToEmployee < DataDrip::Backfill
+  description "Assigns the default 'intern' role to employees without one."
+
   # Define configurable attributes
   attribute :age, :integer
   attribute :name, :string
@@ -331,6 +347,7 @@ DataDrip supports various attribute types that automatically generate appropriat
 - **`:date`** - Date picker
 - **`:time`** - Time picker
 - **`:datetime`** - Date and time picker
+- **`:enum`** - Multi-select from a fixed set of `values:` (searchable checkboxes); e.g. `attribute :status, :enum, values: %w[pending approved rejected]`
 
 ### Backfill Structure
 
@@ -369,6 +386,8 @@ Navigate to `/data_drip/backfill_runs` in your application to access the DataDri
 - View error messages and logs
 - Stop running backfills
 - Schedule backfills for future execution
+
+Visit `/data_drip/backfills` for the **Backfills Catalog** — a searchable table of every datadrip with its description and the custom fields (options) it accepts. Use the search box to find datadrips by name, description, or field name (e.g. `company_ids`).
 
 When creating a new backfill run, the interface dynamically generates form fields based on the attributes defined in your backfill class, making it easy to customize each run without code changes.
 

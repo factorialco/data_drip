@@ -73,6 +73,52 @@ RSpec.describe DataDrip::Backfill, type: :model do
     end
   end
 
+  describe ".description" do
+    it "stores and returns the description" do
+      klass = Class.new(DataDrip::Backfill) { description "Does a thing" }
+
+      expect(klass.description).to eq("Does a thing")
+    end
+
+    it "returns nil when no description is set" do
+      klass = Class.new(DataDrip::Backfill)
+
+      expect(klass.description).to be_nil
+    end
+  end
+
+  describe ".custom_fields" do
+    it "returns the name and type of each declared attribute" do
+      klass =
+        Class.new(DataDrip::Backfill) do
+          attribute :company_ids, :string
+          attribute :limit, :integer
+        end
+
+      expect(klass.custom_fields).to contain_exactly(
+        { name: "company_ids", type: :string },
+        { name: "limit", type: :integer }
+      )
+    end
+
+    it "includes the allowed values for enum attributes" do
+      klass =
+        Class.new(DataDrip::Backfill) do
+          attribute :status, :enum, values: %w[pending approved]
+        end
+
+      expect(klass.custom_fields).to eq(
+        [ { name: "status", type: :enum, values: %w[pending approved] } ]
+      )
+    end
+
+    it "returns an empty array when no attributes are declared" do
+      klass = Class.new(DataDrip::Backfill)
+
+      expect(klass.custom_fields).to eq([])
+    end
+  end
+
   describe ".backfill_options_class" do
     it "creates a class that includes ActiveModel::Attributes" do
       options_class = test_backfill_class.backfill_options_class
