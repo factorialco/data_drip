@@ -35,21 +35,27 @@
         </div>
 
         <div class="overflow-x-auto">
-          <table class="w-full text-left">
+          <table class="w-full text-left" style="table-layout: fixed;">
+            <colgroup>
+              <col style="width: 20%;">
+              <col style="width: 60%;">
+              <col style="width: 20%;">
+            </colgroup>
             <thead>
               <tr>
                 <th class="py-2 px-4 text-gray-400 font-semibold text-sm">NAME</th>
                 <th class="py-2 px-4 text-gray-400 font-semibold text-sm">DESCRIPTION</th>
-                <th class="py-2 px-4 text-gray-400 font-semibold text-sm">CUSTOM FIELDS</th>
+                <th class="py-2 px-4 text-gray-400 font-semibold text-sm">CONFIGURABLE FIELDS</th>
               </tr>
             </thead>
             <tbody id="backfills_tbody">
               <% @backfills.each do |backfill| %>
                 <tr class="border-b border-gray-100 last:border-b-0" data-search="<%= backfill_search_terms(backfill) %>">
-                  <td class="py-3 px-4 text-gray-700 font-semibold align-middle" style="white-space: nowrap;"><%= backfill.name %></td>
+                  <td class="py-3 px-4 text-gray-700 font-semibold" style="vertical-align: top; overflow-wrap: break-word;"><%= backfill.name %></td>
                   <td class="py-3 px-4 text-gray-700" style="vertical-align: top;">
-                    <% if backfill.description.present? %>
-                      <%= backfill.description %>
+                    <% desc = backfill_description(backfill) %>
+                    <% if desc.present? %>
+                      <%= desc %>
                     <% else %>
                       <span style="color: #9ca3af;">No description</span>
                     <% end %>
@@ -63,6 +69,11 @@
             </tbody>
           </table>
         </div>
+
+        <div id="backfills_pagination" class="mt-6 flex justify-between items-center" style="display: none;">
+          <div id="backfills_pagination_info" class="text-sm text-gray-500"></div>
+          <div id="backfills_pagination_controls" style="display: flex; gap: 8px;"></div>
+        </div>
       </div>
     </div>
   </div>
@@ -70,25 +81,115 @@
 
 <script>
   (function() {
+    var PER_PAGE = 10;
+
     var search = document.getElementById('backfill_search');
-    if (!search) return;
-    var rows = document.querySelectorAll('#backfills_tbody tr[data-search]');
+    var rows = Array.prototype.slice.call(
+      document.querySelectorAll('#backfills_tbody tr[data-search]')
+    );
     var noResults = document.getElementById('backfills_no_results');
+    var pager = document.getElementById('backfills_pagination');
+    var info = document.getElementById('backfills_pagination_info');
+    var controls = document.getElementById('backfills_pagination_controls');
+
+    // Inline styles: the precompiled Tailwind build doesn't ship the gray
+    // button utilities, so style the controls here (pagination-current aside).
+    var btnStyle = 'padding: 8px 12px; font-size: 14px; border-radius: 6px; ' +
+      'background-color: #f3f4f6; color: #374151; border: none; cursor: pointer;';
+    var currentStyle = 'padding: 8px 12px; font-size: 14px; border-radius: 6px; ' +
+      'background-color: #7209b7; color: #ffffff; border: none;';
+
+    var query = '';
+    var currentPage = 1;
     var debounceTimer;
 
-    search.addEventListener('input', function() {
-      clearTimeout(debounceTimer);
-      var input = this;
-      debounceTimer = setTimeout(function() {
-        var query = input.value.toLowerCase().trim();
-        var visible = 0;
-        rows.forEach(function(row) {
-          var match = !query || row.getAttribute('data-search').indexOf(query) !== -1;
-          row.style.display = match ? '' : 'none';
-          if (match) visible++;
-        });
-        noResults.style.display = visible === 0 ? '' : 'none';
-      }, 150);
-    });
+    function matchedRows() {
+      if (!query) return rows;
+      return rows.filter(function(row) {
+        return row.getAttribute('data-search').indexOf(query) !== -1;
+      });
+    }
+
+    function render() {
+      var matches = matchedRows();
+      var total = matches.length;
+      var totalPages = Math.max(1, Math.ceil(total / PER_PAGE));
+      if (currentPage > totalPages) currentPage = totalPages;
+      if (currentPage < 1) currentPage = 1;
+
+      var start = (currentPage - 1) * PER_PAGE;
+      rows.forEach(function(row) { row.style.display = 'none'; });
+      matches.slice(start, start + PER_PAGE).forEach(function(row) {
+        row.style.display = '';
+      });
+
+      noResults.style.display = total === 0 ? '' : 'none';
+
+      if (totalPages > 1) {
+        pager.style.display = '';
+        info.textContent = 'Showing ' + (start + 1) + '-' +
+          Math.min(start + PER_PAGE, total) + ' of ' + total + ' backfills';
+        renderControls(totalPages);
+      } else {
+        pager.style.display = 'none';
+        controls.innerHTML = '';
+        info.textContent = '';
+      }
+    }
+
+    function makeButton(label, page) {
+      var button = document.createElement('button');
+      button.type = 'button';
+      button.textContent = label;
+      button.setAttribute('style', btnStyle);
+      button.addEventListener('mouseenter', function() {
+        button.style.backgroundColor = '#e5e7eb';
+      });
+      button.addEventListener('mouseleave', function() {
+        button.style.backgroundColor = '#f3f4f6';
+      });
+      button.addEventListener('click', function() {
+        currentPage = page;
+        render();
+      });
+      return button;
+    }
+
+    function renderControls(totalPages) {
+      controls.innerHTML = '';
+      if (currentPage > 1) {
+        controls.appendChild(makeButton('← Previous', currentPage - 1));
+      }
+      // Sliding window of up to 5 pages, mirroring Paginatable#calculate_page_range.
+      var startPage = Math.max(currentPage - 2, 1);
+      var endPage = Math.min(startPage + 4, totalPages);
+      for (var page = startPage; page <= endPage; page++) {
+        if (page === currentPage) {
+          var current = document.createElement('span');
+          current.textContent = String(page);
+          current.setAttribute('style', currentStyle);
+          controls.appendChild(current);
+        } else {
+          controls.appendChild(makeButton(String(page), page));
+        }
+      }
+      if (currentPage < totalPages) {
+        controls.appendChild(makeButton('Next →', currentPage + 1));
+      }
+    }
+
+    if (search) {
+      search.addEventListener('input', function() {
+        clearTimeout(debounceTimer);
+        var input = this;
+        debounceTimer = setTimeout(function() {
+          query = input.value.toLowerCase().trim();
+          currentPage = 1;
+          render();
+        }, 150);
+      });
+    }
+
+    render();
   })();
 </script>

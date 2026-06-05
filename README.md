@@ -387,7 +387,7 @@ Navigate to `/data_drip/backfill_runs` in your application to access the DataDri
 - Stop running backfills
 - Schedule backfills for future execution
 
-Visit `/data_drip/backfills` for the **Backfills Catalog** — a searchable table of every datadrip with its description and the custom fields (options) it accepts. Use the search box to find datadrips by name, description, or field name (e.g. `company_ids`).
+Visit `/data_drip/backfills` for the **Backfills Catalog** — a searchable table of every datadrip with its description and the configurable fields (options) it accepts. Use the search box to find datadrips by name, description, or field name (e.g. `company_ids`); the list is paginated, and search filters across every page.
 
 When creating a new backfill run, the interface dynamically generates form fields based on the attributes defined in your backfill class, making it easy to customize each run without code changes.
 
