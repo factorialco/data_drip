@@ -54,6 +54,77 @@
   </div>
 </div>
 <script>
+  function esc(str) {
+    return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  }
+
+  function formatDescription(text) {
+    var lines = text.split('\n');
+    var html = '';
+    var inList = false;
+    var inCodeBlock = false;
+    var codeLines = [];
+
+    for (var i = 0; i < lines.length; i++) {
+      var line = lines[i];
+
+      if (line.trim().match(/^```/)) {
+        if (inCodeBlock) {
+          html += '<pre style="margin:6px 0;padding:10px 12px;border-radius:6px;background:#1e293b;color:#e2e8f0;font-size:12px;font-family:monospace;line-height:1.5;overflow-x:auto">' + esc(codeLines.join('\n')) + '</pre>';
+          codeLines = [];
+          inCodeBlock = false;
+        } else {
+          if (inList) { html += '</ul>'; inList = false; }
+          inCodeBlock = true;
+        }
+        continue;
+      }
+
+      if (inCodeBlock) {
+        codeLines.push(line);
+        continue;
+      }
+
+      if (line.trim() === '') {
+        if (inList) { html += '</ul>'; inList = false; }
+        html += '<div style="height:6px"></div>';
+        continue;
+      }
+
+      var headerMatch = line.match(/^(#{1,3})\s+(.+)$/);
+      if (headerMatch) {
+        if (inList) { html += '</ul>'; inList = false; }
+        var level = headerMatch[1].length;
+        var style = level === 1
+          ? 'font-size:15px;font-weight:600;color:#1e3a5f;margin-bottom:2px'
+          : level === 2
+          ? 'font-size:13px;font-weight:600;color:#2563eb;margin-bottom:2px;text-transform:uppercase;letter-spacing:0.03em'
+          : 'font-size:13px;font-weight:500;color:#475569;margin-bottom:2px';
+        html += '<div style="' + style + '">' + inlineFormat(esc(headerMatch[2])) + '</div>';
+        continue;
+      }
+
+      var bulletMatch = line.match(/^[-*]\s+(.+)$/);
+      if (bulletMatch) {
+        if (!inList) { html += '<ul style="list-style:disc;padding-left:20px;margin:4px 0">'; inList = true; }
+        html += '<li style="margin-bottom:2px">' + inlineFormat(esc(bulletMatch[1])) + '</li>';
+        continue;
+      }
+
+      if (inList) { html += '</ul>'; inList = false; }
+      html += '<p style="margin-bottom:3px">' + inlineFormat(esc(line)) + '</p>';
+    }
+
+    if (inList) html += '</ul>';
+    return html;
+  }
+
+  function inlineFormat(text) {
+    text = text.replace(/\*\*(.+?)\*\*/g, '<strong style="font-weight:600;color:#1e293b">$1</strong>');
+    text = text.replace(/`(.+?)`/g, '<code style="padding:1px 5px;border-radius:4px;background:#dbeafe;color:#1e40af;font-size:12px;font-family:monospace">$1</code>');
+    return text;
+  }
+
   function handleBackfillClassChange() {
     var selectedClass = this.value;
     var optionsContainer = document.getElementById("backfill-options-container");
@@ -79,11 +150,10 @@
       })
       .then(function (data) {
         if (data.description && descContainer) {
-          var escaped = data.description.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
           descContainer.innerHTML =
-            '<div class="mb-6 p-4 rounded-lg bg-blue-50 border border-blue-200">' +
-            '<h3 class="block text-blue-700 font-semibold mb-2">DESCRIPTION</h3>' +
-            '<div class="text-gray-700 text-sm whitespace-pre-wrap">' + escaped + '</div>' +
+            '<div style="margin-bottom:24px;padding:16px;border-radius:8px;background:#eff6ff;border:1px solid #bfdbfe">' +
+            '<h3 style="font-size:12px;font-weight:600;color:#1d4ed8;margin-bottom:8px;letter-spacing:0.05em">DESCRIPTION</h3>' +
+            '<div style="color:#374151;font-size:13px;line-height:1.5">' + formatDescription(data.description) + '</div>' +
             '</div>';
         }
         if (data.html) {

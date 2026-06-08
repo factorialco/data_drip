@@ -1,6 +1,20 @@
 
 class AddBirthdayToEmployee < DataDrip::Backfill
   attribute :employee_id, :integer
+  def self.description
+    "Sets today's date as the **birthday** for all employees missing one.\n\n" \
+    "## Options\n" \
+    "- `employee_id`: Target a **single employee** by ID (optional)\n\n" \
+    "## Finding an employee ID\n" \
+    "You can get the ID from an email with:\n" \
+    "```\n" \
+    "SELECT id FROM employees\n" \
+    "WHERE email = 'jane@example.com';\n" \
+    "```\n\n" \
+    "## Notes\n" \
+    "- Uses `update_all` for fast batch processing\n" \
+    "- Safe to re-run — only touches employees where `birthday` is `nil`"
+  end
 def scope
     Employee.where(birthday: nil)
   end
