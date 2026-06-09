@@ -173,6 +173,69 @@ RSpec.describe DataDrip::BackfillRunsController, type: :controller do
     end
   end
 
+  describe "GET #index" do
+    render_views
+
+    let!(:backfill_run) do
+      DataDrip::BackfillRun.create!(
+        backfill_class_name: "AddRoleToEmployee",
+        batch_size: 50,
+        start_at: 1.hour.from_now,
+        backfiller: backfiller
+      )
+    end
+
+    let!(:batch) do
+      DataDrip::BackfillRunBatch.create!(
+        backfill_run: backfill_run,
+        batch_size: 10,
+        start_id: 1,
+        finish_id: 10,
+        status: :pending
+      )
+    end
+
+    it "displays the configured batch_size, not the chunk size" do
+      get :index
+      expect(response.body).to include("50")
+    end
+  end
+
+  describe "GET #show" do
+    render_views
+
+    let!(:backfill_run) do
+      DataDrip::BackfillRun.create!(
+        backfill_class_name: "AddRoleToEmployee",
+        batch_size: 50,
+        start_at: 1.hour.from_now,
+        backfiller: backfiller
+      )
+    end
+
+    let!(:batch) do
+      DataDrip::BackfillRunBatch.create!(
+        backfill_run: backfill_run,
+        batch_size: 10,
+        start_id: 1,
+        finish_id: 10,
+        status: :pending
+      )
+    end
+
+    it "displays the configured batch_size in the summary" do
+      get :show, params: { id: backfill_run.id }
+      expect(response.body).to include("Batch Size")
+      expect(response.body).to include("50")
+    end
+
+    it "displays items processed in the batches table" do
+      get :show, params: { id: backfill_run.id }
+      expect(response.body).to include("ITEMS PROCESSED")
+      expect(response.body).to include("10")
+    end
+  end
+
   describe "#backfill_class_names" do
     it "returns sorted and unique backfill class names" do
       expect(controller.send(:backfill_class_names)).to include(
