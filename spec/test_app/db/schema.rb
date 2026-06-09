@@ -15,7 +15,7 @@ ActiveRecord::Schema[7.0].define(version: 2025_11_20_142547) do
     t.bigint "backfill_run_id", null: false
     t.integer "status", default: 0, null: false
     t.text "error_message"
-    t.integer "batch_size", default: 100, null: false
+    t.integer "actual_size", default: 0, null: false
     t.bigint "start_id", null: false
     t.bigint "finish_id", null: false
     t.datetime "created_at", null: false

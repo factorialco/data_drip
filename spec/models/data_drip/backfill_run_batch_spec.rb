@@ -30,7 +30,7 @@ RSpec.describe DataDrip::BackfillRunBatch, type: :model do
       batch =
         DataDrip::BackfillRunBatch.new(
           backfill_run: backfill_run,
-          batch_size: 10,
+          actual_size: 10,
           start_id: employee1.id,
           finish_id: employee3.id,
           status: :pending
@@ -100,7 +100,7 @@ RSpec.describe DataDrip::BackfillRunBatch, type: :model do
         batch =
           DataDrip::BackfillRunBatch.new(
             backfill_run: backfill_run,
-            batch_size: 10,
+            actual_size: 10,
             start_id: employee1.id,
             finish_id: employee3.id,
             status: :pending
@@ -140,7 +140,7 @@ RSpec.describe DataDrip::BackfillRunBatch, type: :model do
         backfill_run: test_backfill_run,
         start_id: 1,
         finish_id: 10,
-        batch_size: 5,
+        actual_size: 5,
         status: :pending
       }
     end
@@ -161,22 +161,22 @@ RSpec.describe DataDrip::BackfillRunBatch, type: :model do
       expect(batch.errors[:finish_id]).to include("can't be blank")
     end
 
-    it "validates presence of batch_size" do
+    it "validates presence of actual_size" do
       batch =
         DataDrip::BackfillRunBatch.new(
-          valid_batch_attributes.merge(batch_size: nil)
+          valid_batch_attributes.merge(actual_size: nil)
         )
       expect(batch).not_to be_valid
-      expect(batch.errors[:batch_size]).to include("can't be blank")
+      expect(batch.errors[:actual_size]).to include("can't be blank")
     end
 
-    it "validates batch_size is greater than 0" do
+    it "validates actual_size is greater than 0" do
       batch =
         DataDrip::BackfillRunBatch.new(
-          valid_batch_attributes.merge(batch_size: 0)
+          valid_batch_attributes.merge(actual_size: 0)
         )
       expect(batch).not_to be_valid
-      expect(batch.errors[:batch_size]).to include("must be greater than 0")
+      expect(batch.errors[:actual_size]).to include("must be greater than 0")
     end
   end
 end

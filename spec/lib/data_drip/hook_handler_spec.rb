@@ -39,7 +39,7 @@ RSpec.describe "HookHandler" do
             backfill_run: backfill_run,
             start_id: 1,
             finish_id: 100,
-            batch_size: 100
+            actual_size: 100
           }
         )
       end
@@ -76,7 +76,7 @@ RSpec.describe "HookHandler" do
             backfill_run: backfill_run,
             start_id: 1,
             finish_id: 100,
-            batch_size: 100
+            actual_size: 100
           }
         )
       expect(HookHandler).not_to receive(:on_batch_enqueued)

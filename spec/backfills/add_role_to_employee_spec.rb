@@ -20,7 +20,7 @@ RSpec.describe AddRoleToEmployee, type: :model do
     batch =
       DataDrip::BackfillRunBatch.new(
         backfill_run: backfill_run,
-        batch_size: 10,
+        actual_size: 10,
         start_id: employee1.id,
         finish_id: employee3.id,
         status: :pending

@@ -14,7 +14,7 @@ module DataDrip
       backfill_run_batch.run!
       backfill_run_batch.completed!
 
-      parent.increment!(:processed_count, backfill_run_batch.batch_size)
+      parent.increment!(:processed_count, backfill_run_batch.actual_size)
       if parent.batches.where.not(status: :completed).count.zero?
         parent.completed!
       end

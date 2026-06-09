@@ -1,0 +1,6 @@
+class RenameDataDripBackfillRunBatchBatchSizeToActualSize < ActiveRecord::Migration<%= migration_version %>
+  def change
+    rename_column :data_drip_backfill_run_batches, :batch_size, :actual_size
+    change_column_default :data_drip_backfill_run_batches, :actual_size, from: 100, to: 0
+  end
+end

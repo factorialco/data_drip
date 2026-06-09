@@ -31,7 +31,7 @@ RSpec.describe DataDrip::Dripper, type: :job do
       backfill_run.reload
       expect(backfill_run.total_count).to eq(2) # 2 employees with age 25 and role nil
       expect(backfill_run.batches.count).to eq(1) # 1 batch for 2 records with batch_size 2
-      expect(backfill_run.batches.first.batch_size).to eq(2)
+      expect(backfill_run.batches.first.actual_size).to eq(2)
     end
 
     it "sets the backfill run to running status" do
@@ -50,7 +50,7 @@ RSpec.describe DataDrip::Dripper, type: :job do
       backfill_run.reload
       expect(backfill_run.total_count).to eq(1)
       expect(backfill_run.batches.count).to eq(1)
-      expect(backfill_run.batches.first.batch_size).to eq(1)
+      expect(backfill_run.batches.first.actual_size).to eq(1)
     end
 
     it "handles errors and sets failed status" do

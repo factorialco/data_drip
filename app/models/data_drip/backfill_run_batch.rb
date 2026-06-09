@@ -8,7 +8,7 @@ module DataDrip
 
     validates :start_id, presence: true
     validates :finish_id, presence: true
-    validates :batch_size, presence: true, numericality: { greater_than: 0 }
+    validates :actual_size, presence: true, numericality: { greater_than: 0 }
 
     DataDrip.cross_rails_enum(
       self,
@@ -30,7 +30,7 @@ module DataDrip
       running!
       migration =
         backfill_run.backfill_class.new(
-          batch_size: batch_size,
+          batch_size: backfill_run.batch_size,
           sleep_time: 5,
           backfill_options: backfill_run.options
         )
@@ -38,7 +38,7 @@ module DataDrip
       migration
         .scope
         .in_batches(
-          of: batch_size,
+          of: backfill_run.batch_size,
           start: start_id,
           finish: finish_id
         ) do |batch|

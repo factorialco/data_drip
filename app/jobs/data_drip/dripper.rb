@@ -44,7 +44,7 @@ module DataDrip
           BackfillRunBatch.create!(
             backfill_run: backfill_run,
             status: :pending,
-            batch_size: batch[:actual_size],
+            actual_size: batch[:actual_size],
             start_id: batch[:start_id],
             finish_id: batch[:finish_id]
           )

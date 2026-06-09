@@ -9,7 +9,7 @@ class CreateDataDripBackfillRunBatches < ActiveRecord::Migration[7.0]
                    type: :bigint
       t.integer :status, null: false, default: 0, index: true
       t.text :error_message
-      t.integer :batch_size, null: false, default: 100
+      t.integer :actual_size, null: false, default: 0
       t.bigint :start_id, null: false
       t.bigint :finish_id, null: false
       t.timestamps null: false
