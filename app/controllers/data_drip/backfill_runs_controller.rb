@@ -160,7 +160,7 @@ module DataDrip
 
       if backfill_class_name.blank? ||
            backfill_class_name == "Select a backfill class"
-        render json: { html: "", description: nil }
+        render json: { html: "", instructions: nil }
         return
       end
 
@@ -168,7 +168,7 @@ module DataDrip
         DataDrip.all.find { |klass| klass.name == backfill_class_name }
 
       if backfill_class.nil?
-        render json: { html: "", description: nil }
+        render json: { html: "", instructions: nil }
         return
       end
 
@@ -180,9 +180,9 @@ module DataDrip
         )
 
       html = helpers.backfill_option_inputs(temp_run)
-      description = backfill_class.description
+      instructions = backfill_class.instructions
 
-      render json: { html: html, description: description }
+      render json: { html: html, instructions: instructions }
     end
 
     def find_current_backfiller

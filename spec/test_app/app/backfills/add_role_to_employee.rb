@@ -1,13 +1,17 @@
 class AddRoleToEmployee < DataDrip::Backfill
-  def self.description
-    "# Assign default role\n" \
-    "Sets the **intern** role on all employees that don't have one yet.\n\n" \
-    "## Options\n" \
-    "- `age`: Filter employees by age (optional)\n" \
-    "- `name`: Filter employees by exact name match (optional)\n\n" \
-    "## Important\n" \
-    "- This backfill is **idempotent** — safe to re-run\n" \
-    "- Triggers `on_run_completed` and `on_batch_completed` hooks"
+  def self.instructions
+    <<~INSTRUCTIONS
+      # Assign default role
+      Sets the **intern** role on all employees that don't have one yet.
+
+      ## Options
+      - `age`: Filter employees by age (optional)
+      - `name`: Filter employees by exact name match (optional)
+
+      ## Important
+      - This backfill is **idempotent** — safe to re-run
+      - Triggers `on_run_completed` and `on_batch_completed` hooks
+    INSTRUCTIONS
   end
 
   attribute :age, :integer

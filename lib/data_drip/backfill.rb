@@ -3,7 +3,7 @@
 
 module DataDrip
   class Backfill
-    def self.description
+    def self.instructions
       nil
     end
 

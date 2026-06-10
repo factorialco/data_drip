@@ -5,23 +5,23 @@ require "spec_helper"
 RSpec.describe DataDrip::Backfill, type: :model do
   let(:test_backfill_class) { AddRoleToEmployee }
 
-  describe ".description" do
-    it "returns nil by default for a class without a description" do
+  describe ".instructions" do
+    it "returns nil by default for a class without instructions" do
       klass = Class.new(DataDrip::Backfill)
-      expect(klass.description).to be_nil
+      expect(klass.instructions).to be_nil
     end
 
-    it "returns the description when overridden" do
+    it "returns the instructions when overridden" do
       klass = Class.new(DataDrip::Backfill) do
-        def self.description
-          "This is a test description"
+        def self.instructions
+          "These are test instructions"
         end
       end
-      expect(klass.description).to eq("This is a test description")
+      expect(klass.instructions).to eq("These are test instructions")
     end
 
-    it "returns the description from AddRoleToEmployee" do
-      expect(AddRoleToEmployee.description).to include("intern")
+    it "returns the instructions from AddRoleToEmployee" do
+      expect(AddRoleToEmployee.instructions).to include("intern")
     end
   end
 

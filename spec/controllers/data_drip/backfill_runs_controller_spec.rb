@@ -45,7 +45,7 @@ RSpec.describe DataDrip::BackfillRunsController, type: :controller do
         post :create, params: { backfill_run: invalid_attributes }
       end.not_to change(DataDrip::BackfillRun, :count)
 
-      expect(response.body).to include("Error")
+      expect(response.body).to include("There were errors:")
     end
 
     it "renders new template when backfill class name is invalid" do
@@ -56,7 +56,7 @@ RSpec.describe DataDrip::BackfillRunsController, type: :controller do
         post :create, params: { backfill_run: invalid_class_attributes }
       end.not_to change(DataDrip::BackfillRun, :count)
 
-      expect(response.body).to include("Error")
+      expect(response.body).to include("There were errors:")
     end
 
     context "with timezone conversion" do
@@ -174,34 +174,34 @@ RSpec.describe DataDrip::BackfillRunsController, type: :controller do
   end
 
   describe "GET #backfill_options" do
-    it "returns description: nil when backfill class name is blank" do
+    it "returns instructions: nil when backfill class name is blank" do
       get :backfill_options, params: { backfill_class_name: "" }
       json = JSON.parse(response.body)
-      expect(json["description"]).to be_nil
+      expect(json["instructions"]).to be_nil
     end
 
-    it "returns description: nil when backfill class is not found" do
+    it "returns instructions: nil when backfill class is not found" do
       get :backfill_options, params: { backfill_class_name: "NonExistentClass" }
       json = JSON.parse(response.body)
-      expect(json["description"]).to be_nil
+      expect(json["instructions"]).to be_nil
     end
 
-    it "returns description from the backfill class" do
+    it "returns instructions from the backfill class" do
       get :backfill_options, params: { backfill_class_name: "AddRoleToEmployee" }
       json = JSON.parse(response.body)
-      expect(json["description"]).to include("intern")
+      expect(json["instructions"]).to include("intern")
     end
 
-    it "returns description: nil for a backfill with no description" do
-      stub_const("NoDescBackfill", Class.new(DataDrip::Backfill) {
+    it "returns instructions: nil for a backfill with no instructions" do
+      stub_const("NoInstructionsBackfill", Class.new(DataDrip::Backfill) {
         def scope; Employee.none; end
       })
       allow(DataDrip).to receive(:all).and_return(
-        DataDrip.all + [ NoDescBackfill ]
+        DataDrip.all + [ NoInstructionsBackfill ]
       )
-      get :backfill_options, params: { backfill_class_name: "NoDescBackfill" }
+      get :backfill_options, params: { backfill_class_name: "NoInstructionsBackfill" }
       json = JSON.parse(response.body)
-      expect(json["description"]).to be_nil
+      expect(json["instructions"]).to be_nil
     end
   end
 
