@@ -8,6 +8,13 @@ class <%= class_name %> < DataDrip::Backfill
   Elem = type_member { { fixed: YourModel } }
   RelationType = type_member { { fixed: YourModel::RelationType } }
 <% end %>
+  # Describe the purpose of this backfill and how to fill in the options.
+  # This text is shown in the DataDrip UI when this backfill is selected.
+  #
+  # def self.instructions
+  #   "Explain what this backfill does and what values to provide for each option."
+  # end
+
 <% if @sorbet_enabled %>  sig { returns(RelationType]) }<% end %>
   def scope
     # YourModel.some_scope.where(something: true)
