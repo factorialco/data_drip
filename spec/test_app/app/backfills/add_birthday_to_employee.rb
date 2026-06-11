@@ -4,7 +4,7 @@ class AddBirthdayToEmployee < DataDrip::Backfill
 
   attribute :employee_id, :integer
 
-  instructions <<~INSTRUCTIONS
+  instructions <<~MARKDOWN
     Sets today's date as the **birthday** for all employees missing one.
 
     ## Options
@@ -20,7 +20,7 @@ class AddBirthdayToEmployee < DataDrip::Backfill
     ## Notes
     - Uses `update_all` for fast batch processing
     - Safe to re-run — only touches employees where `birthday` is `nil`
-  INSTRUCTIONS
+  MARKDOWN
 
 def scope
     Employee.where(birthday: nil)

@@ -32,11 +32,11 @@ module DataDrip
       @description
     end
 
-    # Rich-text (Markdown) guidance shown in the New Backfill Run form when
-    # this backfill is selected. Same setter/getter idiom as `description`
-    # (`instructions <<~MD ... MD`). Subclasses may also just override this
-    # method (`def self.instructions`) — a plain override shadows the macro,
-    # so both styles work. Returns nil when unset.
+    # Markdown guidance shown in the New Backfill Run form when this backfill
+    # is selected. Same setter/getter idiom as `description`
+    # (`instructions <<~MARKDOWN ... MARKDOWN`). Subclasses may also just
+    # override this method (`def self.instructions`) — a plain override
+    # shadows the macro, so both styles work. Returns nil when unset.
     def self.instructions(text = nil)
       @instructions = text unless text.nil?
       @instructions
