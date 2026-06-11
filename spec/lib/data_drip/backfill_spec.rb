@@ -11,7 +11,13 @@ RSpec.describe DataDrip::Backfill, type: :model do
       expect(klass.instructions).to be_nil
     end
 
-    it "returns the instructions when overridden" do
+    it "stores and returns the instructions set via the DSL" do
+      klass = Class.new(DataDrip::Backfill) { instructions "These are test instructions" }
+
+      expect(klass.instructions).to eq("These are test instructions")
+    end
+
+    it "still supports a plain method override" do
       klass = Class.new(DataDrip::Backfill) do
         def self.instructions
           "These are test instructions"

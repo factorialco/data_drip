@@ -3,18 +3,17 @@ class <%= class_name %> < DataDrip::Backfill
   # Optional: a short description shown on the DataDrip catalog page.
   # description "Short summary of what this backfill does"
 
+  # Optional: rich-text (Markdown) guidance shown in the New Backfill Run form
+  # when this backfill is selected.
+  # instructions <<~MD
+  #   Explain what this backfill does and what values to provide for each option.
+  # MD
+
 <% if @sorbet_enabled %>  extend T::Sig
 
   Elem = type_member { { fixed: YourModel } }
   RelationType = type_member { { fixed: YourModel::RelationType } }
 <% end %>
-  # Describe the purpose of this backfill and how to fill in the options.
-  # This text is shown in the DataDrip UI when this backfill is selected.
-  #
-  # def self.instructions
-  #   "Explain what this backfill does and what values to provide for each option."
-  # end
-
 <% if @sorbet_enabled %>  sig { returns(RelationType]) }<% end %>
   def scope
     # YourModel.some_scope.where(something: true)

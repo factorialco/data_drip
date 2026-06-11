@@ -304,22 +304,22 @@ end
 
 ### Adding Instructions to a Backfill
 
-For longer, formatted guidance, define a `self.instructions` method that returns a string. Unlike `description` (a one-line summary shown in the catalog), instructions are rendered as **rich text** in the **New Backfill Run** form as soon as the backfill is selected — so operators can see what the backfill does and how to fill in the options before running it:
+For longer, formatted guidance, use the `instructions` DSL — the same declaration style as `description`. Unlike `description` (a one-line summary shown in the catalog), instructions are rendered as **rich text** in the **New Backfill Run** form as soon as the backfill is selected — so operators can see what the backfill does and how to fill in the options before running it:
 
 ```ruby
 class FixUserEmails < DataDrip::Backfill
-  def self.instructions
-    <<~MARKDOWN
-      # Fix user emails
-      Marks **unverified** emails as verified.
+  description "Marks unverified user emails as verified."
 
-      ## Options
-      - `dry_run`: preview the affected count without writing changes
+  instructions <<~MARKDOWN
+    # Fix user emails
+    Marks **unverified** emails as verified.
 
-      ## Notes
-      - Safe to re-run (idempotent)
-    MARKDOWN
-  end
+    ## Options
+    - `dry_run`: preview the affected count without writing changes
+
+    ## Notes
+    - Safe to re-run (idempotent)
+  MARKDOWN
 
   def scope
     User.where(email_verified: false)
@@ -328,6 +328,8 @@ end
 ```
 
 Instructions support a small Markdown subset: `#`/`##`/`###` headings, `**bold**`, `` `inline code` ``, `-`/`*` bullet lists, and fenced code blocks. DataDrip ships a tiny built-in renderer (no external dependency) — see `app/javascript/data_drip/markdown.js`.
+
+Defining instructions as a plain method override (`def self.instructions ... end`) also works — useful if the text needs to be computed dynamically.
 
 ### Adding Options to Backfills
 

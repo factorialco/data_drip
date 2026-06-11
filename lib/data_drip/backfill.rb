@@ -3,10 +3,6 @@
 
 module DataDrip
   class Backfill
-    def self.instructions
-      nil
-    end
-
     def self.attribute(name, type = nil, default: nil, **options)
       raise "Method #{name} already defined in #{self.class.name}" if instance_methods.include?(name.to_sym)
 
@@ -28,11 +24,22 @@ module DataDrip
         end
     end
 
-    # Human-readable summary of what this backfill does. Acts as both setter
-    # (`description "..."`) and getter (`description`). Returns nil when unset.
+    # Human-readable summary of what this backfill does, shown on the catalog
+    # page. Acts as both setter (`description "..."`) and getter
+    # (`description`). Returns nil when unset.
     def self.description(text = nil)
       @description = text unless text.nil?
       @description
+    end
+
+    # Rich-text (Markdown) guidance shown in the New Backfill Run form when
+    # this backfill is selected. Same setter/getter idiom as `description`
+    # (`instructions <<~MD ... MD`). Subclasses may also just override this
+    # method (`def self.instructions`) — a plain override shadows the macro,
+    # so both styles work. Returns nil when unset.
+    def self.instructions(text = nil)
+      @instructions = text unless text.nil?
+      @instructions
     end
 
     # Introspects the declared attributes for display on the catalog page.
