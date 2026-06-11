@@ -11,6 +11,7 @@ DataDrip is a Rails engine that provides a robust framework for running data bac
 - 🔧 **Flexible Processing**: Choose between batch-level or element-level processing
 - 📈 **Progress Tracking**: Real-time progress updates and batch monitoring
 - 🎯 **Scoped Processing**: Define custom scopes for targeted data processing
+- 📝 **Self-documenting Backfills**: Add a one-line `description` (shown in the searchable catalog) and rich-text `instructions` (shown in the run form)
 
 ## Installation
 
@@ -301,6 +302,33 @@ class FixUserEmails < DataDrip::Backfill
 end
 ```
 
+### Adding Instructions to a Backfill
+
+For longer, formatted guidance, define a `self.instructions` method that returns a string. Unlike `description` (a one-line summary shown in the catalog), instructions are rendered as **rich text** in the **New Backfill Run** form as soon as the backfill is selected — so operators can see what the backfill does and how to fill in the options before running it:
+
+```ruby
+class FixUserEmails < DataDrip::Backfill
+  def self.instructions
+    <<~MARKDOWN
+      # Fix user emails
+      Marks **unverified** emails as verified.
+
+      ## Options
+      - `dry_run`: preview the affected count without writing changes
+
+      ## Notes
+      - Safe to re-run (idempotent)
+    MARKDOWN
+  end
+
+  def scope
+    User.where(email_verified: false)
+  end
+end
+```
+
+Instructions support a small Markdown subset: `#`/`##`/`###` headings, `**bold**`, `` `inline code` ``, `-`/`*` bullet lists, and fenced code blocks. DataDrip ships a tiny built-in renderer (no external dependency) — see `app/javascript/data_drip/markdown.js`.
+
 ### Adding Options to Backfills
 
 You can make your backfills configurable by adding attributes that users can set when creating a backfill run. This allows for dynamic filtering and let's you customize your backfill runs:
@@ -389,7 +417,7 @@ Navigate to `/data_drip/backfill_runs` in your application to access the DataDri
 
 Visit `/data_drip/backfills` for the **Backfills Catalog** — a searchable table of every datadrip with its description and the configurable fields (options) it accepts. Use the search box to find datadrips by name, description, or field name (e.g. `company_ids`); the list is paginated, and search filters across every page.
 
-When creating a new backfill run, the interface dynamically generates form fields based on the attributes defined in your backfill class, making it easy to customize each run without code changes.
+When creating a new backfill run, the interface dynamically generates form fields based on the attributes defined in your backfill class, making it easy to customize each run without code changes. If the selected backfill defines `self.instructions`, they are rendered as formatted rich text above the options.
 
 ## Contributing
 
