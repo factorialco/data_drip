@@ -10,6 +10,8 @@ DataDrip::Engine.routes.draw do
     get :backfill_options, on: :collection
   end
 
+  resources :backfills, only: %i[index]
+
   post "backfill_runs/set_timezone",
        to: "backfill_runs#set_timezone",
        as: :set_timezone_backfill_runs

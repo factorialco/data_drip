@@ -1,0 +1,195 @@
+<div class="min-h-screen flex bg-white">
+
+  <%= render "data_drip/shared/sidebar", active: :catalog %>
+
+  <div class="flex-1 flex flex-col items-center justify-start py-10">
+    <div class="w-full max-w-5xl mb-8">
+      <div
+        class="
+          bg-gradient-to-r from-slate-700 to-gray-900 rounded-lg p-6 shadow text-white
+        "
+      >
+        <h1 class="text-2xl mb-1 text-left">Backfills Catalog</h1>
+        <p class="text-sm font-light text-left mt-0.5">All datadrips available in this app, with their descriptions and the options they accept.</p>
+      </div>
+    </div>
+
+    <div class="w-full max-w-5xl flex-1 flex flex-col">
+      <div
+        class="
+          bg-white rounded-lg border border-gray-200 p-6 flex-1 flex flex-col
+        "
+      >
+        <div class="mb-6">
+          <input
+            type="text"
+            id="backfill_search"
+            placeholder="Search by name, description, or field..."
+            autocomplete="off"
+            style="display: block; width: 100%; padding: 8px 12px 8px 34px;
+                   border: 1px solid #d1d5db; border-radius: 6px; font-size: 14px;
+                   outline: none; box-sizing: border-box;
+                   background-image: url(&quot;data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3E%3Cpath stroke='%239ca3af' stroke-linecap='round' stroke-width='2' d='m13 13 4 4M8.5 3a5.5 5.5 0 1 0 0 11 5.5 5.5 0 0 0 0-11Z'/%3E%3C/svg%3E&quot;);
+                   background-repeat: no-repeat; background-position: 10px center; background-size: 16px 16px;"
+          />
+        </div>
+
+        <div class="overflow-x-auto">
+          <table class="w-full text-left" style="table-layout: fixed;">
+            <colgroup>
+              <col style="width: 20%;">
+              <col style="width: 60%;">
+              <col style="width: 20%;">
+            </colgroup>
+            <thead>
+              <tr>
+                <th class="py-2 px-4 text-gray-400 font-semibold text-sm">NAME</th>
+                <th class="py-2 px-4 text-gray-400 font-semibold text-sm">DESCRIPTION</th>
+                <th class="py-2 px-4 text-gray-400 font-semibold text-sm">CONFIGURABLE FIELDS</th>
+              </tr>
+            </thead>
+            <tbody id="backfills_tbody">
+              <% @backfills.each do |backfill| %>
+                <tr class="border-b border-gray-100 last:border-b-0" data-search="<%= backfill_search_terms(backfill) %>">
+                  <td class="py-3 px-4 text-gray-700 font-semibold" style="vertical-align: top; overflow-wrap: break-word;"><%= backfill.name %></td>
+                  <td class="py-3 px-4 text-gray-700" style="vertical-align: top;">
+                    <% desc = backfill_description(backfill) %>
+                    <% if desc.present? %>
+                      <%= desc %>
+                    <% else %>
+                      <span style="color: #9ca3af;">No description</span>
+                    <% end %>
+                  </td>
+                  <td class="py-3 px-4 text-gray-700" style="vertical-align: top;"><%= custom_field_tags(backfill) %></td>
+                </tr>
+              <% end %>
+              <tr id="backfills_no_results" style="display: none;">
+                <td colspan="3" class="py-3 px-4" style="text-align: center; color: #9ca3af; font-style: italic;">No matching backfills</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div id="backfills_pagination" class="mt-6 flex justify-between items-center" style="display: none;">
+          <div id="backfills_pagination_info" class="text-sm text-gray-500"></div>
+          <div id="backfills_pagination_controls" style="display: flex; gap: 8px;"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+  (function() {
+    var PER_PAGE = 10;
+
+    var search = document.getElementById('backfill_search');
+    var rows = Array.prototype.slice.call(
+      document.querySelectorAll('#backfills_tbody tr[data-search]')
+    );
+    var noResults = document.getElementById('backfills_no_results');
+    var pager = document.getElementById('backfills_pagination');
+    var info = document.getElementById('backfills_pagination_info');
+    var controls = document.getElementById('backfills_pagination_controls');
+
+    // Inline styles: the precompiled Tailwind build doesn't ship the gray
+    // button utilities, so style the controls here (pagination-current aside).
+    var btnStyle = 'padding: 8px 12px; font-size: 14px; border-radius: 6px; ' +
+      'background-color: #f3f4f6; color: #374151; border: none; cursor: pointer;';
+    var currentStyle = 'padding: 8px 12px; font-size: 14px; border-radius: 6px; ' +
+      'background-color: #7209b7; color: #ffffff; border: none;';
+
+    var query = '';
+    var currentPage = 1;
+    var debounceTimer;
+
+    function matchedRows() {
+      if (!query) return rows;
+      return rows.filter(function(row) {
+        return row.getAttribute('data-search').indexOf(query) !== -1;
+      });
+    }
+
+    function render() {
+      var matches = matchedRows();
+      var total = matches.length;
+      var totalPages = Math.max(1, Math.ceil(total / PER_PAGE));
+      if (currentPage > totalPages) currentPage = totalPages;
+      if (currentPage < 1) currentPage = 1;
+
+      var start = (currentPage - 1) * PER_PAGE;
+      rows.forEach(function(row) { row.style.display = 'none'; });
+      matches.slice(start, start + PER_PAGE).forEach(function(row) {
+        row.style.display = '';
+      });
+
+      noResults.style.display = total === 0 ? '' : 'none';
+
+      if (totalPages > 1) {
+        pager.style.display = '';
+        info.textContent = 'Showing ' + (start + 1) + '-' +
+          Math.min(start + PER_PAGE, total) + ' of ' + total + ' backfills';
+        renderControls(totalPages);
+      } else {
+        pager.style.display = 'none';
+        controls.innerHTML = '';
+        info.textContent = '';
+      }
+    }
+
+    function makeButton(label, page) {
+      var button = document.createElement('button');
+      button.type = 'button';
+      button.textContent = label;
+      button.setAttribute('style', btnStyle);
+      button.addEventListener('mouseenter', function() {
+        button.style.backgroundColor = '#e5e7eb';
+      });
+      button.addEventListener('mouseleave', function() {
+        button.style.backgroundColor = '#f3f4f6';
+      });
+      button.addEventListener('click', function() {
+        currentPage = page;
+        render();
+      });
+      return button;
+    }
+
+    function renderControls(totalPages) {
+      controls.innerHTML = '';
+      if (currentPage > 1) {
+        controls.appendChild(makeButton('← Previous', currentPage - 1));
+      }
+      // Sliding window of up to 5 pages, mirroring Paginatable#calculate_page_range.
+      var startPage = Math.max(currentPage - 2, 1);
+      var endPage = Math.min(startPage + 4, totalPages);
+      for (var page = startPage; page <= endPage; page++) {
+        if (page === currentPage) {
+          var current = document.createElement('span');
+          current.textContent = String(page);
+          current.setAttribute('style', currentStyle);
+          controls.appendChild(current);
+        } else {
+          controls.appendChild(makeButton(String(page), page));
+        }
+      }
+      if (currentPage < totalPages) {
+        controls.appendChild(makeButton('Next →', currentPage + 1));
+      }
+    }
+
+    if (search) {
+      search.addEventListener('input', function() {
+        clearTimeout(debounceTimer);
+        var input = this;
+        debounceTimer = setTimeout(function() {
+          query = input.value.toLowerCase().trim();
+          currentPage = 1;
+          render();
+        }, 150);
+      });
+    }
+
+    render();
+  })();
+</script>

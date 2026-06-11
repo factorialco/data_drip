@@ -1,0 +1,33 @@
+<%#
+  DataDrip dashboard sidebar. Pass `active:` (:runs or :catalog) to highlight
+  the current section. Nav links use inline styles because the engine's Tailwind
+  build is precompiled and isn't regenerated for new class names.
+%>
+<% active = local_assigns[:active] %>
+<% link_base = "display: block; padding: 8px 16px; border-radius: 6px; font-weight: 600; font-size: 14px; text-decoration: none;" %>
+
+<div
+  class="
+    hidden md:flex flex-col m-2 w-72 bg-gradient-to-b from-slate-700
+    to-gray-900 fixed inset-y-0 left-0
+  "
+>
+  <div class="p-6 flex justify-center items-center">
+    <%= link_to backfill_runs_path, class: "block" do %>
+      <span
+        class="
+          text-4xl font-bold tracking-widest bg-clip-text text-transparent
+        "
+        style="background: linear-gradient(135deg, #f72585 10%, #b5179e 50%, #7209b7 90%); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; text-fill-color: transparent;"
+      >DATADRIP
+      </span>
+    <% end %>
+  </div>
+
+  <nav style="padding: 0 16px; display: flex; flex-direction: column; gap: 4px;">
+    <%= link_to "Runs", backfill_runs_path,
+        style: "#{link_base} color: #{active == :runs ? '#ffffff' : '#cbd5e1'}; background-color: #{active == :runs ? 'rgba(255,255,255,0.12)' : 'transparent'};" %>
+    <%= link_to "Catalog", backfills_path,
+        style: "#{link_base} color: #{active == :catalog ? '#ffffff' : '#cbd5e1'}; background-color: #{active == :catalog ? 'rgba(255,255,255,0.12)' : 'transparent'};" %>
+  </nav>
+</div>

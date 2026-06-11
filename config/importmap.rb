@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 pin "application", to: "data_drip/application.js", preload: true
+pin "markdown", to: "data_drip/markdown.js"
 pin "@hotwired/turbo-rails", to: "turbo.min.js", preload: true
 pin "@hotwired/stimulus", to: "stimulus.min.js"
 pin "@hotwired/stimulus-loading", to: "stimulus-loading.js"

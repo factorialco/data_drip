@@ -5,6 +5,32 @@ require "spec_helper"
 RSpec.describe DataDrip::Backfill, type: :model do
   let(:test_backfill_class) { AddRoleToEmployee }
 
+  describe ".instructions" do
+    it "returns nil by default for a class without instructions" do
+      klass = Class.new(DataDrip::Backfill)
+      expect(klass.instructions).to be_nil
+    end
+
+    it "stores and returns the instructions set via the DSL" do
+      klass = Class.new(DataDrip::Backfill) { instructions "These are test instructions" }
+
+      expect(klass.instructions).to eq("These are test instructions")
+    end
+
+    it "still supports a plain method override" do
+      klass = Class.new(DataDrip::Backfill) do
+        def self.instructions
+          "These are test instructions"
+        end
+      end
+      expect(klass.instructions).to eq("These are test instructions")
+    end
+
+    it "returns the instructions from AddRoleToEmployee" do
+      expect(AddRoleToEmployee.instructions).to include("intern")
+    end
+  end
+
   describe ".attribute" do
     it "defines attribute methods on the class" do
       expect(test_backfill_class.new).to respond_to(:age)
@@ -70,6 +96,52 @@ RSpec.describe DataDrip::Backfill, type: :model do
 
       instance = klass.new(backfill_options: { start_date: "2020-06-15" })
       expect(instance.start_date).to eq(Date.new(2020, 6, 15))
+    end
+  end
+
+  describe ".description" do
+    it "stores and returns the description" do
+      klass = Class.new(DataDrip::Backfill) { description "Does a thing" }
+
+      expect(klass.description).to eq("Does a thing")
+    end
+
+    it "returns nil when no description is set" do
+      klass = Class.new(DataDrip::Backfill)
+
+      expect(klass.description).to be_nil
+    end
+  end
+
+  describe ".custom_fields" do
+    it "returns the name and type of each declared attribute" do
+      klass =
+        Class.new(DataDrip::Backfill) do
+          attribute :company_ids, :string
+          attribute :limit, :integer
+        end
+
+      expect(klass.custom_fields).to contain_exactly(
+        { name: "company_ids", type: :string },
+        { name: "limit", type: :integer }
+      )
+    end
+
+    it "includes the allowed values for enum attributes" do
+      klass =
+        Class.new(DataDrip::Backfill) do
+          attribute :status, :enum, values: %w[pending approved]
+        end
+
+      expect(klass.custom_fields).to eq(
+        [ { name: "status", type: :enum, values: %w[pending approved] } ]
+      )
+    end
+
+    it "returns an empty array when no attributes are declared" do
+      klass = Class.new(DataDrip::Backfill)
+
+      expect(klass.custom_fields).to eq([])
     end
   end
 

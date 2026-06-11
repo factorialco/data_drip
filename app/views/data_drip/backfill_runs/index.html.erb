@@ -1,23 +1,6 @@
 <div class="min-h-screen flex bg-white">
 
-  <div
-    class="
-      hidden md:flex flex-col m-2 justify-between w-72 bg-gradient-to-b from-slate-700
-      to-gray-900 fixed inset-y-0 left-0
-    "
-  >
-    <div class="p-6 flex justify-center items-center">
-      <%= link_to backfill_runs_path, class: "block" do %>
-        <span
-          class="
-            text-4xl font-bold tracking-widest bg-clip-text text-transparent
-          "
-          style="background: linear-gradient(135deg, #f72585 10%, #b5179e 50%, #7209b7 90%); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; text-fill-color: transparent;"
-        >DATADRIP
-        </span>
-      <% end %>
-    </div>
-  </div>
+  <%= render "data_drip/shared/sidebar", active: :runs %>
 
   <div class="flex-1 flex flex-col items-center justify-start py-10">
     <div class="w-full max-w-5xl mb-8">

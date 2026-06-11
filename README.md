@@ -11,6 +11,7 @@ DataDrip is a Rails engine that provides a robust framework for running data bac
 - 🔧 **Flexible Processing**: Choose between batch-level or element-level processing
 - 📈 **Progress Tracking**: Real-time progress updates and batch monitoring
 - 🎯 **Scoped Processing**: Define custom scopes for targeted data processing
+- 📝 **Self-documenting Backfills**: Add a one-line `description` (shown in the searchable catalog) and rich-text `instructions` (shown in the run form)
 
 ## Installation
 
@@ -287,12 +288,57 @@ class FixUserEmails < DataDrip::Backfill
 end
 ```
 
+### Describing a Backfill
+
+Give a backfill a human-readable description with the `description` DSL. It is shown on the **Backfills Catalog** page (see [Web Interface](#web-interface)) so others can tell at a glance what each datadrip does:
+
+```ruby
+class FixUserEmails < DataDrip::Backfill
+  description "Marks unverified user emails as verified."
+
+  def scope
+    User.where(email_verified: false)
+  end
+end
+```
+
+### Adding Instructions to a Backfill
+
+For longer, formatted guidance, use the `instructions` DSL — the same declaration style as `description`. Unlike `description` (a one-line summary shown in the catalog), instructions are rendered as **rich text** in the **New Backfill Run** form as soon as the backfill is selected — so operators can see what the backfill does and how to fill in the options before running it:
+
+```ruby
+class FixUserEmails < DataDrip::Backfill
+  description "Marks unverified user emails as verified."
+
+  instructions <<~MARKDOWN
+    # Fix user emails
+    Marks **unverified** emails as verified.
+
+    ## Options
+    - `dry_run`: preview the affected count without writing changes
+
+    ## Notes
+    - Safe to re-run (idempotent)
+  MARKDOWN
+
+  def scope
+    User.where(email_verified: false)
+  end
+end
+```
+
+Instructions support a small Markdown subset: `#`/`##`/`###` headings, `**bold**`, `` `inline code` ``, `-`/`*` bullet lists, and fenced code blocks. DataDrip ships a tiny built-in renderer (no external dependency) — see `app/javascript/data_drip/markdown.js`.
+
+Defining instructions as a plain method override (`def self.instructions ... end`) also works — useful if the text needs to be computed dynamically.
+
 ### Adding Options to Backfills
 
 You can make your backfills configurable by adding attributes that users can set when creating a backfill run. This allows for dynamic filtering and let's you customize your backfill runs:
 
 ```ruby
 class AddRoleToEmployee < DataDrip::Backfill
+  description "Assigns the default 'intern' role to employees without one."
+
   # Define configurable attributes
   attribute :age, :integer
   attribute :name, :string
@@ -331,6 +377,7 @@ DataDrip supports various attribute types that automatically generate appropriat
 - **`:date`** - Date picker
 - **`:time`** - Time picker
 - **`:datetime`** - Date and time picker
+- **`:enum`** - Multi-select from a fixed set of `values:` (searchable checkboxes); e.g. `attribute :status, :enum, values: %w[pending approved rejected]`
 
 ### Backfill Structure
 
@@ -370,7 +417,9 @@ Navigate to `/data_drip/backfill_runs` in your application to access the DataDri
 - Stop running backfills
 - Schedule backfills for future execution
 
-When creating a new backfill run, the interface dynamically generates form fields based on the attributes defined in your backfill class, making it easy to customize each run without code changes.
+Visit `/data_drip/backfills` for the **Backfills Catalog** — a searchable table of every datadrip with its description and the configurable fields (options) it accepts. Use the search box to find datadrips by name, description, or field name (e.g. `company_ids`); the list is paginated, and search filters across every page.
+
+When creating a new backfill run, the interface dynamically generates form fields based on the attributes defined in your backfill class, making it easy to customize each run without code changes. If the selected backfill defines `self.instructions`, they are rendered as formatted rich text above the options.
 
 ## Contributing
 
