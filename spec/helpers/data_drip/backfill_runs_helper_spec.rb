@@ -79,6 +79,30 @@ RSpec.describe DataDrip::BackfillRunsHelper, type: :helper do
     end
   end
 
+  describe "#backfill_option_inputs with a required attribute" do
+    let(:backfill_run) do
+      DataDrip::BackfillRun.new(
+        backfill_class_name: "BackfillRunsHelperSpec::RequiredFieldBackfill",
+        options: {}
+      )
+    end
+
+    let(:html) { helper.backfill_option_inputs(backfill_run) }
+
+    it "marks the required input with the required attribute" do
+      expect(html).to match(
+        %r{<input[^>]*name="backfill_run\[options\]\[audience\]"[^>]*required="required"}
+      )
+    end
+
+    it "labels the required option and not the optional one" do
+      expect(html.scan("· required").length).to eq(1)
+      expect(html).not_to match(
+        %r{<input[^>]*name="backfill_run\[options\]\[note\]"[^>]*required}
+      )
+    end
+  end
+
   describe "#status_tag" do
     it "renders a badge without inline styles" do
       html = helper.status_tag("running")
@@ -109,6 +133,17 @@ RSpec.describe DataDrip::BackfillRunsHelper, type: :helper do
 end
 
 module BackfillRunsHelperSpec
+  class RequiredFieldBackfill < DataDrip::Backfill
+    attribute :audience, :string, required: true
+    attribute :note, :string
+
+    def scope
+      Employee.all
+    end
+
+    def process_element(_element); end
+  end
+
   class TieredBackfill < DataDrip::Backfill
     attribute :tiers, :enum, values: %w[starter growth]
 

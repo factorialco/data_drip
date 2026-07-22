@@ -171,4 +171,131 @@ RSpec.describe DataDrip::BackfillRun, type: :model do
       expect(backfill_run.status).to eq("completed")
     end
   end
+
+  describe "required options" do
+    let(:attributes) do
+      {
+        backfill_class_name: "BackfillRunSpec::RequiredOptionBackfill",
+        batch_size: 100,
+        start_at: 1.hour.from_now,
+        backfiller: backfiller
+      }
+    end
+
+    it "tracks required option names on the backfill class" do
+      expect(
+        BackfillRunSpec::RequiredOptionBackfill.required_option_names
+      ).to eq(%i[target_role])
+      expect(
+        BackfillRunSpec::RequiredOptionBackfill.backfill_options_class.new
+      ).not_to be_valid
+    end
+
+    it "is invalid when a required option is missing" do
+      backfill_run = DataDrip::BackfillRun.new(attributes.merge(options: {}))
+
+      expect(backfill_run).not_to be_valid
+      expect(backfill_run.errors[:options]).to include(
+        "target_role can't be blank"
+      )
+    end
+
+    it "is invalid when a required option is blank" do
+      backfill_run =
+        DataDrip::BackfillRun.new(
+          attributes.merge(options: { "target_role" => "" })
+        )
+
+      expect(backfill_run).not_to be_valid
+      expect(backfill_run.errors[:options]).to include(
+        "target_role can't be blank"
+      )
+    end
+
+    it "is valid when the required option is provided" do
+      backfill_run =
+        DataDrip::BackfillRun.new(
+          attributes.merge(options: { "target_role" => "intern" })
+        )
+
+      expect(backfill_run).to be_valid
+    end
+
+    it "accepts false for a required boolean option" do
+      backfill_run =
+        DataDrip::BackfillRun.new(
+          attributes.merge(
+            backfill_class_name: "BackfillRunSpec::RequiredBooleanBackfill",
+            options: {
+              "confirmed" => "0"
+            }
+          )
+        )
+
+      expect(backfill_run).to be_valid
+    end
+
+    it "skips scope validation instead of crashing when a required option the scope depends on is missing" do
+      backfill_run =
+        DataDrip::BackfillRun.new(
+          attributes.merge(
+            backfill_class_name: "BackfillRunSpec::ScopeNeedsOptionBackfill",
+            options: {}
+          )
+        )
+
+      expect { backfill_run.valid? }.not_to raise_error
+      expect(backfill_run.errors[:options]).to include(
+        "minimum_age can't be blank"
+      )
+    end
+
+    it "still reports unknown option keys" do
+      backfill_run =
+        DataDrip::BackfillRun.new(
+          attributes.merge(
+            options: {
+              "target_role" => "intern",
+              "bogus" => "1"
+            }
+          )
+        )
+
+      expect(backfill_run).not_to be_valid
+      expect(backfill_run.errors[:options].join).to include("unknown attributes")
+    end
+  end
+end
+
+module BackfillRunSpec
+  class RequiredOptionBackfill < DataDrip::Backfill
+    attribute :target_role, :string, required: true
+
+    def scope
+      Employee.all
+    end
+
+    def process_element(_element); end
+  end
+
+  class RequiredBooleanBackfill < DataDrip::Backfill
+    attribute :confirmed, :boolean, required: true
+
+    def scope
+      Employee.all
+    end
+
+    def process_element(_element); end
+  end
+
+  class ScopeNeedsOptionBackfill < DataDrip::Backfill
+    attribute :minimum_age, :integer, required: true
+
+    def scope
+      # Blows up if minimum_age is nil — exactly what the guard protects against.
+      Employee.where("age >= ?", Integer(minimum_age))
+    end
+
+    def process_element(_element); end
+  end
 end

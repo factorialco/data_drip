@@ -3,7 +3,7 @@
 
 module DataDrip
   class Backfill
-    def self.attribute(name, type = nil, default: nil, **options)
+    def self.attribute(name, type = nil, default: nil, required: false, **options)
       raise "Method #{name} already defined in #{self.class.name}" if instance_methods.include?(name.to_sym)
 
       if type == :enum
@@ -13,7 +13,26 @@ module DataDrip
         backfill_options_class.attribute(name, type, default: default, **options)
       end
 
+      if required
+        required_option_names << name.to_sym
+
+        if type == :boolean
+          # presence: true would reject a legitimate `false`.
+          backfill_options_class.validates name,
+                                           inclusion: {
+                                             in: [ true, false ],
+                                             message: "can't be blank"
+                                           }
+        else
+          backfill_options_class.validates name, presence: true
+        end
+      end
+
       define_method(name) { backfill_options.public_send(name) }
+    end
+
+    def self.required_option_names
+      @required_option_names ||= []
     end
 
     def self.backfill_options_class
@@ -21,6 +40,12 @@ module DataDrip
         Class.new do
           include ActiveModel::API
           include ActiveModel::Attributes
+
+          # The class is anonymous; i18n lookups (e.g. validation messages)
+          # need a model name to resolve against.
+          def self.model_name
+            ActiveModel::Name.new(self, nil, "BackfillOptions")
+          end
         end
     end
 

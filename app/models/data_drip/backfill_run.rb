@@ -12,6 +12,7 @@ module DataDrip
     validates :backfill_class_name, presence: true
     validate :backfill_class_exists
     validate :backfill_class_properly_configured?
+    validate :validate_required_options, on: :create
     validate :validate_scope, on: :create
     validate :start_at_must_be_valid_datetime
     validates :start_at, presence: true
@@ -125,9 +126,25 @@ module DataDrip
       errors.add(:backfill_class_name, "must inherit from DataDrip::Backfill")
     end
 
+    def validate_required_options
+      return unless backfill_class&.backfill_options_class
+
+      backfill_options = backfill_class.backfill_options_class.new(options || {})
+      return if backfill_options.valid?
+
+      backfill_options.errors.each do |error|
+        errors.add(:options, "#{error.attribute} #{error.message}")
+      end
+    rescue ActiveModel::UnknownAttributeError
+      # Unknown option keys are reported by validate_scope.
+    end
+
     def validate_scope
       return unless backfill_class_name.present?
       return unless backfill_class
+      # A missing required option would make the scope blow up (or count the
+      # wrong records) — the validate_required_options error is enough.
+      return if errors[:options].any?
 
       begin
         backfill =

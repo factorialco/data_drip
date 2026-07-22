@@ -187,13 +187,33 @@ module DataDrip
         inputs =
           safe_join(
             attribute_types.map do |name, type|
+              required =
+                backfill_run.backfill_class.required_option_names.include?(
+                  name.to_sym
+                )
+
               content_tag :div, class: "mb-4 last:mb-0" do
                 label =
                   label_tag "backfill_run[options][#{name}]",
-                            name.to_s,
                             class:
                               "mb-1.5 block font-mono text-sm font-medium " \
-                              "text-zinc-700 dark:text-zinc-300"
+                              "text-zinc-700 dark:text-zinc-300" do
+                    if required
+                      safe_join(
+                        [
+                          name.to_s,
+                          content_tag(
+                            :span,
+                            " · required",
+                            class:
+                              "font-sans font-normal text-zinc-400 dark:text-zinc-500"
+                          )
+                        ]
+                      )
+                    else
+                      name.to_s
+                    end
+                  end
 
                 input =
                   if type.is_a?(DataDrip::Types::Enum)
@@ -201,7 +221,7 @@ module DataDrip
                   else
                     current = backfill_run.options[name]
                     value = current.nil? ? defaults.public_send(name) : current
-                    build_standard_input(name, type, value)
+                    build_standard_input(name, type, value, required: required)
                   end
 
                 label + input
@@ -215,16 +235,16 @@ module DataDrip
 
     private
 
-    def build_standard_input(name, type, value)
+    def build_standard_input(name, type, value, required: false)
       field_name = "backfill_run[options][#{name}]"
 
       case type
       when ActiveModel::Type::String, ActiveModel::Type::ImmutableString
-        text_field_tag field_name, value, class: INPUT_CLASSES
+        text_field_tag field_name, value, class: INPUT_CLASSES, required: required
       when ActiveModel::Type::Integer, ActiveModel::Type::BigInteger
-        number_field_tag field_name, value, class: INPUT_CLASSES, step: 1
+        number_field_tag field_name, value, class: INPUT_CLASSES, step: 1, required: required
       when ActiveModel::Type::Decimal, ActiveModel::Type::Float
-        number_field_tag field_name, value, class: INPUT_CLASSES, step: 0.01
+        number_field_tag field_name, value, class: INPUT_CLASSES, step: 0.01, required: required
       when ActiveModel::Type::Boolean
         # Pair the checkbox with a hidden "0" field so an unchecked box
         # submits an explicit false instead of dropping the key entirely.
@@ -245,13 +265,13 @@ module DataDrip
             )
         end
       when ActiveModel::Type::Date
-        date_field_tag field_name, value, class: INPUT_CLASSES
+        date_field_tag field_name, value, class: INPUT_CLASSES, required: required
       when ActiveModel::Type::Time
-        time_field_tag field_name, value, class: INPUT_CLASSES
+        time_field_tag field_name, value, class: INPUT_CLASSES, required: required
       when ActiveModel::Type::DateTime
-        datetime_field_tag field_name, value, class: INPUT_CLASSES
+        datetime_field_tag field_name, value, class: INPUT_CLASSES, required: required
       else
-        text_area_tag field_name, value, class: INPUT_CLASSES, rows: 3
+        text_area_tag field_name, value, class: INPUT_CLASSES, rows: 3, required: required
       end
     end
 

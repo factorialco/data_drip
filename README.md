@@ -296,7 +296,7 @@ class AddRoleToEmployee < DataDrip::Backfill
   # Define configurable attributes
   attribute :age, :integer
   attribute :name, :string
-  attribute :department, :string
+  attribute :department, :string, required: true
   attribute :active_only, :boolean, default: true
 
   def scope
@@ -319,6 +319,16 @@ end
 
 When creating a backfill run through the form in the UI, you will see form fields for each attribute, allowing you to customize the backfill's behavior without modifying code.
 This way, it's easy to create a backfill run for different scenarios with different scopes.
+
+#### Required Options
+
+By default every option is optional. Pass `required: true` to make an option mandatory:
+
+```ruby
+attribute :department, :string, required: true
+```
+
+A run cannot be created while a required option is blank — the form marks the field as required (both visually and with the native `required` attribute), and the server rejects the run with a validation error, so runs created programmatically are covered too. For `:boolean` attributes, `false` counts as answered; only a missing value is rejected.
 
 #### Supported Attribute Types
 
