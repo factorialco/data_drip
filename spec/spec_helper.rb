@@ -2,21 +2,29 @@
 
 ENV["RAILS_ENV"] = "test"
 
-require "simplecov"
-SimpleCov.start do
-  enable_coverage :branch
+# SimpleCov is only bundled in the primary Gemfile. The Rails-version
+# appraisal gemfiles (gemfiles/Gemfile-Rails-*) run the suite without it, so
+# guard the require and skip coverage when the gem isn't available.
+begin
+  require "simplecov"
+rescue LoadError
+  # Coverage not measured under this bundle.
+else
+  SimpleCov.start do
+    enable_coverage :branch
 
-  # Only measure the engine's own code, not the dummy test app or the suite.
-  root File.expand_path("..", __dir__)
-  skip "/spec/"
-  skip "/lib/data_drip/version.rb"
+    # Only measure the engine's own code, not the dummy test app or the suite.
+    root File.expand_path("..", __dir__)
+    skip "/spec/"
+    skip "/lib/data_drip/version.rb"
 
-  group "Controllers", "app/controllers"
-  group "Models", "app/models"
-  group "Jobs", "app/jobs"
-  group "Helpers", "app/helpers"
-  group "Library", "lib"
-  group "Generators", "lib/generators"
+    group "Controllers", "app/controllers"
+    group "Models", "app/models"
+    group "Jobs", "app/jobs"
+    group "Helpers", "app/helpers"
+    group "Library", "lib"
+    group "Generators", "lib/generators"
+  end
 end
 
 Dir.chdir(File.join(__dir__, "test_app")) do
