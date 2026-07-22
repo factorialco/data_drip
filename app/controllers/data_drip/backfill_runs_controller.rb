@@ -104,13 +104,15 @@ module DataDrip
 
     def destroy
       @backfill_run = DataDrip::BackfillRun.find(params[:id])
-      if @backfill_run.enqueued?
+      # Deletable when not in flight: still-enqueued, or finished (completed/
+      # failed/stopped) so old runs can be cleaned up.
+      if @backfill_run.enqueued? || @backfill_run.terminal?
         @backfill_run.destroy!
         flash[:notice] = "Backfill run has been deleted."
       else
         flash[
           :alert
-        ] = "Backfill run cannot be deleted as it is not in an enqueued state."
+        ] = "Backfill run cannot be deleted while it is pending or running."
       end
       redirect_to backfill_runs_path(tab: params[:tab] || "my_runs")
     end
@@ -223,6 +225,9 @@ module DataDrip
       render json: { html: html }
     end
 
+    private
+
+    # Exposed to views via helper_method (see top of class), but not a routable action.
     def find_current_backfiller
       if DataDrip.current_backfiller_method.blank?
         raise "Missing DataDrip.current_backfiller_method, please set it in an initializer (like DataDrip.current_backfiller_method = :current_user"
@@ -233,8 +238,6 @@ module DataDrip
 
       send(DataDrip.current_backfiller_method)
     end
-
-    private
 
     def set_user_timezone
       @user_timezone =
@@ -255,7 +258,9 @@ module DataDrip
     end
 
     def backfill_class_names
-      @backfill_class_names ||= DataDrip.all.map(&:name).uniq.sort
+      # compact drops anonymous backfill subclasses (nil name), which would
+      # otherwise blow up the sort.
+      @backfill_class_names ||= DataDrip.all.map(&:name).compact.uniq.sort
     end
   end
 end

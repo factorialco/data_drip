@@ -305,7 +305,7 @@ end
 
 ### Adding Options to Backfills
 
-You can make your backfills configurable by adding attributes that users can set when creating a backfill run. This allows for dynamic filtering and let's you customize your backfill runs:
+You can make your backfills configurable by adding attributes that users can set when creating a backfill run. This allows for dynamic filtering and lets you customize your backfill runs:
 
 ```ruby
 class AddRoleToEmployee < DataDrip::Backfill

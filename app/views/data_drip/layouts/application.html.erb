@@ -2,14 +2,14 @@
 <html class="h-full antialiased">
 <head>
   <title>DataDrip</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2032%2032'%3E%3Cpath%20fill='%23db2777'%20d='M16%203C10%2012%207%2016%207%2021a9%209%200%200018%200c0-5-3-9-9-18z'/%3E%3C/svg%3E">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <%= csrf_meta_tags %>
   <%= csp_meta_tag %>
   <%= stylesheet_link_tag 'data_drip/tailwind', media: :all, data: { turbo_track: :reload } %>
   <%= javascript_importmap_tags "application", importmap: DataDrip.importmap %>
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:ital,opsz,wght@0,14..32,100..900;1,14..32,100..900&display=swap" rel="stylesheet">
+  <%# No web fonts: the CSS falls back to the system sans stack (see --font-sans),
+      keeping the admin UI self-contained and free of external requests. %>
 </head>
 <body
   class="min-h-dvh bg-white text-zinc-800 dark:bg-zinc-950 dark:text-zinc-300"

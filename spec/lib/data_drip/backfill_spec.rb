@@ -73,6 +73,23 @@ RSpec.describe DataDrip::Backfill, type: :model do
     end
   end
 
+  describe "enum option validation" do
+    let(:options_class) do
+      BackfillSpec::TieredBackfill.backfill_options_class
+    end
+
+    it "accepts values within the declared set" do
+      expect(options_class.new(tier: "starter,growth")).to be_valid
+    end
+
+    it "rejects values outside the declared set" do
+      options = options_class.new(tier: "starter,bogus")
+
+      expect(options).not_to be_valid
+      expect(options.errors[:tier]).to include("is not included in the list")
+    end
+  end
+
   describe ".backfill_options_class" do
     it "creates a class that includes ActiveModel::Attributes" do
       options_class = test_backfill_class.backfill_options_class
@@ -203,5 +220,17 @@ RSpec.describe DataDrip::Backfill, type: :model do
       expect(employee1.reload.role).to eq("intern")
       expect(employee2.reload.role).to be_nil
     end
+  end
+end
+
+module BackfillSpec
+  class TieredBackfill < DataDrip::Backfill
+    attribute :tier, :enum, values: %w[starter growth]
+
+    def scope
+      Employee.all
+    end
+
+    def process_element(_element); end
   end
 end

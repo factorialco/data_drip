@@ -10,11 +10,15 @@ module DataDrip
       page = params[page_param].to_i
       page = 1 if page < 1
 
-      offset = (page - 1) * per_page
-
-      paginated_collection = collection.limit(per_page).offset(offset)
       total_count = collection.count
       total_pages = (total_count / per_page.to_f).ceil
+
+      # Clamp past-the-end requests (e.g. ?page=999) to the last real page so
+      # the offset and the "Showing X–Y" label stay sensible.
+      page = total_pages if total_pages.positive? && page > total_pages
+
+      offset = (page - 1) * per_page
+      paginated_collection = collection.limit(per_page).offset(offset)
 
       {
         collection: paginated_collection,

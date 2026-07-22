@@ -20,7 +20,7 @@
             method: :post,
             form: { data: { turbo_confirm: "Stop this backfill run? Batches that are already running will finish." } },
             class: danger_button_classes %>
-      <% elsif @backfill_run.enqueued? %>
+      <% elsif @backfill_run.enqueued? || @backfill_run.terminal? %>
         <%= button_to "Delete run",
             backfill_run_path(@backfill_run),
             method: :delete,

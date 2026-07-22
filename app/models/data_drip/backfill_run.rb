@@ -96,8 +96,13 @@ module DataDrip
     end
 
     def backfill_class
-      @backfill_class ||=
-        DataDrip.all.find { |klass| klass.name == backfill_class_name }
+      # Resolve the current constant by name (constrained to DataDrip::Backfill
+      # subclasses) rather than scanning `descendants`, which can hold stale
+      # class objects after a code reload in development.
+      @backfill_class ||= begin
+        klass = backfill_class_name.presence&.safe_constantize
+        klass if klass.is_a?(Class) && klass < DataDrip::Backfill
+      end
     end
 
     def enqueue

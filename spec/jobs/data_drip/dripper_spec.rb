@@ -67,20 +67,25 @@ RSpec.describe DataDrip::Dripper, type: :job do
     end
 
     it "handles errors and sets failed status" do
-      # Skip validation to allow creation, then mock the error
-      backfill_run.save!(validate: false)
-      allow_any_instance_of(AddRoleToEmployee).to receive(:scope).and_raise(
+      run =
+        DataDrip::BackfillRun.new(
+          backfill_class_name: "DripperSpec::BoomBackfill",
+          batch_size: 2,
+          start_at: 1.hour.from_now,
+          backfiller: backfiller,
+          options: {}
+        )
+      run.save!(validate: false)
+      run.update_column(:status, DataDrip::BackfillRun.statuses[:enqueued])
+
+      expect { described_class.new.perform(run) }.to raise_error(
         StandardError,
-        "Test error"
+        "Boom"
       )
 
-      expect { described_class.new.perform(backfill_run) }.to raise_error(
-        StandardError
-      )
-
-      backfill_run.reload
-      expect(backfill_run.status).to eq("failed")
-      expect(backfill_run.error_message).to eq("Test error")
+      run.reload
+      expect(run.status).to eq("failed")
+      expect(run.error_message).to eq("Boom")
     end
 
     context "with no options" do
@@ -105,5 +110,15 @@ RSpec.describe DataDrip::Dripper, type: :job do
         expect(backfill_run.batches.count).to eq(2) # 2 batches: [2, 1]
       end
     end
+  end
+end
+
+module DripperSpec
+  class BoomBackfill < DataDrip::Backfill
+    def scope
+      raise StandardError, "Boom"
+    end
+
+    def process_element(_element); end
   end
 end

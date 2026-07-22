@@ -5,20 +5,19 @@ require_relative "lib/data_drip/version"
 Gem::Specification.new do |spec|
   spec.name = "data_drip"
   spec.version = DataDrip::VERSION
-  spec.authors = [ "Avalon van der Horst" ]
-  spec.email = [ "avalonvdhorst@gmail.com" ]
-  spec.authors = [ "Oriol Gual Oliva" ]
-  spec.email = [ "oriol.gual@gmail.com" ]
+  spec.authors = [ "Avalon van der Horst", "Oriol Gual Oliva" ]
+  spec.email = [ "avalonvdhorst@gmail.com", "oriol.gual@gmail.com" ]
 
-  spec.summary = ""
-  spec.description = ""
+  spec.summary =
+    "Run and monitor batched data backfills from a Rails engine admin UI."
+  spec.description =
+    "DataDrip is a Rails engine for running data backfills in configurable " \
+    "batches, with a web dashboard to schedule, monitor, and retry them."
   spec.homepage = "https://github.com/factorialco/data_drip"
   spec.license = "MIT"
   spec.required_ruby_version = ">= 3.1.0"
 
-  spec.metadata[
-    "allowed_push_host"
-  ] = "TODO: Set to your gem server 'https://example.com'"
+  spec.metadata["allowed_push_host"] = "https://rubygems.org"
 
   spec.metadata["homepage_uri"] = spec.homepage
   spec.metadata["source_code_uri"] = spec.homepage

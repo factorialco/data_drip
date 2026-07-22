@@ -229,7 +229,7 @@ RSpec.describe DataDrip::BackfillRunsController, type: :controller do
       end
     end
 
-    context "when the backfill run is not enqueued" do
+    context "when the backfill run is running" do
       before { backfill_run.update!(status: "running") }
 
       it "does not delete the backfill run and redirects with an alert" do
@@ -238,8 +238,19 @@ RSpec.describe DataDrip::BackfillRunsController, type: :controller do
         expect(DataDrip::BackfillRun.exists?(backfill_run.id)).to be_truthy
         expect(response).to redirect_to(backfill_runs_path(tab: "my_runs"))
         expect(flash[:alert]).to eq(
-          "Backfill run cannot be deleted as it is not in an enqueued state."
+          "Backfill run cannot be deleted while it is pending or running."
         )
+      end
+    end
+
+    context "when the backfill run is in a terminal state" do
+      before { backfill_run.update!(status: "completed") }
+
+      it "deletes the backfill run so finished runs can be cleaned up" do
+        delete :destroy, params: { id: backfill_run.id }
+
+        expect(DataDrip::BackfillRun.exists?(backfill_run.id)).to be_falsey
+        expect(flash[:notice]).to eq("Backfill run has been deleted.")
       end
     end
 

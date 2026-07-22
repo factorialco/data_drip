@@ -51,13 +51,29 @@ RSpec.describe DataDrip::BackfillRunBatch, type: :model do
     end
 
     it "sets status to running during execution" do
-      allow_any_instance_of(AddRoleToEmployee).to receive(:scope).and_return(
-        Employee.none
-      )
+      empty_run =
+        DataDrip::BackfillRun.new(
+          backfill_class_name: "BackfillRunBatchSpec::EmptyScopeBackfill",
+          batch_size: 10,
+          start_at: 1.hour.from_now,
+          backfiller: backfiller,
+          options: {}
+        )
+      empty_run.save!(validate: false)
 
-      batch.run!
+      empty_batch =
+        DataDrip::BackfillRunBatch.new(
+          backfill_run: empty_run,
+          batch_size: 10,
+          start_id: 1,
+          finish_id: 100
+        )
+      empty_batch.save!(validate: false)
+      empty_batch.update_column(:status, 0)
 
-      expect(batch.reload.status).to eq("running")
+      empty_batch.run!
+
+      expect(empty_batch.reload.status).to eq("running")
     end
 
     it "passes the run's options through to the backfill instance" do
@@ -204,5 +220,13 @@ module BackfillRunBatchSpec
     def process_element(element)
       element.update!(role: role)
     end
+  end
+
+  class EmptyScopeBackfill < DataDrip::Backfill
+    def scope
+      Employee.none
+    end
+
+    def process_element(_element); end
   end
 end

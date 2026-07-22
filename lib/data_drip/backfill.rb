@@ -9,6 +9,20 @@ module DataDrip
       if type == :enum
         enum_type = DataDrip::Types::Enum.new(values: options.delete(:values) || [])
         backfill_options_class.attribute(name, enum_type, default: default, **options)
+
+        # Reject submitted values (a comma-separated list) that aren't part of
+        # the declared set, so a crafted request can't persist arbitrary values.
+        attribute_name = name.to_sym
+        backfill_options_class.validate do
+          raw = public_send(attribute_name)
+          if raw.present?
+            allowed =
+              enum_type.available_values.map { |value| (value.is_a?(Array) ? value.last : value).to_s }
+            unless (raw.to_s.split(",") - allowed).empty?
+              errors.add(attribute_name, "is not included in the list")
+            end
+          end
+        end
       else
         backfill_options_class.attribute(name, type, default: default, **options)
       end

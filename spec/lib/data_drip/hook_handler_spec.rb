@@ -14,6 +14,16 @@ RSpec.describe "HookHandler" do
       }
     )
   end
+
+  # hooks_handler_class_name is global config; restore it so these examples
+  # don't leak state into the rest of the suite.
+  around do |example|
+    original = DataDrip.hooks_handler_class_name
+    example.run
+  ensure
+    DataDrip.hooks_handler_class_name = original
+  end
+
   context "when the hook handler is configured" do
     before { DataDrip.hooks_handler_class_name = "HookHandler" }
 
