@@ -78,7 +78,7 @@ module DataDrip
       Rails.logger.debug scope.explain
     end
 
-    attr_reader :backfill_options
+    attr_reader :backfill_options, :sleep_time
 
     def scope
       raise NotImplementedError

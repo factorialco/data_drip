@@ -83,7 +83,7 @@ Rails.application.configure do
   # The class that handles lifecycle hooks for backfill runs and batches
   DataDrip.hooks_handler_class_name = 'HookHandler'  # default: nil
 
-  # Optional: Sleep time between batches in seconds (default: 0.1)
+  # Optional: Sleep time between batches in seconds (default: 5)
   DataDrip.sleep_time = 0.5
 end
 ```

@@ -18,6 +18,10 @@ require "rspec/rails"
 
 ActiveRecord::Migration.maintain_test_schema!
 
+# Backfills pause DataDrip.sleep_time (default 5s in production) between
+# batches. The suite runs the real batching loop, so drop it to 0 to stay fast.
+DataDrip.sleep_time = 0
+
 RSpec.configure do |config|
   # Enable flags like --only-failures and --next-failure
   config.example_status_persistence_file_path = ".rspec_status"

@@ -60,26 +60,36 @@ RSpec.describe DataDrip::BackfillRunBatch, type: :model do
       expect(batch.reload.status).to eq("running")
     end
 
-    it "passes options to the backfill class" do
-      backfill_instance = instance_double(AddRoleToEmployee)
-      allow(AddRoleToEmployee).to receive(:new).with(
-        batch_size: 10,
-        sleep_time: 5,
-        backfill_options: {
-          "age" => 25
-        }
-      ).and_return(backfill_instance)
-      allow(backfill_instance).to receive(:scope).and_return(Employee.none)
+    it "passes the run's options through to the backfill instance" do
+      run =
+        DataDrip::BackfillRun.new(
+          backfill_class_name: "BackfillRunBatchSpec::EchoRoleBackfill",
+          batch_size: 10,
+          start_at: 1.hour.from_now,
+          backfiller: backfiller,
+          options: {
+            "role" => "custom_role"
+          }
+        )
+      run.save!(validate: false)
 
-      batch.run!
+      echo_batch =
+        DataDrip::BackfillRunBatch.new(
+          backfill_run: run,
+          batch_size: 10,
+          start_id: employee1.id,
+          finish_id: employee3.id
+        )
+      echo_batch.save!(validate: false)
+      echo_batch.update_column(:status, 0)
 
-      expect(AddRoleToEmployee).to have_received(:new).with(
-        batch_size: 10,
-        sleep_time: 5,
-        backfill_options: {
-          "age" => 25
-        }
-      )
+      echo_batch.run!
+
+      expect(
+        Employee.where(
+          id: [ employee1.id, employee2.id, employee3.id ]
+        ).pluck(:role)
+      ).to all(eq("custom_role"))
     end
 
     context "with no options" do
@@ -177,6 +187,22 @@ RSpec.describe DataDrip::BackfillRunBatch, type: :model do
         )
       expect(batch).not_to be_valid
       expect(batch.errors[:batch_size]).to include("must be greater than 0")
+    end
+  end
+end
+
+module BackfillRunBatchSpec
+  # Writes the received `role` option onto every processed record, so a test
+  # can assert the run's options reached the backfill instance.
+  class EchoRoleBackfill < DataDrip::Backfill
+    attribute :role, :string
+
+    def scope
+      Employee.all
+    end
+
+    def process_element(element)
+      element.update!(role: role)
     end
   end
 end

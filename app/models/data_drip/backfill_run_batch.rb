@@ -31,7 +31,6 @@ module DataDrip
       migration =
         backfill_run.backfill_class.new(
           batch_size: batch_size,
-          sleep_time: 5,
           backfill_options: backfill_run.options
         )
 
@@ -43,7 +42,9 @@ module DataDrip
           finish: finish_id
         ) do |batch|
           migration.send(:process_batch, batch)
-          sleep 5
+          # Throttle between batches using the configured DataDrip.sleep_time
+          # (defaults to the migration's sleep_time).
+          sleep migration.sleep_time
         end
     end
 

@@ -17,7 +17,7 @@ module DataDrip
   mattr_accessor :child_queue_name, default: (ENV["DATA_DRIP_CHILD_QUEUE"].presence || "data_drip_child").to_sym
   mattr_accessor :importmap, default: Importmap::Map.new
   mattr_accessor :before_backfill, default: nil
-  mattr_accessor :sleep_time, default: 0.1
+  mattr_accessor :sleep_time, default: 5
   mattr_accessor :hooks_handler_class_name, default: nil
 
   class Error < StandardError

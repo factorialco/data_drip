@@ -16,7 +16,6 @@ module DataDrip
       new_backfill =
         backfill_run.backfill_class.new(
           batch_size: backfill_run.batch_size,
-          sleep_time: 5,
           backfill_options: backfill_run.options || {}
         )
       scope = new_backfill.scope
