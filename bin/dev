@@ -1,0 +1,6 @@
+#!/usr/bin/env bash
+# Boots the dummy app (spec/test_app) with the engine mounted at /data_drip.
+set -euo pipefail
+
+cd "$(dirname "$0")/../spec/test_app"
+BUNDLE_GEMFILE=../../Gemfile exec bin/rails server "$@"
