@@ -96,6 +96,17 @@ module DataDrip
       enqueued!
     end
 
+    # Called after each batch reaches a terminal state. Once no batch is still
+    # active, the run settles on its own terminal state: failed if any batch
+    # failed, otherwise completed. A run that was stopped is left untouched.
+    def finalize_if_batches_finished!
+      reload
+      return if terminal?
+      return if batches.where(status: %i[pending enqueued running]).exists?
+
+      batches.failed.exists? ? failed! : completed!
+    end
+
     private
 
     def run_hooks

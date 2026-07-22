@@ -15,12 +15,11 @@ module DataDrip
       backfill_run_batch.completed!
 
       parent.increment!(:processed_count, backfill_run_batch.batch_size)
-      if parent.batches.where.not(status: :completed).count.zero?
-        parent.completed!
-      end
+      parent.finalize_if_batches_finished!
     rescue StandardError => e
       backfill_run_batch.failed!
       backfill_run_batch.update!(error_message: e.message)
+      parent.finalize_if_batches_finished!
       raise e
     end
   end
