@@ -12,6 +12,41 @@ RSpec.describe DataDrip::BackfillRunsController, type: :controller do
     Employee.create!(name: "John", role: nil, age: 30)
   end
 
+  describe "GET #new" do
+    render_views
+
+    it "renders the class picker with all backfill classes" do
+      get :new
+
+      expect(response).to have_http_status(:ok)
+      expect(response.body).to include("backfill_class_listbox")
+      expect(response.body).to include('data-value="AddRoleToEmployee"')
+    end
+
+    it "surfaces the current user's recently run classes in a Recent section" do
+      DataDrip::BackfillRun.create!(
+        backfill_class_name: "AddRoleToEmployee",
+        batch_size: 100,
+        start_at: 1.hour.from_now,
+        backfiller: backfiller,
+        options: {
+          age: 25
+        }
+      )
+
+      get :new
+
+      expect(response.body).to include(">Recent<")
+      expect(response.body).to include('data-recent="true"')
+    end
+
+    it "omits the Recent section when the user has no runs" do
+      get :new
+
+      expect(response.body).not_to include(">Recent<")
+    end
+  end
+
   describe "POST #create" do
     let(:valid_attributes) do
       {

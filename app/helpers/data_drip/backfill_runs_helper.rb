@@ -168,6 +168,45 @@ module DataDrip
         "text-zinc-600 hover:bg-zinc-950/5 dark:text-zinc-400 dark:hover:bg-white/5"
     end
 
+    # A single option row in the backfill-class combobox. `data-name` /
+    # `data-component` / `data-value` feed the fuzzy matcher in the Stimulus
+    # controller; the name span is re-rendered with match highlights on filter.
+    def backfill_class_option_tag(name, recent: false)
+      component = name.deconstantize
+
+      content_tag :li,
+                  role: "option",
+                  class:
+                    "flex cursor-pointer items-baseline justify-between gap-x-4 " \
+                    "rounded-md px-2.5 py-1.5",
+                  data: {
+                    combobox_target: "option",
+                    action: "mousedown->combobox#select",
+                    value: name,
+                    name: name.demodulize,
+                    component: component,
+                    recent: recent.to_s
+                  } do
+        safe_join(
+          [
+            content_tag(
+              :span,
+              name.demodulize,
+              class: "font-mono text-sm text-zinc-800 dark:text-zinc-200",
+              data: { combobox_name: true }
+            ),
+            if component.present?
+              content_tag(
+                :span,
+                component,
+                class: "font-mono text-xs text-zinc-400 dark:text-zinc-500"
+              )
+            end
+          ].compact
+        )
+      end
+    end
+
     def backfill_option_inputs(backfill_run)
       return "" unless backfill_run.backfill_class&.backfill_options_class
 

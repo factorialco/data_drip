@@ -43,24 +43,24 @@
         role="listbox"
         hidden
         data-combobox-target="list"
-        class="absolute inset-x-0 top-full z-10 mt-1.5 max-h-64 overflow-y-auto rounded-lg bg-white p-1 shadow-lg ring-1 ring-zinc-950/10 dark:bg-zinc-900 dark:shadow-none dark:ring-white/10"
+        class="absolute inset-x-0 top-full z-10 mt-1.5 max-h-72 overflow-y-auto rounded-lg bg-white p-1 shadow-lg ring-1 ring-zinc-950/10 dark:bg-zinc-900 dark:shadow-none dark:ring-white/10"
       >
-        <% backfill_class_names.each do |name| %>
-          <li
-            role="option"
-            data-combobox-target="option"
-            data-value="<%= name %>"
-            data-action="mousedown->combobox#select"
-            class="flex cursor-pointer items-baseline justify-between gap-x-4 rounded-md px-2.5 py-1.5"
-          >
-            <span class="font-mono text-sm text-zinc-800 dark:text-zinc-200"><%= name.demodulize %></span>
-            <% namespace = name.deconstantize %>
-            <% if namespace.present? %>
-              <span class="font-mono text-xs text-zinc-400 dark:text-zinc-500"><%= namespace %></span>
-            <% end %>
-          </li>
+        <% if @recent_backfill_class_names.present? %>
+          <li role="presentation" data-combobox-target="recentHeader" class="px-2.5 pt-2 pb-1 text-xs font-semibold tracking-wide text-zinc-400 uppercase dark:text-zinc-500">Recent</li>
+          <% @recent_backfill_class_names.each do |name| %>
+            <%= backfill_class_option_tag(name, recent: true) %>
+          <% end %>
         <% end %>
-        <li data-combobox-target="empty" class="hidden px-2.5 py-2 text-center text-sm text-zinc-400 dark:text-zinc-500">No matching classes.</li>
+
+        <li role="presentation" data-combobox-target="allHeader" class="flex items-baseline justify-between px-2.5 pt-2 pb-1 text-xs font-semibold tracking-wide text-zinc-400 uppercase dark:text-zinc-500">
+          <span>All backfills</span>
+          <span class="font-normal normal-case tabular-nums" data-combobox-target="count"></span>
+        </li>
+        <% backfill_class_names.each do |name| %>
+          <%= backfill_class_option_tag(name) %>
+        <% end %>
+
+        <li data-combobox-target="empty" role="presentation" class="hidden px-2.5 py-2 text-center text-sm text-zinc-400 dark:text-zinc-500">No matching classes.</li>
       </ul>
     </div>
     <p class="mt-1.5 text-sm text-zinc-500 dark:text-zinc-400">The class that defines which records are affected and the change to apply.</p>

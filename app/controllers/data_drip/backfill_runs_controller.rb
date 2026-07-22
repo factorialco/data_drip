@@ -48,6 +48,7 @@ module DataDrip
 
     def new
       @run = DataDrip::BackfillRun.new
+      @recent_backfill_class_names = recent_backfill_class_names
     end
 
     def create
@@ -261,6 +262,20 @@ module DataDrip
       # compact drops anonymous backfill subclasses (nil name), which would
       # otherwise blow up the sort.
       @backfill_class_names ||= DataDrip.all.map(&:name).compact.uniq.sort
+    end
+
+    # The current user's most-recently-run classes (that still exist), surfaced
+    # at the top of the class picker for quick reselection.
+    def recent_backfill_class_names(limit: 6)
+      available = backfill_class_names
+      DataDrip::BackfillRun
+        .where(backfiller: find_current_backfiller)
+        .group(:backfill_class_name)
+        .maximum(:created_at)
+        .sort_by { |_name, run_at| -run_at.to_i }
+        .map(&:first)
+        .select { |name| available.include?(name) }
+        .first(limit)
     end
   end
 end
