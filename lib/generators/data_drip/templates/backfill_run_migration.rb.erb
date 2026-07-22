@@ -13,6 +13,12 @@ class CreateDataDripBackfillRuns < ActiveRecord::Migration<%= migration_version 
       t.string :backfiller_name
       t.datetime :start_at, null: false
       t.timestamps null: false
+
+      # "My runs" filters by backfiller and sorts by created_at; "All runs"
+      # just sorts by created_at.
+      t.index [ :backfiller_id, :created_at ],
+              name: "idx_backfill_runs_on_backfiller_and_created_at"
+      t.index :created_at
     end
   end
 end

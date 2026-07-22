@@ -48,6 +48,12 @@ rails generate data_drip:add_backfiller_name
 
 This snapshots the backfiller's display name onto each run so it is preserved even if the backfiller record is later deleted.
 
+To add the performance indexes to an older install (composite indexes on the runs list and per-run batch queries):
+
+```bash
+rails generate data_drip:add_performance_indexes
+```
+
 ## Requirements
 
 - **Ruby**: >= 3.1.0
