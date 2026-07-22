@@ -39,6 +39,19 @@ RSpec.describe DataDrip::Dripper, type: :job do
       expect(backfill_run.reload.status).to eq("running")
     end
 
+    it "is idempotent: a duplicate delivery does not create a second set of batches" do
+      described_class.new.perform(backfill_run)
+      batch_count = backfill_run.reload.batches.count
+      expect(batch_count).to be_positive
+
+      # Same run delivered again (e.g. at-least-once queue) — now running.
+      expect do
+        described_class.new.perform(DataDrip::BackfillRun.find(backfill_run.id))
+      end.not_to change(DataDrip::BackfillRunBatch, :count)
+
+      expect(backfill_run.reload.batches.count).to eq(batch_count)
+    end
+
     it "handles amount_of_elements limit" do
       backfill_run.update!(amount_of_elements: 1)
 

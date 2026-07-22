@@ -77,6 +77,23 @@ RSpec.describe DataDrip::DripperChild, type: :job do
     end
   end
 
+  context "when the same batch is delivered twice" do
+    let(:run) { build_run("DripperChildSpec::OkBackfill") }
+    let!(:batch) { build_batch(run, start_id: employee1.id, finish_id: employee2.id) }
+
+    it "processes it once and does not double-count processed_count" do
+      described_class.new.perform(batch)
+      expect(batch.reload.status).to eq("completed")
+      expect(run.reload.processed_count).to eq(2)
+
+      # Duplicate delivery of the now-completed batch is a no-op.
+      described_class.new.perform(DataDrip::BackfillRunBatch.find(batch.id))
+
+      expect(batch.reload.status).to eq("completed")
+      expect(run.reload.processed_count).to eq(2)
+    end
+  end
+
   context "when the run was stopped" do
     let(:run) { build_run("DripperChildSpec::OkBackfill") }
     let!(:batch) { build_batch(run, start_id: employee1.id, finish_id: employee2.id) }

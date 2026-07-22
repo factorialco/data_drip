@@ -74,6 +74,57 @@ RSpec.describe DataDrip::BackfillRun, type: :model do
       end
     end
 
+    describe "no_active_run_for_same_class" do
+      it "is invalid when an identical active run (same class and options) already exists" do
+        DataDrip::BackfillRun.create!(valid_attributes.merge(options: { age: 25 }))
+
+        duplicate =
+          DataDrip::BackfillRun.new(valid_attributes.merge(options: { age: 25 }))
+
+        expect(duplicate).not_to be_valid
+        expect(duplicate.errors[:base].join).to match(
+          /already.*pending or in progress/
+        )
+      end
+
+      it "is valid when an active run of the same class has different options" do
+        DataDrip::BackfillRun.create!(valid_attributes.merge(options: { age: 25 }))
+
+        # Same class, different options -> different target records -> allowed.
+        other =
+          DataDrip::BackfillRun.new(valid_attributes.merge(options: { age: 30 }))
+
+        expect(other).to be_valid
+      end
+
+      it "is valid when an active run of the same class has a different element limit" do
+        DataDrip::BackfillRun.create!(
+          valid_attributes.merge(options: { age: 25 }, amount_of_elements: 1)
+        )
+
+        other =
+          DataDrip::BackfillRun.new(valid_attributes.merge(options: { age: 25 }))
+
+        expect(other).to be_valid
+      end
+
+      it "is valid when the existing identical run is terminal" do
+        existing =
+          DataDrip::BackfillRun.create!(
+            valid_attributes.merge(options: { age: 25 })
+          )
+        existing.update_column(
+          :status,
+          DataDrip::BackfillRun.statuses[:completed]
+        )
+
+        duplicate =
+          DataDrip::BackfillRun.new(valid_attributes.merge(options: { age: 25 }))
+
+        expect(duplicate).to be_valid
+      end
+    end
+
     describe "other validations" do
       it "validates presence of backfill_class_name" do
         backfill_run =

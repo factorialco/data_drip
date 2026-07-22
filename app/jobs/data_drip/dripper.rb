@@ -5,6 +5,12 @@ module DataDrip
     queue_as { DataDrip.queue_name }
 
     def perform(backfill_run)
+      # Idempotency guard: a run only transitions enqueued -> running once.
+      # A duplicate delivery (at-least-once queues, accidental re-enqueue) finds
+      # the run already running/terminal and is a no-op, so we never build a
+      # second set of batches for the same run.
+      return unless backfill_run.enqueued?
+
       backfill_run.running!
 
       new_backfill =

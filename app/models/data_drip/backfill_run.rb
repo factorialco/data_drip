@@ -4,6 +4,9 @@ module DataDrip
   class BackfillRun < ApplicationRecord
     self.table_name = "data_drip_backfill_runs"
 
+    # Statuses in which a run (or batch) still has work outstanding.
+    ACTIVE_STATUSES = %i[pending enqueued running].freeze
+
     has_many :batches,
              class_name: "DataDrip::BackfillRunBatch",
              dependent: :destroy
@@ -14,6 +17,7 @@ module DataDrip
     validate :backfill_class_properly_configured?
     validate :validate_required_options, on: :create
     validate :validate_scope, on: :create
+    validate :no_active_run_for_same_class, on: :create
     validate :start_at_must_be_valid_datetime
     validates :start_at, presence: true
     validates :batch_size, presence: true, numericality: { greater_than: 0 }
@@ -102,7 +106,7 @@ module DataDrip
     def finalize_if_batches_finished!
       reload
       return if terminal?
-      return if batches.where(status: %i[pending enqueued running]).exists?
+      return if batches.where(status: ACTIVE_STATUSES).exists?
 
       batches.failed.exists? ? failed! : completed!
     end
@@ -186,6 +190,39 @@ module DataDrip
       DateTime.parse(start_at.to_s)
     rescue ArgumentError, TypeError
       errors.add(:start_at, "must be a valid datetime")
+    end
+
+    # Forbids launching an *identical* run — same class, same options, same
+    # element limit — while an equivalent one is still in flight. Different
+    # parameterizations (e.g. per-department scopes, a trial run then the full
+    # run) are allowed, since they target different records. This is an
+    # application-level guard against accidental double-submits; it isn't a hard
+    # concurrency lock (that would need a DB constraint in the host app).
+    def no_active_run_for_same_class
+      return if backfill_class_name.blank?
+
+      # Narrow in SQL by the cheap columns; compare the JSON options in Ruby so
+      # we don't depend on json-column equality semantics across adapters.
+      # Runs only on create, so the record is always new — no self-match to exclude.
+      candidates =
+        self.class.where(
+          backfill_class_name: backfill_class_name,
+          amount_of_elements: amount_of_elements,
+          status: ACTIVE_STATUSES
+        )
+
+      normalized_options = (options || {}).stringify_keys
+      duplicate =
+        candidates.any? do |run|
+          (run.options || {}).stringify_keys == normalized_options
+        end
+      return unless duplicate
+
+      errors.add(
+        :base,
+        "An identical run for #{backfill_class_name} (same options) is already " \
+          "pending or in progress. Wait for it to finish or stop it before starting another."
+      )
     end
   end
 end

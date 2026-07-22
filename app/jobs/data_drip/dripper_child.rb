@@ -5,6 +5,12 @@ module DataDrip
     queue_as { DataDrip.child_queue_name }
 
     def perform(backfill_run_batch)
+      # Idempotency guard: a batch is only processed once. A duplicate delivery
+      # finds it already running/terminal and is a no-op, so records are not
+      # re-processed and processed_count is not double-counted. Runs before the
+      # stopped check so an already-finished batch is never flipped to stopped.
+      return unless backfill_run_batch.pending? || backfill_run_batch.enqueued?
+
       parent = backfill_run_batch.backfill_run
       if parent.stopped?
         backfill_run_batch.stopped!
