@@ -1,10 +1,33 @@
-<% @batches.each do |batch| %>
-  <tr class="border-b border-gray-100 last:border-b-0">
-    <td class="py-3 px-4 text-gray-700 align-middle"><%= status_tag(batch.status) %></td>
-    <td class="py-3 px-4 text-gray-700 align-middle"><%= batch.batch_size %></td>
-    <td class="py-3 px-4 text-gray-700 align-middle"><%= format_datetime_in_user_timezone(batch.updated_at, @user_timezone) %></td>
-    <td class="py-3 px-4 text-gray-700 align-middle"><%= batch.start_id %></td>
-    <td class="py-3 px-4 text-gray-700 align-middle"><%= batch.finish_id %></td>
-    <td class="py-3 px-4 text-red-700 align-middle"><%= batch.error_message %></td>
+<% batches.each do |batch| %>
+  <tr>
+    <td class="py-2.5 pr-4"><%= status_tag(batch.status) %></td>
+    <td class="py-2.5 pr-4 font-mono text-xs text-zinc-600 tabular-nums dark:text-zinc-300"><%= number_with_delimiter(batch.start_id) %> → <%= number_with_delimiter(batch.finish_id) %></td>
+    <td class="py-2.5 pr-4 text-sm text-zinc-600 tabular-nums dark:text-zinc-300"><%= number_with_delimiter(batch.batch_size) %></td>
+    <td class="py-2.5 pr-4 text-sm text-zinc-500 dark:text-zinc-400">
+      <%= batch.completed? || batch.failed? || batch.stopped? ? format_datetime_in_user_timezone(batch.updated_at, @user_timezone) : "—" %>
+    </td>
+    <td class="py-2.5">
+      <% if batch.error_message.present? %>
+        <button
+          type="button"
+          class="text-sm font-medium text-drip-700 hover:text-drip-600 dark:text-drip-400 dark:hover:text-drip-300"
+          data-action="batch-errors#toggle"
+          data-batch-errors-id-param="<%= batch.id %>"
+          aria-expanded="false"
+          aria-controls="batch_error_<%= batch.id %>"
+        >Show error</button>
+      <% else %>
+        <span class="text-sm text-zinc-400 dark:text-zinc-600" aria-hidden="true">—</span>
+      <% end %>
+    </td>
   </tr>
+  <% if batch.error_message.present? %>
+    <tr id="batch_error_<%= batch.id %>" hidden>
+      <td colspan="5" class="pb-3">
+        <div class="overflow-x-auto rounded-lg bg-red-50 p-3 dark:bg-red-400/10">
+          <pre class="font-mono text-xs leading-5 whitespace-pre-wrap text-red-800 dark:text-red-300"><%= batch.error_message %></pre>
+        </div>
+      </td>
+    </tr>
+  <% end %>
 <% end %>

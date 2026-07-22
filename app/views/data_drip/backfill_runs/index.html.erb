@@ -1,132 +1,140 @@
-<div class="min-h-screen flex bg-white">
+<h1 class="text-xl font-semibold tracking-tight text-zinc-900 dark:text-white">Backfill runs</h1>
 
-  <div
-    class="
-      hidden md:flex flex-col m-2 justify-between w-72 bg-gradient-to-b from-slate-700
-      to-gray-900 fixed inset-y-0 left-0
-    "
-  >
-    <div class="p-6 flex justify-center items-center">
-      <%= link_to backfill_runs_path, class: "block" do %>
-        <span
-          class="
-            text-4xl font-bold tracking-widest bg-clip-text text-transparent
-          "
-          style="background: linear-gradient(135deg, #f72585 10%, #b5179e 50%, #7209b7 90%); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; text-fill-color: transparent;"
-        >DATADRIP
-        </span>
+<dl class="mt-6 flex flex-wrap gap-y-4">
+  <div class="pr-6 sm:pr-10">
+    <dt class="text-sm text-zinc-500 dark:text-zinc-400">Running</dt>
+    <dd class="mt-0.5 text-2xl font-semibold tracking-tight text-zinc-900 tabular-nums dark:text-white"><%= @stats[:running] %></dd>
+  </div>
+  <div class="border-l border-zinc-950/10 px-6 sm:px-10 dark:border-white/10">
+    <dt class="text-sm text-zinc-500 dark:text-zinc-400">Enqueued</dt>
+    <dd class="mt-0.5 text-2xl font-semibold tracking-tight text-zinc-900 tabular-nums dark:text-white"><%= @stats[:enqueued] %></dd>
+  </div>
+  <div class="border-l border-zinc-950/10 px-6 sm:px-10 dark:border-white/10">
+    <dt class="text-sm text-zinc-500 dark:text-zinc-400">Failed <span class="text-zinc-400 dark:text-zinc-500">· last 7 days</span></dt>
+    <dd class="mt-0.5 text-2xl font-semibold tracking-tight text-zinc-900 tabular-nums dark:text-white"><%= @stats[:failed_recently] %></dd>
+  </div>
+  <div class="border-l border-zinc-950/10 pl-6 sm:pl-10 dark:border-white/10">
+    <dt class="text-sm text-zinc-500 dark:text-zinc-400">Completed <span class="text-zinc-400 dark:text-zinc-500">· last 7 days</span></dt>
+    <dd class="mt-0.5 text-2xl font-semibold tracking-tight text-zinc-900 tabular-nums dark:text-white"><%= @stats[:completed_recently] %></dd>
+  </div>
+</dl>
+
+<%= turbo_frame_tag "runs", data: { turbo_action: "advance" } do %>
+  <nav class="mt-8 flex gap-x-6 border-b border-zinc-950/10 dark:border-white/10" aria-label="Tabs">
+    <% [["my_runs", "My runs", @my_runs_count], ["all", "All runs", @all_runs_count]].each do |tab, label, count| %>
+      <% active = @current_tab == tab %>
+      <%= link_to backfill_runs_path(tab: tab, q: @query.presence, status: @status_filter),
+          class:
+            "-mb-px flex items-center gap-x-2 border-b-2 px-1 py-2.5 text-sm font-medium " +
+              (active ?
+                "border-drip-700 text-drip-700 dark:border-drip-400 dark:text-drip-400" :
+                "border-transparent text-zinc-500 hover:border-zinc-300 hover:text-zinc-700 dark:text-zinc-400 dark:hover:border-zinc-600 dark:hover:text-zinc-200"),
+          aria: (active ? { current: "page" } : {}) do %>
+        <%= label %>
+        <span class="rounded-full px-2 py-0.5 text-xs tabular-nums <%= active ? "bg-drip-50 text-drip-700 dark:bg-drip-400/10 dark:text-drip-300" : "bg-zinc-100 text-zinc-500 dark:bg-white/10 dark:text-zinc-400" %>"><%= count %></span>
       <% end %>
-    </div>
-  </div>
+    <% end %>
+  </nav>
 
-  <div class="flex-1 flex flex-col items-center justify-start py-10">
-    <div class="w-full max-w-5xl mb-8">
-      <div
-        class="
-          bg-gradient-to-r from-slate-700 to-gray-900 rounded-lg p-6 shadow text-white
-        "
-      >
-        <h1 class="text-2xl mb-1 text-left">Hello
-          <%= find_current_backfiller.send(DataDrip.backfiller_name_attribute) %>!</h1>
-        <p class="text-sm font-light text-left mt-0.5">We are happy to see you again.</p>
-        <div class="mt-8 flex">
-          <%= link_to "New Backfill Run",
-          new_backfill_run_path,
-          class: "px-4 py-2 text-white rounded font-bold shadow gradient-btn" %>
-        </div>
-      </div>
+  <%= form_with url: backfill_runs_path, method: :get,
+      data: { controller: "autosubmit", turbo_action: "advance" },
+      class: "mt-4 flex flex-wrap items-center gap-3" do %>
+    <%= hidden_field_tag :tab, @current_tab %>
+    <div class="relative w-full max-w-64">
+      <svg viewBox="0 0 20 20" fill="none" class="pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-zinc-400" aria-hidden="true">
+        <path stroke="currentColor" stroke-linecap="round" stroke-width="2" d="m13 13 4 4M8.5 3a5.5 5.5 0 1 0 0 11 5.5 5.5 0 0 0 0-11Z" />
+      </svg>
+      <%= text_field_tag :q, @query,
+          placeholder: "Filter by class name…",
+          autocomplete: "off",
+          aria: { label: "Filter by class name" },
+          data: { action: "input->autosubmit#submit" },
+          class: "#{DataDrip::BackfillRunsHelper::INPUT_CLASSES} pl-8" %>
     </div>
+    <div class="inline-grid grid-cols-[1fr_--spacing(8)]">
+      <%= select_tag :status,
+          options_for_select(
+            [["All statuses", ""]] +
+              DataDrip::BackfillRun.statuses.keys.map { |status| [status.capitalize, status] },
+            @status_filter
+          ),
+          aria: { label: "Filter by status" },
+          data: { action: "change->autosubmit#now" },
+          class: "#{DataDrip::BackfillRunsHelper::INPUT_CLASSES} col-span-full row-start-1 appearance-none pr-8" %>
+      <svg viewBox="0 0 8 5" width="8" height="5" fill="none" class="pointer-events-none col-start-2 row-start-1 place-self-center text-zinc-400" aria-hidden="true">
+        <path d="M.5.5 4 4 7.5.5" stroke="currentcolor" />
+      </svg>
+    </div>
+  <% end %>
 
-    <div class="w-full max-w-5xl flex-1 flex flex-col">
-      <div
-        class="
-          bg-white rounded-lg border border-gray-200 p-6 flex-1 flex flex-col
-        "
-      >
-    
-        
-        <!-- Tab Navigation -->
-        <div class="mb-6">
-          <nav class="flex" aria-label="Tabs" style="gap: 2rem;">
-            <%= link_to backfill_runs_path(tab: 'my_runs'), 
-                class: "tab-link py-2 px-1 font-semibold text-sm #{@current_tab == 'my_runs' ? 'active-tab' : 'inactive-tab'}",
-                data: { tab: 'my_runs' } do %>
-              My Runs
-            <% end %>
-            <%= link_to backfill_runs_path(tab: 'all'), 
-                class: "tab-link py-2 px-1 font-semibold text-sm #{@current_tab == 'all' ? 'active-tab' : 'inactive-tab'}",
-                data: { tab: 'all' } do %>
-              All Runs
-            <% end %>
-          </nav>
-        </div>
-        <div class="overflow-x-auto">
-          <table class="w-full text-left">
-            <thead>
-              <tr>
-                <th class="py-2 px-4 text-gray-400 font-semibold text-sm">NAME</th>
-                <th class="py-2 px-4 text-gray-400 font-semibold text-sm">STATUS</th>
-                <th class="py-2 px-4 text-gray-400 font-semibold text-sm">BATCH SIZE</th>
-                <th class="py-2 px-4 text-gray-400 font-semibold text-sm">BACKFILLER</th>
+  <% if @backfill_runs.any? %>
+    <div class="-mx-4 -my-2 mt-2 overflow-x-auto whitespace-nowrap sm:-mx-6 lg:-mx-8">
+      <div class="inline-block min-w-full px-4 py-2 align-middle sm:px-6 lg:px-8">
+        <table class="w-full text-left">
+          <thead>
+            <tr>
+              <th class="border-b border-zinc-950/10 py-2.5 pr-4 text-sm font-medium whitespace-nowrap text-zinc-500 dark:border-white/10 dark:text-zinc-400">Backfill class</th>
+              <th class="border-b border-zinc-950/10 py-2.5 pr-4 text-sm font-medium whitespace-nowrap text-zinc-500 dark:border-white/10 dark:text-zinc-400">Status</th>
+              <th class="border-b border-zinc-950/10 py-2.5 pr-4 text-sm font-medium whitespace-nowrap text-zinc-500 dark:border-white/10 dark:text-zinc-400">Progress</th>
+              <th class="border-b border-zinc-950/10 py-2.5 pr-4 text-sm font-medium whitespace-nowrap text-zinc-500 dark:border-white/10 dark:text-zinc-400">Batch size</th>
+              <th class="border-b border-zinc-950/10 py-2.5 pr-4 text-sm font-medium whitespace-nowrap text-zinc-500 dark:border-white/10 dark:text-zinc-400">Backfiller</th>
+              <th class="border-b border-zinc-950/10 py-2.5 pr-4 text-sm font-medium whitespace-nowrap text-zinc-500 dark:border-white/10 dark:text-zinc-400">Created</th>
+              <th class="border-b border-zinc-950/10 py-2.5 dark:border-white/10"><span class="sr-only">View</span></th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-zinc-950/5 dark:divide-white/5">
+            <% @backfill_runs.each do |backfill_run| %>
+              <tr
+                class="group cursor-pointer hover:bg-zinc-950/2.5 dark:hover:bg-white/2.5"
+                data-controller="row-link"
+                data-row-link-url-value="<%= backfill_run_path(backfill_run) %>"
+                data-action="click->row-link#visit"
+              >
+                <td class="py-3 pr-4">
+                  <%= link_to backfill_run.backfill_class_name,
+                      backfill_run_path(backfill_run),
+                      class: "font-medium text-zinc-900 group-hover:text-drip-700 dark:text-white dark:group-hover:text-drip-400",
+                      data: { turbo_frame: "_top" } %>
+                </td>
+                <td class="py-3 pr-4"><%= status_tag(backfill_run.status) %></td>
+                <td class="py-3 pr-4">
+                  <div class="flex items-center gap-x-2">
+                    <%= progress_bar(backfill_run.progress_percent, status: backfill_run.status, classes: "h-1.5 w-24") %>
+                    <span class="w-9 text-xs text-zinc-500 tabular-nums dark:text-zinc-400"><%= backfill_run.total_count ? "#{backfill_run.progress_percent}%" : "—" %></span>
+                  </div>
+                </td>
+                <td class="py-3 pr-4 text-sm text-zinc-600 tabular-nums dark:text-zinc-300"><%= number_with_delimiter(backfill_run.batch_size) %></td>
+                <td class="py-3 pr-4 text-sm text-zinc-600 dark:text-zinc-300"><%= backfill_run.backfiller_name %></td>
+                <td class="py-3 pr-4 text-sm text-zinc-500 dark:text-zinc-400"><%= relative_time(backfill_run.created_at, @user_timezone) %></td>
+                <td class="py-3 text-right text-zinc-400 dark:text-zinc-600" aria-hidden="true">›</td>
               </tr>
-            </thead>
-            <tbody>
-              <% @backfill_runs.each do |backfill_run| %>
-                <tr class="border-b border-gray-100 last:border-b-0">
-                  <td class="py-3 px-4 text-gray-700 font-semibold align-middle"><%= link_to backfill_run.backfill_class_name, backfill_run_path(backfill_run) %></td>
-                  <td class="py-3 px-4 text-gray-700 align-middle"><%= status_tag(backfill_run.status) %></td>
-                  <td class="py-3 px-4 text-gray-700 align-middle"><%= backfill_run.batch_size %></td>
-                  <td class="py-3 px-4 text-gray-700 align-middle"><%= backfill_run.backfiller_name %></td>
-                </tr>
-              <% end %>
-            </tbody>
-          </table>
-        </div>
-        
-        <%= render 'data_drip/shared/pagination', 
-            pagination: @pagination, 
-            item_name: "backfill runs", 
-            page_param: :page,
-            additional_params: { tab: @current_tab } %>
+            <% end %>
+          </tbody>
+        </table>
       </div>
     </div>
-  </div>
-</div>
 
-<script>
-  document.addEventListener('DOMContentLoaded', function() {
-    var userTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
-    var currentTimezone = '<%= session[:user_timezone] %>';
-    
-    if (currentTimezone !== userTimezone) {
-      fetch('<%= set_timezone_backfill_runs_path %>', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'X-CSRF-Token': document.querySelector('meta[name="csrf-token"]').getAttribute('content')
-        },
-        body: JSON.stringify({ timezone: userTimezone })
-      });
-    }
-    
-      var tabLinks = document.querySelectorAll('nav[aria-label="Tabs"] a');
-      var tableContainer = document.querySelector('.overflow-x-auto');
-      
-      tabLinks.forEach(function(link) {
-        link.addEventListener('click', function(e) {
-          if (tableContainer) {
-            tableContainer.style.opacity = '0.6';
-            tableContainer.style.pointerEvents = 'none';
-          }
-          
-          tabLinks.forEach(function(tab) {
-            tab.classList.remove('active-tab');
-            tab.classList.add('inactive-tab');
-          });
-          
-          this.classList.remove('inactive-tab');
-          this.classList.add('active-tab');
-        });
-      });
-  });
-</script>
+    <%= render 'data_drip/shared/pagination',
+        pagination: @pagination,
+        item_name: "runs",
+        page_param: :page,
+        additional_params: { tab: @current_tab, q: @query.presence, status: @status_filter } %>
+  <% else %>
+    <div class="border-t border-zinc-950/5 py-16 text-center dark:border-white/5">
+      <% filtered = @query.present? || @status_filter.present? %>
+      <p class="text-sm font-semibold text-zinc-900 dark:text-white"><%= filtered ? "No runs match your filters." : "No backfill runs yet." %></p>
+      <p class="mx-auto mt-1 max-w-[45ch] text-sm text-pretty text-zinc-500 dark:text-zinc-400">
+        <%= filtered ?
+          "Try a different class name or status." :
+          "Create your first run to start backfilling data in batches." %>
+      </p>
+      <div class="mt-5">
+        <% if filtered %>
+          <%= link_to "Clear filters", backfill_runs_path(tab: @current_tab), class: secondary_button_classes %>
+        <% else %>
+          <%= link_to "New backfill run", new_backfill_run_path, class: secondary_button_classes, data: { turbo_frame: "_top" } %>
+        <% end %>
+      </div>
+    </div>
+  <% end %>
+<% end %>

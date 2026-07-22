@@ -1,0 +1,26 @@
+<header class="border-b border-zinc-950/10 dark:border-white/10">
+  <div class="mx-auto flex max-w-6xl items-center gap-x-6 px-4 py-3 sm:px-6 lg:px-8">
+    <%= link_to "DATADRIP",
+        backfill_runs_path,
+        class:
+          "block bg-linear-135 from-[#f72585] via-drip-pink to-drip-700 " \
+          "bg-clip-text text-lg font-bold tracking-widest text-transparent " \
+          "rounded-sm focus-visible:outline-2 focus-visible:outline-offset-2 " \
+          "focus-visible:outline-drip-700" %>
+
+    <div class="flex flex-1 items-center justify-end gap-x-4">
+      <% backfiller_name = find_current_backfiller.send(DataDrip.backfiller_name_attribute) %>
+      <div class="flex items-center gap-x-2" title="<%= backfiller_name %>">
+        <span
+          class="flex size-6 items-center justify-center rounded-full bg-drip-100 text-[0.6875rem] font-semibold text-drip-700 dark:bg-drip-400/10 dark:text-drip-300"
+          aria-hidden="true"
+        ><%= backfiller_initials(backfiller_name) %></span>
+        <span class="text-sm text-zinc-500 max-sm:hidden dark:text-zinc-400"><%= backfiller_name %></span>
+      </div>
+
+      <% unless current_page?(new_backfill_run_path) %>
+        <%= link_to "New backfill run", new_backfill_run_path, class: primary_button_classes %>
+      <% end %>
+    </div>
+  </div>
+</header>

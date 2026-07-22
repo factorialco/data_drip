@@ -1,0 +1,23 @@
+<% run = backfill_run %>
+<% total_batches = run.batches.count %>
+<% completed_batches = run.batches.completed.count %>
+<% failed_batches = run.batches.failed.count %>
+
+<h2 class="text-base font-semibold text-zinc-900 dark:text-white">Batches</h2>
+<p class="text-sm text-zinc-500 tabular-nums dark:text-zinc-400">
+  <%= completed_batches %> of <%= total_batches %> completed<%= " · #{failed_batches} failed" if failed_batches.positive? %>
+</p>
+
+<span class="flex-1"></span>
+
+<% if failed_batches.positive? %>
+  <% failed_only = batch_status == "failed" %>
+  <%= link_to failed_only ? "Show all" : "Failed only",
+      backfill_run_path(run, batch_status: failed_only ? nil : "failed"),
+      class: secondary_button_classes(size: :small) %>
+  <%= button_to "Retry failed batches",
+      retry_failed_batches_backfill_run_path(run),
+      method: :post,
+      form: { data: { turbo_confirm: "Re-enqueue #{failed_batches} failed #{failed_batches == 1 ? "batch" : "batches"}?" } },
+      class: secondary_button_classes(size: :small) %>
+<% end %>

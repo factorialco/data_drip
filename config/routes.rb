@@ -5,8 +5,8 @@ DataDrip::Engine.routes.draw do
 
   resources :backfill_runs, only: %i[index show new create destroy] do
     post :stop, on: :member
+    post :retry_failed_batches, on: :member
     get :updates, on: :member
-    get :stream, on: :member
     get :backfill_options, on: :collection
   end
 

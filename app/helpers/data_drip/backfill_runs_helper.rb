@@ -2,28 +2,127 @@
 
 module DataDrip
   module BackfillRunsHelper
+    INPUT_CLASSES =
+      "block w-full rounded-lg bg-white px-3 py-1.5 text-sm text-zinc-900 " \
+      "outline-1 -outline-offset-1 outline-zinc-950/15 placeholder:text-zinc-400 " \
+      "focus:outline-2 focus:-outline-offset-1 focus:outline-drip-700 max-sm:text-base " \
+      "dark:bg-white/5 dark:text-white dark:outline-white/15 " \
+      "dark:placeholder:text-zinc-500 dark:focus:outline-drip-400"
+
+    LABEL_CLASSES =
+      "block text-sm font-semibold text-zinc-900 dark:text-white"
+
+    STATUS_BADGES = {
+      "pending" => {
+        badge: "bg-zinc-50 text-zinc-600 inset-ring-zinc-500/20 " \
+          "dark:bg-white/5 dark:text-zinc-400 dark:inset-ring-white/10",
+        dot: "bg-zinc-400"
+      },
+      "enqueued" => {
+        badge: "bg-amber-50 text-amber-700 inset-ring-amber-600/20 " \
+          "dark:bg-amber-400/10 dark:text-amber-400 dark:inset-ring-amber-400/20",
+        dot: "bg-amber-500"
+      },
+      "running" => {
+        badge: "bg-blue-50 text-blue-700 inset-ring-blue-600/20 " \
+          "dark:bg-blue-400/10 dark:text-blue-400 dark:inset-ring-blue-400/30",
+        dot: "bg-blue-500 animate-pulse motion-reduce:animate-none"
+      },
+      "completed" => {
+        badge: "bg-green-50 text-green-700 inset-ring-green-600/20 " \
+          "dark:bg-green-400/10 dark:text-green-400 dark:inset-ring-green-400/30",
+        dot: "bg-green-500"
+      },
+      "failed" => {
+        badge: "bg-red-50 text-red-700 inset-ring-red-600/20 " \
+          "dark:bg-red-400/10 dark:text-red-400 dark:inset-ring-red-400/30",
+        dot: "bg-red-500"
+      },
+      "stopped" => {
+        badge: "bg-zinc-50 text-zinc-600 inset-ring-zinc-500/20 " \
+          "dark:bg-white/5 dark:text-zinc-400 dark:inset-ring-white/10",
+        dot: "bg-zinc-400"
+      }
+    }.freeze
+
     def status_tag(status)
-      tag_styles =
-        case status.to_s
-        when "enqueued"
-          "background-color: #cec254; color: #fff; border: 1px solid #eab308;"
-        when "running"
-          "background-color: #e28e26; color: #fff; border: 1px solid #f97316;"
-        when "completed"
-          "background-color: #51bc5f; color: #fff; border: 1px solid #16a34a;"
-        when "failed"
-          "background-color: #ef4444; color: #fff; border: 1px solid #dc2626;"
-        when "stopped"
-          "background-color: #ef4444; color: #fff; border: 1px solid #dc2626;"
-        else
-          "background-color: #9ca3af; color: #fff; border: 1px solid #6b7280;"
-        end
+      config = STATUS_BADGES.fetch(status.to_s, STATUS_BADGES["pending"])
+
       content_tag(
         :span,
-        status.to_s.capitalize,
-        class: "inline-block py-1 rounded text-xs font-semibold",
-        style: "#{tag_styles} padding-right: 5px; padding-left: 5px;"
+        class:
+          "inline-flex items-center gap-x-1.5 rounded-full px-2 py-0.5 " \
+          "text-xs font-medium inset-ring #{config[:badge]}"
+      ) do
+        tag.span(
+          "",
+          class: "size-1.5 rounded-full #{config[:dot]}",
+          aria: { hidden: true }
+        ) + status.to_s.capitalize
+      end
+    end
+
+    # Renders a progress bar. Pass sizing (height/width/margins) via +classes+.
+    def progress_bar(percent, status: nil, classes: "h-1.5")
+      fill =
+        case status.to_s
+        when "failed"
+          "bg-red-500"
+        when "stopped"
+          "bg-zinc-400 dark:bg-zinc-500"
+        when "completed"
+          "bg-green-500"
+        else
+          "bg-linear-to-r from-drip-pink to-drip-700"
+        end
+
+      content_tag(
+        :div,
+        class:
+          "overflow-hidden rounded-full bg-zinc-950/5 dark:bg-white/10 #{classes}",
+        role: "progressbar",
+        aria: {
+          valuenow: percent,
+          valuemin: 0,
+          valuemax: 100
+        }
+      ) do
+        tag.div(
+          "",
+          class: "h-full rounded-full w-(--progress) #{fill}",
+          style: "--progress: #{percent}%"
+        )
+      end
+    end
+
+    def relative_time(datetime, user_timezone = "UTC")
+      return "" unless datetime
+
+      local = datetime.in_time_zone(user_timezone.presence || "UTC")
+      words =
+        if datetime.past?
+          "#{time_ago_in_words(datetime)} ago"
+        else
+          "in #{distance_of_time_in_words(Time.current, datetime)}"
+        end
+
+      tag.time(
+        words,
+        datetime: datetime.iso8601,
+        title: local.strftime("%b %d, %Y %H:%M %Z")
       )
+    end
+
+    def format_duration(seconds)
+      return "—" if seconds.nil?
+
+      seconds = seconds.round
+      return "#{seconds} s" if seconds < 60
+
+      minutes = seconds / 60
+      return "#{minutes} min" if minutes < 60
+
+      "#{minutes / 60} h #{minutes % 60} min"
     end
 
     def format_datetime_in_user_timezone(datetime, user_timezone = "UTC")
@@ -35,6 +134,40 @@ module DataDrip
       local_time.strftime("%b %d, %H:%M")
     end
 
+    def backfiller_initials(name)
+      name.to_s.split.map { |part| part[0] }.first(2).join.upcase
+    end
+
+    def primary_button_classes
+      "inline-flex items-center rounded-lg bg-drip-700 px-3 py-1.5 text-sm " \
+        "font-semibold text-white hover:bg-drip-600 focus-visible:outline-2 " \
+        "focus-visible:outline-offset-2 focus-visible:outline-drip-700 " \
+        "dark:bg-drip-600 dark:hover:bg-drip-500 dark:focus-visible:outline-drip-400"
+    end
+
+    def secondary_button_classes(size: :base)
+      padding = size == :small ? "px-2.5 py-1 text-xs" : "px-3 py-1.5 text-sm"
+
+      "inline-flex items-center rounded-lg bg-white #{padding} font-semibold " \
+        "text-zinc-900 shadow-xs ring-1 ring-zinc-950/10 hover:bg-zinc-50 " \
+        "focus-visible:outline-2 focus-visible:outline-offset-2 " \
+        "focus-visible:outline-drip-700 dark:bg-white/5 dark:text-white " \
+        "dark:shadow-none dark:ring-white/10 dark:hover:bg-white/10"
+    end
+
+    def danger_button_classes
+      "inline-flex items-center rounded-lg bg-red-50 px-3 py-1.5 text-sm " \
+        "font-semibold text-red-700 ring-1 ring-red-600/20 hover:bg-red-100 " \
+        "focus-visible:outline-2 focus-visible:outline-offset-2 " \
+        "focus-visible:outline-red-600 dark:bg-red-400/10 dark:text-red-400 " \
+        "dark:ring-red-400/20 dark:hover:bg-red-400/15"
+    end
+
+    def ghost_button_classes
+      "inline-flex items-center rounded-lg px-3 py-1.5 text-sm font-semibold " \
+        "text-zinc-600 hover:bg-zinc-950/5 dark:text-zinc-400 dark:hover:bg-white/5"
+    end
+
     def backfill_option_inputs(backfill_run)
       return "" unless backfill_run.backfill_class&.backfill_options_class
 
@@ -44,250 +177,217 @@ module DataDrip
 
       defaults = options_class.new
 
-      input_class =
-        "block w-full mt-1 rounded border border-gray-200 focus:ring focus:ring-blue-200 focus:border-blue-400 px-3 py-2"
-
-      content_tag :div, class: "mb-6 p-4 rounded-lg bg-gray-50" do
-        header_content =
+      content_tag :div, class: "mb-5 rounded-xl bg-zinc-50 p-4 dark:bg-white/5" do
+        header =
           content_tag :h3,
-                      "OPTIONS:",
-                      class: "block text-gray-500 font-semibold mb-2"
+                      "Options · #{backfill_run.backfill_class_name}",
+                      class:
+                        "mb-4 font-mono text-xs font-medium text-zinc-500 dark:text-zinc-400"
 
-        inputs_content =
+        inputs =
           safe_join(
             attribute_types.map do |name, type|
-              content_tag :div, class: "mb-6" do
-                label_content =
+              content_tag :div, class: "mb-4 last:mb-0" do
+                label =
                   label_tag "backfill_run[options][#{name}]",
-                            name.to_s.upcase,
-                            class: "block text-gray-500 font-semibold mb-2"
+                            name.to_s,
+                            class:
+                              "mb-1.5 block font-mono text-sm font-medium " \
+                              "text-zinc-700 dark:text-zinc-300"
 
-                input_content =
+                input =
                   if type.is_a?(DataDrip::Types::Enum)
                     build_enum_input(name, type, backfill_run)
                   else
                     current = backfill_run.options[name]
                     value = current.nil? ? defaults.public_send(name) : current
-                    build_standard_input(name, type, value, input_class)
+                    build_standard_input(name, type, value)
                   end
 
-                label_content + input_content
+                label + input
               end
             end
           )
 
-        header_content + inputs_content
+        header + inputs
       end
     end
 
     private
 
-    def build_standard_input(name, type, value, input_class)
+    def build_standard_input(name, type, value)
+      field_name = "backfill_run[options][#{name}]"
+
       case type
-      when ActiveModel::Type::String,
-           ActiveModel::Type::ImmutableString
-        text_field_tag "backfill_run[options][#{name}]",
-                       value,
-                       class: input_class
+      when ActiveModel::Type::String, ActiveModel::Type::ImmutableString
+        text_field_tag field_name, value, class: INPUT_CLASSES
       when ActiveModel::Type::Integer, ActiveModel::Type::BigInteger
-        number_field_tag "backfill_run[options][#{name}]",
-                         value,
-                         class: input_class,
-                         step: 1
+        number_field_tag field_name, value, class: INPUT_CLASSES, step: 1
       when ActiveModel::Type::Decimal, ActiveModel::Type::Float
-        number_field_tag "backfill_run[options][#{name}]",
-                         value,
-                         class: input_class,
-                         step: 0.01
+        number_field_tag field_name, value, class: INPUT_CLASSES, step: 0.01
       when ActiveModel::Type::Boolean
         # Pair the checkbox with a hidden "0" field so an unchecked box
         # submits an explicit false instead of dropping the key entirely.
         # Without this, the attribute's `default:` silently re-applies on the
         # server, which is invisible from the persisted options.
-        field_name = "backfill_run[options][#{name}]"
-        content_tag :div, class: "flex items-center" do
+        content_tag :div, class: "flex items-center gap-x-2" do
           hidden_field_tag(field_name, "0", id: nil) +
-            check_box_tag(field_name, "1", value, class: "mr-2") +
-            label_tag(field_name, "Yes", class: "text-gray-700")
+            check_box_tag(
+              field_name,
+              "1",
+              value,
+              class: "size-4 accent-drip-700 dark:accent-drip-400"
+            ) +
+            label_tag(
+              field_name,
+              "Enabled",
+              class: "text-sm text-zinc-700 dark:text-zinc-300"
+            )
         end
       when ActiveModel::Type::Date
-        date_field_tag "backfill_run[options][#{name}]",
-                       value,
-                       class: input_class
+        date_field_tag field_name, value, class: INPUT_CLASSES
       when ActiveModel::Type::Time
-        time_field_tag "backfill_run[options][#{name}]",
-                       value,
-                       class: input_class
+        time_field_tag field_name, value, class: INPUT_CLASSES
       when ActiveModel::Type::DateTime
-        datetime_field_tag "backfill_run[options][#{name}]",
-                           value,
-                           class: input_class
+        datetime_field_tag field_name, value, class: INPUT_CLASSES
       else
-        text_area_tag "backfill_run[options][#{name}]",
-                      value,
-                      class: input_class,
-                      rows: 3
+        text_area_tag field_name, value, class: INPUT_CLASSES, rows: 3
       end
     end
 
     def build_enum_input(name, type, backfill_run)
       raw_choices = type.available_values
       # Normalize to [label, value] pairs — supports both ["a","b"] and [["Label","val"],...]
-      pairs = raw_choices.map { |c| c.is_a?(Array) ? c : [ c, c ] }
-      all_values = pairs.map(&:last).map(&:to_s)
+      pairs = raw_choices.map { |choice| choice.is_a?(Array) ? choice : [ choice, choice ] }
 
       field_name = "backfill_run[options][#{name}]"
       field_id = "enum_#{name}"
       current_value = backfill_run.options[name].to_s
-      selected_values = current_value.present? ? current_value.split(",") : all_values
+      selected_values =
+        current_value.present? ? current_value.split(",") : pairs.map(&:last).map(&:to_s)
 
-      hidden = hidden_field_tag field_name, selected_values.join(","), id: "#{field_id}_hidden"
+      content_tag :div, data: { controller: "enum-select" } do
+        hidden =
+          hidden_field_tag field_name,
+                           selected_values.join(","),
+                           id: "#{field_id}_hidden",
+                           data: {
+                             enum_select_target: "hidden"
+                           }
 
-      search_id = "#{field_id}_search"
-      select_all_id = "#{field_id}_select_all"
-      clear_id = "#{field_id}_clear"
-      counter_id = "#{field_id}_counter"
-      no_results_id = "#{field_id}_no_results"
+        search =
+          tag.input(
+            type: "text",
+            id: "#{field_id}_search",
+            placeholder: "Search…",
+            autocomplete: "off",
+            aria: { label: "Search options" },
+            data: {
+              enum_select_target: "search",
+              action: "input->enum-select#filter"
+            },
+            class: "#{INPUT_CLASSES} mb-2"
+          )
 
-      search_input = tag.input(
-        type: "text",
-        id: search_id,
-        placeholder: "Search...",
-        autocomplete: "off",
-        style: "display: block; width: 100%; padding: 6px 10px 6px 30px; margin-bottom: 8px; " \
-               "border: 1px solid #d1d5db; border-radius: 6px; font-size: 13px; " \
-               "outline: none; box-sizing: border-box; " \
-               "background-image: url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' " \
-               "fill='none' viewBox='0 0 20 20'%3E%3Cpath stroke='%239ca3af' stroke-linecap='round' " \
-               "stroke-width='2' d='m13 13 4 4M8.5 3a5.5 5.5 0 1 0 0 11 5.5 5.5 0 0 0 0-11Z'/" \
-               "%3E%3C/svg%3E\"); background-repeat: no-repeat; " \
-               "background-position: 8px center; background-size: 16px 16px;"
-      )
-
-      selected_count = selected_values.length
-      counter = content_tag(:span, "#{selected_count}/#{pairs.length} selected",
-        id: counter_id,
-        style: "font-size: 12px; color: #6b7280;")
-
-      toolbar = content_tag(:div,
-        style: "display: flex; align-items: center; gap: 10px; margin-bottom: 6px; " \
-               "padding-bottom: 6px; border-bottom: 1px solid #e5e7eb;") do
-        select_all_cb = check_box_tag(select_all_id, "1", selected_count == pairs.length,
-          style: "margin-right: 4px; cursor: pointer; accent-color: #3b82f6;")
-        select_all_label = label_tag(select_all_id, "Select All",
-          style: "font-size: 13px; color: #374151; font-weight: 500; cursor: pointer;")
-
-        clear_btn = content_tag(:button, "Clear",
-          type: "button",
-          id: clear_id,
-          style: "font-size: 12px; color: #3b82f6; background: none; border: none; " \
-                 "cursor: pointer; text-decoration: underline; padding: 0;")
-
-        spacer = content_tag(:span, "", style: "flex: 1;")
-
-        select_all_cb + select_all_label + spacer + counter + clear_btn
-      end
-
-      checkboxes = safe_join(
-        pairs.map do |label, value|
-          val_str = value.to_s
-          cb_id = "#{field_id}_#{val_str.parameterize(separator: '_')}"
-          checked = selected_values.include?(val_str)
-          content_tag(:div,
-            data: { search: label.to_s.downcase },
-            style: "display: flex; align-items: center; padding: 4px 6px; " \
-                   "border-radius: 4px; transition: background-color 0.1s;") do
-            check_box_tag(cb_id, val_str, checked,
-              class: "#{field_id}_cb",
-              style: "margin-right: 8px; cursor: pointer; accent-color: #3b82f6;") +
-              label_tag(cb_id, label,
-                style: "font-size: 13px; color: #374151; cursor: pointer; user-select: none;")
-          end
-        end
-      )
-
-      no_results = content_tag(:div, "No matches found",
-        id: no_results_id,
-        style: "display: none; padding: 12px; text-align: center; " \
-               "color: #9ca3af; font-size: 13px; font-style: italic;")
-
-      choices_container = content_tag(:div, checkboxes + no_results,
-        id: "#{field_id}_list",
-        style: "max-height: 260px; overflow-y: auto; border: 1px solid #e5e7eb; " \
-               "border-radius: 6px; padding: 4px;")
-
-      js = content_tag(:script) do
-        raw(<<~JS)
-          (function() {
-            var hiddenField = document.getElementById('#{field_id}_hidden');
-            var searchInput = document.getElementById('#{search_id}');
-            var selectAll = document.getElementById('#{select_all_id}');
-            var clearBtn = document.getElementById('#{clear_id}');
-            var counter = document.getElementById('#{counter_id}');
-            var noResults = document.getElementById('#{no_results_id}');
-            var checkboxes = document.querySelectorAll('.#{field_id}_cb');
-            var rows = document.querySelectorAll('##{field_id}_list > div[data-search]');
-            var total = checkboxes.length;
-
-            function syncToHidden() {
-              var values = [];
-              checkboxes.forEach(function(cb) { if (cb.checked) values.push(cb.value); });
-              hiddenField.value = values.join(',');
-              var count = values.length;
-              counter.textContent = count + '/' + total + ' selected';
-              selectAll.checked = (count === total);
-              selectAll.indeterminate = (count > 0 && count < total);
-            }
-
-            var debounceTimer;
-            searchInput.addEventListener('input', function() {
-              clearTimeout(debounceTimer);
-              var input = this;
-              debounceTimer = setTimeout(function() {
-                var query = input.value.toLowerCase().trim();
-                var visible = 0;
-                rows.forEach(function(row) {
-                  var match = !query || row.getAttribute('data-search').indexOf(query) !== -1;
-                  row.style.display = match ? 'flex' : 'none';
-                  if (match) visible++;
-                });
-                noResults.style.display = visible === 0 ? 'block' : 'none';
-              }, 150);
-            });
-
-            selectAll.addEventListener('change', function() {
-              var checked = selectAll.checked;
-              checkboxes.forEach(function(cb) {
-                if (cb.closest('div[data-search]').style.display !== 'none') {
-                  cb.checked = checked;
+        toolbar =
+          content_tag :div,
+                      class:
+                        "mb-2 flex items-center gap-x-3 border-b border-zinc-950/5 " \
+                        "pb-2 dark:border-white/10" do
+            select_all =
+              check_box_tag(
+                "#{field_id}_select_all",
+                "1",
+                selected_values.length == pairs.length,
+                class: "size-4 accent-drip-700 dark:accent-drip-400",
+                data: {
+                  enum_select_target: "selectAll",
+                  action: "change->enum-select#toggleAll"
                 }
-              });
-              syncToHidden();
-            });
+              )
 
-            clearBtn.addEventListener('click', function() {
-              checkboxes.forEach(function(cb) { cb.checked = false; });
-              searchInput.value = '';
-              rows.forEach(function(row) { row.style.display = 'flex'; });
-              noResults.style.display = 'none';
-              syncToHidden();
-            });
+            select_all_label =
+              label_tag "#{field_id}_select_all",
+                        "Select all",
+                        class:
+                          "text-sm font-medium text-zinc-700 dark:text-zinc-300"
 
-            checkboxes.forEach(function(cb) {
-              cb.addEventListener('change', syncToHidden);
-            });
+            spacer = tag.span("", class: "flex-1")
 
-            rows.forEach(function(row) {
-              row.addEventListener('mouseenter', function() { row.style.backgroundColor = '#f3f4f6'; });
-              row.addEventListener('mouseleave', function() { row.style.backgroundColor = 'transparent'; });
-            });
+            counter =
+              content_tag :span,
+                          "#{selected_values.length}/#{pairs.length} selected",
+                          class: "text-xs text-zinc-500 tabular-nums dark:text-zinc-400",
+                          data: {
+                            enum_select_target: "counter"
+                          }
 
-            syncToHidden();
-          })();
-        JS
+            clear =
+              content_tag :button,
+                          "Clear",
+                          type: "button",
+                          class:
+                            "text-xs font-medium text-drip-700 hover:text-drip-600 " \
+                            "dark:text-drip-400 dark:hover:text-drip-300",
+                          data: {
+                            action: "enum-select#clear"
+                          }
+
+            select_all + select_all_label + spacer + counter + clear
+          end
+
+        checkboxes =
+          safe_join(
+            pairs.map do |label, value|
+              value_string = value.to_s
+              checkbox_id = "#{field_id}_#{value_string.parameterize(separator: "_")}"
+
+              content_tag :div,
+                          class:
+                            "flex items-center gap-x-2 rounded-md px-2 py-1 " \
+                            "hover:bg-zinc-950/5 dark:hover:bg-white/5",
+                          data: {
+                            enum_select_target: "row",
+                            search: label.to_s.downcase
+                          } do
+                check_box_tag(
+                  checkbox_id,
+                  value_string,
+                  selected_values.include?(value_string),
+                  class: "size-4 accent-drip-700 dark:accent-drip-400",
+                  data: {
+                    enum_select_target: "checkbox",
+                    action: "change->enum-select#sync"
+                  }
+                ) +
+                  label_tag(
+                    checkbox_id,
+                    label,
+                    class:
+                      "flex-1 cursor-pointer text-sm text-zinc-700 select-none " \
+                      "dark:text-zinc-300"
+                  )
+              end
+            end
+          )
+
+        no_results =
+          content_tag :p,
+                      "No matches found.",
+                      class: "hidden p-3 text-center text-sm text-zinc-400 dark:text-zinc-500",
+                      data: {
+                        enum_select_target: "noResults"
+                      }
+
+        list =
+          content_tag :div,
+                      checkboxes + no_results,
+                      class:
+                        "max-h-64 overflow-y-auto rounded-lg p-1 outline-1 " \
+                        "-outline-offset-1 outline-zinc-950/10 dark:outline-white/10"
+
+        hidden + search + toolbar + list
       end
-
-      hidden + search_input + toolbar + choices_container + js
     end
   end
 end

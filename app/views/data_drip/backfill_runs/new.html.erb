@@ -1,130 +1,118 @@
+<nav aria-label="Breadcrumb" class="flex items-center gap-x-2 text-sm">
+  <%= link_to "Backfill runs", backfill_runs_path, class: "text-zinc-500 hover:text-zinc-700 dark:text-zinc-400 dark:hover:text-zinc-200" %>
+  <span class="text-zinc-400 dark:text-zinc-600" aria-hidden="true">/</span>
+  <span class="text-zinc-700 dark:text-zinc-300" aria-current="page">New run</span>
+</nav>
 
-<div class="min-h-screen flex items-center justify-center m-8 bg-gradient-to-r from-slate-700 to-gray-900">
-  <div class="w-full max-w-lg">
-    <%= form_with model: @run, url: backfill_runs_path, local: true, html: { class: "bg-white p-10 md:p-14 rounded-lg", "data-turbo": "false" } do |f| %>
-      <h1 class="text-4xl md:text-5xl font-semibold text-center mb-10 text-gray-700">New Backfill Run</h1>
-      <% if @run.errors.any? %>
-        <div class="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-6">
-          <h4 class="font-bold mb-2">There were errors:</h4>
-          <ul class="list-disc list-inside">
-            <% @run.errors.full_messages.each do |msg| %>
-              <li><%= msg %></li>
+<h1 class="mt-4 text-xl font-semibold tracking-tight text-zinc-900 dark:text-white">New backfill run</h1>
+<p class="mt-1 text-sm text-pretty text-zinc-500 dark:text-zinc-400">Pick a backfill class, tune the batching, and run it now or schedule it for later.</p>
+
+<%= form_with model: @run, url: backfill_runs_path,
+    data: {
+      controller: "backfill-options",
+      backfill_options_url_value: backfill_options_backfill_runs_path
+    },
+    html: { class: "mt-8 max-w-lg" } do |f| %>
+
+  <% if @run.errors.any? %>
+    <div class="mb-6 rounded-lg bg-red-50 p-4 dark:bg-red-400/10" role="alert">
+      <h2 class="text-sm font-semibold text-red-800 dark:text-red-300">This run couldn't be created</h2>
+      <ul class="mt-2 list-inside list-disc text-sm text-red-700 dark:text-red-400">
+        <% @run.errors.full_messages.each do |message| %>
+          <li><%= message %></li>
+        <% end %>
+      </ul>
+    </div>
+  <% end %>
+
+  <div class="mb-5" data-controller="combobox" data-action="focusout->combobox#focusout">
+    <%= f.label :backfill_class_name, "Backfill class", class: DataDrip::BackfillRunsHelper::LABEL_CLASSES %>
+    <div class="relative mt-1.5">
+      <%= f.text_field :backfill_class_name,
+          placeholder: "Search backfill classes…",
+          autocomplete: "off",
+          role: "combobox",
+          aria: { expanded: false, autocomplete: "list", controls: "backfill_class_listbox" },
+          data: {
+            combobox_target: "input",
+            action: "input->combobox#filter focus->combobox#open keydown->combobox#keydown change->backfill-options#refresh"
+          },
+          class: DataDrip::BackfillRunsHelper::INPUT_CLASSES %>
+      <ul
+        id="backfill_class_listbox"
+        role="listbox"
+        hidden
+        data-combobox-target="list"
+        class="absolute inset-x-0 top-full z-10 mt-1.5 max-h-64 overflow-y-auto rounded-lg bg-white p-1 shadow-lg ring-1 ring-zinc-950/10 dark:bg-zinc-900 dark:shadow-none dark:ring-white/10"
+      >
+        <% backfill_class_names.each do |name| %>
+          <li
+            role="option"
+            data-combobox-target="option"
+            data-value="<%= name %>"
+            data-action="mousedown->combobox#select"
+            class="flex cursor-pointer items-baseline justify-between gap-x-4 rounded-md px-2.5 py-1.5"
+          >
+            <span class="font-mono text-sm text-zinc-800 dark:text-zinc-200"><%= name.demodulize %></span>
+            <% namespace = name.deconstantize %>
+            <% if namespace.present? %>
+              <span class="font-mono text-xs text-zinc-400 dark:text-zinc-500"><%= namespace %></span>
             <% end %>
-          </ul>
-        </div>
-      <% end %>
-
-      <div class="mb-6">
-        <%= f.label :backfill_class_name, "BACKFILL CLASS", class: "block text-gray-500 font-semibold mb-2" %>
-        <%= f.text_field :backfill_class_name,
-              list: "backfill_class_options",
-              placeholder: "Search backfill class…",
-              autocomplete: "off",
-              class: "block w-full mt-1 rounded border border-gray-200 focus:ring focus:ring-blue-200 focus:border-blue-400 px-3 py-2" %>
-        <datalist id="backfill_class_options">
-          <% backfill_class_names.each do |name| %>
-            <option value="<%= name %>"></option>
-          <% end %>
-        </datalist>
-      </div>
-
-      <div class="mb-6">
-        <%= f.label :batch_size, "BATCH SIZE", class: "block text-gray-500 font-semibold mb-2" %>
-        <%= f.number_field :batch_size, class: "block w-full mt-1 rounded border border-gray-200  focus:ring focus:ring-blue-200 focus:border-blue-400 px-3 py-2", min: 1 %>
-      </div>
-
-      <div class="mb-6">
-        <%= f.label :amount_of_elements, "MAXIMUM AMOUNT OF ELEMENTS", class: "block text-gray-500 font-semibold mb-2" %>
-        <%= f.number_field :amount_of_elements, class: "block w-full mt-1 rounded border border-gray-200  focus:ring focus:ring-blue-200 focus:border-blue-400 px-3 py-2", min: 0, step: 10 %>
-      </div>
-
-      <div id="backfill-options-container"></div>
-
-      <div class="mb-6">
-        <%= f.label :start_at, "RUN SHOULD START AT", class: "block text-gray-500 font-semibold mb-2" %>
-        <%= f.datetime_field :start_at, value: "", class: "block w-full mt-1 rounded border border-gray-200 focus:ring focus:ring-blue-200 focus:border-blue-400 px-3 py-2" %>
-      </div>
-      <%= hidden_field_tag :user_timezone, "", id: "user_timezone" %>
-      <div class="flex justify-center">
-        <%= f.submit "Create Backfill Run", id: "submit-btn", class: "text-white font-bold py-2 px-4 rounded gradient-btn" %>
-      </div>
-    <% end %>
+          </li>
+        <% end %>
+        <li data-combobox-target="empty" class="hidden px-2.5 py-2 text-center text-sm text-zinc-400 dark:text-zinc-500">No matching classes.</li>
+      </ul>
+    </div>
+    <p class="mt-1.5 text-sm text-zinc-500 dark:text-zinc-400">The class that defines which records are affected and the change to apply.</p>
   </div>
-</div>
-<script>
-  function handleBackfillClassChange() {
-    var selectedClass = this.value;
-    var optionsContainer = document.getElementById("backfill-options-container");
 
-    if (!optionsContainer) return;
+  <div class="mb-5">
+    <%= f.label :batch_size, "Batch size", class: DataDrip::BackfillRunsHelper::LABEL_CLASSES %>
+    <%= f.number_field :batch_size, min: 1, class: "#{DataDrip::BackfillRunsHelper::INPUT_CLASSES} mt-1.5 max-w-40" %>
+    <p class="mt-1.5 text-sm text-pretty text-zinc-500 dark:text-zinc-400">Records processed per job. Larger batches finish sooner but hold locks for longer.</p>
+  </div>
 
-    optionsContainer.innerHTML = "";
+  <div class="mb-5">
+    <%= f.label :amount_of_elements, class: DataDrip::BackfillRunsHelper::LABEL_CLASSES do %>
+      Maximum records <span class="font-normal text-zinc-400 dark:text-zinc-500">· optional</span>
+    <% end %>
+    <%= f.number_field :amount_of_elements, min: 0, placeholder: "No limit", class: "#{DataDrip::BackfillRunsHelper::INPUT_CLASSES} mt-1.5 max-w-40" %>
+    <p class="mt-1.5 text-sm text-pretty text-zinc-500 dark:text-zinc-400">Stop after this many records — useful for a trial run on production data.</p>
+  </div>
 
-    if (selectedClass && selectedClass !== "Select a backfill class") {
-      fetch("<%= backfill_options_backfill_runs_path %>?backfill_class_name=" + encodeURIComponent(selectedClass), {
-        method: "GET",
-        headers: {
-          "Accept": "application/json",
-          "X-Requested-With": "XMLHttpRequest",
-          "X-CSRF-Token": document.querySelector('meta[name="csrf-token"]')?.getAttribute('content')
-        }
-      })
-      .then(function (response) {
-        if (!response.ok) throw new Error("Network response was not ok: " + response.status);
-        return response.json();
-      })
-      .then(function (data) {
-        if (data.html) {
-          optionsContainer.innerHTML = data.html;
-          optionsContainer.querySelectorAll("script").forEach(function (oldScript) {
-            var newScript = document.createElement("script");
-            newScript.textContent = oldScript.textContent;
-            oldScript.parentNode.replaceChild(newScript, oldScript);
-          });
-        }
-      })
-      .catch(function (error) {
-        console.error("Error fetching backfill options:", error);
-      });
-    }
-  }
+  <div data-backfill-options-target="container">
+    <%= backfill_option_inputs(@run) if @run.backfill_class_name.present? %>
+  </div>
 
-  function initializeBackfillForm() {
-    var timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
-    var timeZoneInput = document.getElementById("user_timezone");
-    if (timeZoneInput) {
-      timeZoneInput.value = timeZone;
-    }
+  <% scheduled_later = @run.start_at.present? && @run.start_at > 1.minute.from_now %>
+  <fieldset class="mb-5" data-controller="schedule">
+    <legend class="<%= DataDrip::BackfillRunsHelper::LABEL_CLASSES %>">Schedule</legend>
+    <div class="mt-2 flex h-lh items-center gap-x-2 text-sm">
+      <%= radio_button_tag :schedule_mode, "now", !scheduled_later,
+          class: "size-4 accent-drip-700 dark:accent-drip-400",
+          data: { action: "change->schedule#toggle" } %>
+      <%= label_tag :schedule_mode_now, "Run immediately", class: "text-zinc-700 dark:text-zinc-300" %>
+    </div>
+    <div class="mt-2 flex flex-wrap items-center gap-x-2 gap-y-2 text-sm">
+      <%= radio_button_tag :schedule_mode, "later", scheduled_later,
+          class: "size-4 accent-drip-700 dark:accent-drip-400",
+          data: { action: "change->schedule#toggle" } %>
+      <%= label_tag :schedule_mode_later, "Schedule for later", class: "text-zinc-700 dark:text-zinc-300" %>
+      <%= f.datetime_field :start_at,
+          disabled: !scheduled_later,
+          aria: { label: "Start date and time" },
+          data: { schedule_target: "field" },
+          class: "#{DataDrip::BackfillRunsHelper::INPUT_CLASSES} max-w-60 disabled:opacity-50" %>
+      <span class="text-xs text-zinc-400 dark:text-zinc-500" data-timezone-target="label"></span>
+    </div>
+  </fieldset>
 
-    var classInput = document.getElementById("backfill_run_backfill_class_name");
-    var optionsContainer = document.getElementById("backfill-options-container");
+  <%= hidden_field_tag :user_timezone, "", data: { timezone_target: "field" } %>
 
-    if (classInput && optionsContainer) {
-      classInput.removeEventListener("change", handleBackfillClassChange);
-      classInput.addEventListener("change", handleBackfillClassChange);
-    } else {
-      setTimeout(initializeBackfillForm, 100);
-    }
-  }
-
-  if (document.readyState === "loading") {
-    document.addEventListener("DOMContentLoaded", initializeBackfillForm);
-  } else {
-    initializeBackfillForm();
-  }
-
-  document.addEventListener("DOMContentLoaded", function () {
-    var form = document.querySelector('form[action*="backfill_runs"]');
-    var submitBtn = document.getElementById("submit-btn");
-
-    if (form && submitBtn) {
-      form.addEventListener("submit", function () {
-        submitBtn.disabled = true;
-        submitBtn.textContent = "Creating...";
-        submitBtn.classList.add("opacity-50", "cursor-not-allowed");
-      });
-    }
-  });
-</script>
-
-
+  <div class="mt-8 flex items-center gap-x-3">
+    <%= f.submit "Create backfill run",
+        class: "#{primary_button_classes} cursor-pointer",
+        data: { turbo_submits_with: "Creating…" } %>
+    <%= link_to "Cancel", backfill_runs_path, class: ghost_button_classes %>
+  </div>
+<% end %>

@@ -45,7 +45,8 @@ RSpec.describe DataDrip::BackfillRunsController, type: :controller do
         post :create, params: { backfill_run: invalid_attributes }
       end.not_to change(DataDrip::BackfillRun, :count)
 
-      expect(response.body).to include("Error")
+      expect(response).to have_http_status(422)
+      expect(response.body).to include("This run couldn")
     end
 
     it "renders new template when backfill class name is invalid" do
@@ -56,7 +57,8 @@ RSpec.describe DataDrip::BackfillRunsController, type: :controller do
         post :create, params: { backfill_run: invalid_class_attributes }
       end.not_to change(DataDrip::BackfillRun, :count)
 
-      expect(response.body).to include("Error")
+      expect(response).to have_http_status(422)
+      expect(response.body).to include("This run couldn")
     end
 
     context "with timezone conversion" do
@@ -64,7 +66,7 @@ RSpec.describe DataDrip::BackfillRunsController, type: :controller do
         {
           backfill_class_name: "AddRoleToEmployee",
           batch_size: 100,
-          start_at: "2024-01-15T10:30:00",
+          start_at: "2030-01-15T10:30:00",
           user_timezone: "America/New_York"
         }
       end
@@ -77,7 +79,7 @@ RSpec.describe DataDrip::BackfillRunsController, type: :controller do
              }
         expect(response).to redirect_to(backfill_runs_path(tab: "my_runs"))
         expect(flash[:notice]).to include(
-          "Will run at 15-01-2024, 10:30:00 EST"
+          "Will run at 15-01-2030, 10:30:00 EST"
         )
       end
 
@@ -89,6 +91,83 @@ RSpec.describe DataDrip::BackfillRunsController, type: :controller do
              }
         expect(response).to redirect_to(backfill_runs_path(tab: "my_runs"))
         expect(flash[:notice]).to include("Will run at")
+      end
+    end
+  end
+
+  describe "POST #create without start_at" do
+    it "defaults to running immediately" do
+      expect do
+        post :create,
+             params: {
+               backfill_run: {
+                 backfill_class_name: "AddRoleToEmployee",
+                 batch_size: 100,
+                 start_at: ""
+               }
+             }
+      end.to change(DataDrip::BackfillRun, :count).by(1)
+
+      backfill_run = DataDrip::BackfillRun.last!
+      expect(backfill_run.start_at).to be_within(1.minute).of(Time.current)
+      expect(flash[:notice]).to include("will start shortly")
+    end
+  end
+
+  describe "POST #retry_failed_batches" do
+    let!(:backfill_run) do
+      DataDrip::BackfillRun.create!(
+        backfill_class_name: "AddRoleToEmployee",
+        batch_size: 100,
+        start_at: 1.hour.from_now,
+        backfiller: backfiller
+      )
+    end
+
+    context "with failed batches" do
+      let!(:failed_batch) do
+        DataDrip::BackfillRunBatch.create!(
+          backfill_run: backfill_run,
+          status: :failed,
+          error_message: "boom",
+          batch_size: 100,
+          start_id: 1,
+          finish_id: 100
+        )
+      end
+
+      let!(:completed_batch) do
+        DataDrip::BackfillRunBatch.create!(
+          backfill_run: backfill_run,
+          status: :completed,
+          batch_size: 100,
+          start_id: 101,
+          finish_id: 200
+        )
+      end
+
+      before { backfill_run.update!(status: "stopped") }
+
+      it "re-enqueues only the failed batches and resumes the run" do
+        expect do
+          post :retry_failed_batches, params: { id: backfill_run.id }
+        end.to have_enqueued_job(DataDrip::DripperChild).exactly(:once)
+
+        expect(failed_batch.reload.status).to eq("enqueued")
+        expect(failed_batch.error_message).to be_nil
+        expect(completed_batch.reload.status).to eq("completed")
+        expect(backfill_run.reload.status).to eq("running")
+        expect(response).to redirect_to(backfill_run_path(backfill_run))
+        expect(flash[:notice]).to eq("Re-enqueued 1 failed batch.")
+      end
+    end
+
+    context "without failed batches" do
+      it "redirects with an alert" do
+        post :retry_failed_batches, params: { id: backfill_run.id }
+
+        expect(response).to redirect_to(backfill_run_path(backfill_run))
+        expect(flash[:alert]).to eq("This run has no failed batches to retry.")
       end
     end
   end
@@ -175,12 +254,10 @@ RSpec.describe DataDrip::BackfillRunsController, type: :controller do
 
   describe "#backfill_class_names" do
     it "returns sorted and unique backfill class names" do
-      expect(controller.send(:backfill_class_names)).to include(
-        "Select a backfill class"
-      )
-      expect(controller.send(:backfill_class_names)).to include(
-        "AddRoleToEmployee"
-      )
+      names = controller.send(:backfill_class_names)
+
+      expect(names).to include("AddRoleToEmployee")
+      expect(names).to eq(names.uniq.sort)
     end
   end
 
@@ -231,7 +308,7 @@ RSpec.describe DataDrip::BackfillRunsController, type: :controller do
           post :create, params: { backfill_run: attributes }
         end.not_to change(DataDrip::BackfillRun, :count)
 
-        expect(response).to have_http_status(:ok)
+        expect(response).to have_http_status(422)
       end
     end
 

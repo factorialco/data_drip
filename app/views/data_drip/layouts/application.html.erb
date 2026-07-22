@@ -1,21 +1,28 @@
 <!DOCTYPE html>
-<html>
+<html class="h-full antialiased">
 <head>
   <title>DataDrip</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
   <%= csrf_meta_tags %>
   <%= csp_meta_tag %>
-  <%= stylesheet_link_tag 'data_drip/tailwind', media: :all, data: { turbo_track: :reload }  %>
-  <%= javascript_importmap_tags "application", importmap: DataDrip.importmap  %>
+  <%= stylesheet_link_tag 'data_drip/tailwind', media: :all, data: { turbo_track: :reload } %>
+  <%= javascript_importmap_tags "application", importmap: DataDrip.importmap %>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:ital,opsz,wght@0,14..32,100..900;1,14..32,100..900&display=swap" rel="stylesheet">
 </head>
-<body>
-  <% flash.each do |key, value| %>
-		<div class="p-2 rounded <%= key == 'notice' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800' %>">
-			<%= value %>
-		</div>
-	<% end %>
-  <%= yield %>
+<body
+  class="min-h-dvh bg-white text-zinc-800 dark:bg-zinc-950 dark:text-zinc-300"
+  data-controller="timezone"
+  data-timezone-url-value="<%= set_timezone_backfill_runs_path %>"
+  data-timezone-current-value="<%= session[:user_timezone] %>"
+>
+  <div class="isolate">
+    <%= render "data_drip/shared/header" %>
+    <main class="mx-auto w-full max-w-6xl px-4 py-8 sm:px-6 lg:px-8">
+      <%= render "data_drip/shared/flash" %>
+      <%= yield %>
+    </main>
+  </div>
 </body>
 </html>

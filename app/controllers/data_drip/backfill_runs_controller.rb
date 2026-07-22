@@ -12,14 +12,32 @@ module DataDrip
 
     def index
       @current_tab = params[:tab] || "my_runs"
+      @query = params[:q].to_s.strip
+      @status_filter =
+        params[:status].presence_in(DataDrip::BackfillRun.statuses.keys)
 
-      base_scope =
-        case @current_tab
-        when "my_runs"
-          DataDrip::BackfillRun.where(backfiller: find_current_backfiller)
-        else
-          DataDrip::BackfillRun.all
-        end
+      runs = DataDrip::BackfillRun.all
+      my_runs = runs.where(backfiller: find_current_backfiller)
+
+      @my_runs_count = my_runs.count
+      @all_runs_count = runs.count
+
+      @stats = {
+        running: runs.running.count,
+        enqueued: runs.enqueued.count,
+        failed_recently: runs.failed.where(updated_at: 7.days.ago..).count,
+        completed_recently: runs.completed.where(updated_at: 7.days.ago..).count
+      }
+
+      base_scope = @current_tab == "my_runs" ? my_runs : runs
+      if @query.present?
+        base_scope =
+          base_scope.where(
+            "backfill_class_name LIKE ?",
+            "%#{DataDrip::BackfillRun.sanitize_sql_like(@query)}%"
+          )
+      end
+      base_scope = base_scope.where(status: @status_filter) if @status_filter
 
       pagination_data =
         paginate_collection(base_scope.order(created_at: :desc), per_page: 10)
@@ -42,6 +60,9 @@ module DataDrip
             params[:backfill_run][:start_at] = local_time.utc if local_time
           end
         end
+      else
+        # "Run immediately" — the schedule field is disabled and not submitted.
+        params[:backfill_run][:start_at] = Time.current
       end
 
       @run =
@@ -50,21 +71,29 @@ module DataDrip
         )
 
       if @run.save
-        local_time = @run.start_at.in_time_zone(@user_timezone)
-        redirect_to backfill_runs_path(tab: "my_runs"),
-                    notice:
-                      "Backfill job for #{@run.backfill_class_name} has been enqueued. Will run at #{local_time.strftime("%d-%m-%Y, %H:%M:%S %Z")}."
+        notice =
+          if @run.start_at <= 1.minute.from_now
+            "Backfill job for #{@run.backfill_class_name} has been enqueued and will start shortly."
+          else
+            local_time = @run.start_at.in_time_zone(@user_timezone)
+            "Backfill job for #{@run.backfill_class_name} has been enqueued. Will run at #{local_time.strftime("%d-%m-%Y, %H:%M:%S %Z")}."
+          end
+
+        redirect_to backfill_runs_path(tab: "my_runs"), notice: notice
       else
-        render :new
+        render :new, status: :unprocessable_entity
       end
     end
 
     def show
       @backfill_run = DataDrip::BackfillRun.find(params[:id])
 
+      batch_scope = @backfill_run.batches
+      batch_scope = batch_scope.failed if params[:batch_status] == "failed"
+
       batch_pagination_data =
         paginate_collection(
-          @backfill_run.batches.order(created_at: :desc),
+          batch_scope.order(created_at: :desc),
           per_page: 20,
           page_param: :batch_page
         )
@@ -98,53 +127,64 @@ module DataDrip
       redirect_to backfill_run_path(@backfill_run)
     end
 
+    def retry_failed_batches
+      @backfill_run = DataDrip::BackfillRun.find(params[:id])
+      failed_batches = @backfill_run.batches.failed
+
+      if failed_batches.none?
+        flash[:alert] = "This run has no failed batches to retry."
+      else
+        count = 0
+        failed_batches.find_each do |batch|
+          batch.update!(status: :pending, error_message: nil)
+          batch.enqueue
+          count += 1
+        end
+        @backfill_run.running! unless @backfill_run.running?
+        flash[
+          :notice
+        ] = "Re-enqueued #{count} failed #{count == 1 ? "batch" : "batches"}."
+      end
+
+      redirect_to backfill_run_path(@backfill_run)
+    end
+
     def updates
       @backfill_run = DataDrip::BackfillRun.find(params[:id])
 
+      batches =
+        @backfill_run.batches.order(created_at: :desc).limit(20)
+
       render json: {
                status: @backfill_run.status,
-               status_html:
+               terminal: @backfill_run.terminal?,
+               status_html: helpers.status_tag(@backfill_run.status),
+               progress_html:
                  render_to_string(
-                   partial: "status_tag",
-                   locals: {
-                     status: @backfill_run.status
-                   },
-                   formats: [ :html ]
-                 ),
-               processed_count: @backfill_run.processed_count,
-               total_count: @backfill_run.total_count,
-               batches_html:
-                 render_to_string(
-                   partial: "batches_table",
+                   partial: "progress",
                    locals: {
                      backfill_run: @backfill_run
                    },
                    formats: [ :html ]
+                 ),
+               batches_meta_html:
+                 render_to_string(
+                   partial: "batches_meta",
+                   locals: {
+                     backfill_run: @backfill_run,
+                     batch_status: nil
+                   },
+                   formats: [ :html ]
+                 ),
+               batches_html:
+                 render_to_string(
+                   partial: "batches_table",
+                   locals: {
+                     batches: batches
+                   },
+                   formats: [ :html ]
                  )
              }
-    end
-
-    def stream
-      @backfill_run = DataDrip::BackfillRun.find(params[:id])
-
-      response.headers["Content-Type"] = "text/event-stream"
-      response.headers["Cache-Control"] = "no-cache"
-      response.headers["Connection"] = "keep-alive"
-      response.headers["X-Accel-Buffering"] = "no"
-
-      send_initial_data
-      monitor_backfill_run
-    rescue IOError, ActionController::Live::ClientDisconnected
-      Rails.logger.info "SSE client disconnected for backfill run #{@backfill_run&.id}"
-    rescue StandardError => e
-      Rails.logger.error "SSE error for backfill run #{@backfill_run&.id}: #{e.message}"
-      Rails.logger.error e.backtrace.join("\n")
-    ensure
-      begin
-        response.stream.close if response.stream.respond_to?(:close)
-      rescue StandardError => e
-        Rails.logger.error "Error closing SSE stream: #{e.message}"
-      end
     end
 
     def set_timezone
@@ -158,8 +198,7 @@ module DataDrip
     def backfill_options
       backfill_class_name = params[:backfill_class_name]
 
-      if backfill_class_name.blank? ||
-           backfill_class_name == "Select a backfill class"
+      if backfill_class_name.blank?
         render json: { html: "" }
         return
       end
@@ -197,104 +236,6 @@ module DataDrip
 
     private
 
-    def send_initial_data
-      data = {
-        status: @backfill_run.status,
-        status_html:
-          render_to_string(
-            partial: "status_tag",
-            locals: {
-              status: @backfill_run.status
-            },
-            formats: [ :html ]
-          ),
-        processed_count: @backfill_run.processed_count,
-        total_count: @backfill_run.total_count,
-        batches_html:
-          render_to_string(
-            partial: "batches_table",
-            locals: {
-              backfill_run: @backfill_run
-            },
-            formats: [ :html ]
-          )
-      }
-
-      response.stream.write("data: #{data.to_json}\n\n")
-    rescue StandardError => e
-      Rails.logger.error "Error sending initial SSE data: #{e.message}"
-      response.stream.write(
-        "data: {\"error\": \"Failed to send initial data\"}\n\n"
-      )
-    end
-
-    def monitor_backfill_run
-      last_processed_count = @backfill_run.processed_count
-      last_status = @backfill_run.status
-      timeout = 5.minutes.from_now
-
-      loop do
-        break if Time.current > timeout
-
-        # More aggressive client connection check
-        begin
-          # Try to write data - this will fail if client disconnected
-          response.stream.write("event: ping\ndata: {}\n\n")
-          response.stream.flush if response.stream.respond_to?(:flush)
-        rescue IOError,
-               ActionController::Live::ClientDisconnected,
-               Errno::EPIPE,
-               Errno::ECONNRESET
-          Rails.logger.info "SSE client disconnected during monitoring for backfill run #{@backfill_run.id}"
-          break
-        rescue StandardError => e
-          Rails.logger.error "SSE connection error: #{e.class} - #{e.message}"
-          break
-        end
-
-        begin
-          @backfill_run.reload
-
-          if @backfill_run.processed_count != last_processed_count ||
-               @backfill_run.status != last_status
-            data = {
-              status: @backfill_run.status,
-              status_html:
-                render_to_string(
-                  partial: "status_tag",
-                  locals: {
-                    status: @backfill_run.status
-                  },
-                  formats: [ :html ]
-                ),
-              processed_count: @backfill_run.processed_count,
-              total_count: @backfill_run.total_count,
-              batches_html:
-                render_to_string(
-                  partial: "batches_table",
-                  locals: {
-                    backfill_run: @backfill_run
-                  },
-                  formats: [ :html ]
-                )
-            }
-
-            response.stream.write("data: #{data.to_json}\n\n")
-            last_processed_count = @backfill_run.processed_count
-            last_status = @backfill_run.status
-
-            break if %w[completed failed stopped].include?(@backfill_run.status)
-          end
-
-          sleep 2
-        rescue StandardError => e
-          Rails.logger.error "Error in SSE monitoring loop: #{e.message}"
-          response.stream.write("data: {\"error\": \"Monitoring error\"}\n\n")
-          break
-        end
-      end
-    end
-
     def set_user_timezone
       @user_timezone =
         params[:user_timezone].presence || session[:user_timezone] || "UTC"
@@ -314,11 +255,7 @@ module DataDrip
     end
 
     def backfill_class_names
-      @backfill_class_names = DataDrip.all.map(&:name)
-      @backfill_class_names.sort!
-      @backfill_class_names.unshift("Select a backfill class")
-      @backfill_class_names.uniq!
-      @backfill_class_names
+      @backfill_class_names ||= DataDrip.all.map(&:name).uniq.sort
     end
   end
 end

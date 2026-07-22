@@ -1,0 +1,43 @@
+<% run = backfill_run %>
+<div class="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+  <p class="text-3xl font-semibold tracking-tight text-zinc-900 tabular-nums dark:text-white">
+    <%= run.total_count ? "#{run.progress_percent}%" : "—" %>
+  </p>
+  <p class="text-sm text-zinc-500 tabular-nums dark:text-zinc-400">
+    <% if run.total_count %>
+      <%= number_with_delimiter(run.processed_count) %> of <%= number_with_delimiter(run.total_count) %> records
+    <% elsif run.enqueued? || run.pending? %>
+      scheduled to start <%= relative_time(run.start_at, @user_timezone) %>
+    <% else %>
+      waiting for batches to be created
+    <% end %>
+  </p>
+</div>
+
+<%= progress_bar(run.progress_percent, status: run.status, classes: "mt-3 h-2") %>
+
+<dl class="mt-4 flex flex-wrap gap-x-8 gap-y-2">
+  <div>
+    <dt class="text-xs text-zinc-500 dark:text-zinc-400">Throughput</dt>
+    <dd class="mt-0.5 text-sm font-medium text-zinc-900 tabular-nums dark:text-white">
+      <%= run.throughput_per_minute ? "~#{number_with_delimiter(run.throughput_per_minute.round)} / min" : "—" %>
+    </dd>
+  </div>
+  <% if run.running? %>
+    <div>
+      <dt class="text-xs text-zinc-500 dark:text-zinc-400">Estimated remaining</dt>
+      <dd class="mt-0.5 text-sm font-medium text-zinc-900 tabular-nums dark:text-white"><%= run.eta_seconds ? "~#{format_duration(run.eta_seconds)}" : "—" %></dd>
+    </div>
+  <% end %>
+  <div>
+    <dt class="text-xs text-zinc-500 dark:text-zinc-400">Elapsed</dt>
+    <dd class="mt-0.5 text-sm font-medium text-zinc-900 tabular-nums dark:text-white"><%= format_duration(run.elapsed_seconds) %></dd>
+  </div>
+</dl>
+
+<% if run.error_message.present? %>
+  <div class="mt-4 overflow-x-auto rounded-lg bg-red-50 p-3 dark:bg-red-400/10">
+    <p class="mb-1 text-xs font-semibold text-red-800 dark:text-red-300">This run failed while preparing its batches</p>
+    <pre class="font-mono text-xs leading-5 whitespace-pre-wrap text-red-800 dark:text-red-300"><%= run.error_message %></pre>
+  </div>
+<% end %>

@@ -36,6 +36,53 @@ module DataDrip
         backfiller.send(DataDrip.backfiller_name_attribute.to_sym)
     end
 
+    def terminal?
+      completed? || failed? || stopped?
+    end
+
+    def progress_percent
+      return 100 if completed?
+      return 0 if total_count.to_i.zero?
+
+      [ (processed_count.to_f / total_count) * 100, 100 ].min.floor
+    end
+
+    # When the first batch was created, i.e. when processing actually began
+    # (start_at is only when the run was scheduled to be picked up).
+    def processing_started_at
+      @processing_started_at ||= batches.minimum(:created_at)
+    end
+
+    def last_activity_at
+      @last_activity_at ||= batches.maximum(:updated_at)
+    end
+
+    def elapsed_seconds
+      return nil unless processing_started_at
+
+      reference = terminal? ? (last_activity_at || updated_at) : Time.current
+      (reference - processing_started_at).to_f
+    end
+
+    def throughput_per_minute
+      elapsed = elapsed_seconds
+      return nil if elapsed.nil? || elapsed < 1 || processed_count.to_i.zero?
+
+      processed_count * 60.0 / elapsed
+    end
+
+    def eta_seconds
+      return nil unless running? && total_count.to_i.positive?
+
+      rate = throughput_per_minute
+      return nil unless rate
+
+      remaining = total_count - processed_count
+      return nil if remaining.negative?
+
+      remaining * 60.0 / rate
+    end
+
     def backfill_class
       @backfill_class ||=
         DataDrip.all.find { |klass| klass.name == backfill_class_name }

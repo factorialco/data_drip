@@ -16,6 +16,27 @@ jobs:
       - name: Run rubocop
         run: |
           bundle exec rubocop --parallel
+  compiled_css:
+    name: Compiled CSS up to date
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v2
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - name: Install Tailwind toolchain
+        run: npm ci
+      - name: Recompile CSS
+        run: npm run build:css
+      - name: Verify tailwind.css is committed
+        run: |
+          git diff --exit-code app/assets/stylesheets/data_drip/tailwind.css || {
+            echo "tailwind.css is out of date. Run 'bundle exec rake data_drip:css' and commit the result."
+            exit 1
+          }
   tests:
     name: Tests
     runs-on: ubuntu-latest

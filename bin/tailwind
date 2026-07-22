@@ -1,4 +1,10 @@
 #!/usr/bin/env bash
+set -e
 
-# Run Tailwind CLI to build CSS for the DataDrip engine
-npx @tailwindcss/cli -i ./app/assets/stylesheets/data_drip/application.tailwind.css -o ./app/assets/stylesheets/data_drip/tailwind.css --watch "$@"
+# Compile the DataDrip engine's Tailwind CSS in watch mode (development).
+# For a one-shot build use `bundle exec rake data_drip:css`.
+cd "$(dirname "$0")/.."
+
+[ -d node_modules ] || npm install --no-audit --no-fund
+
+npm run watch:css

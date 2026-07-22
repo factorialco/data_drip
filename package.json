@@ -1,0 +1,13 @@
+{
+  "name": "data_drip-assets",
+  "private": true,
+  "description": "Development-only toolchain to compile the engine's Tailwind CSS. Consumer apps never need this — the compiled tailwind.css is checked in and ships inside the gem.",
+  "scripts": {
+    "build:css": "tailwindcss -i ./app/assets/stylesheets/data_drip/application.tailwind.css -o ./app/assets/stylesheets/data_drip/tailwind.css",
+    "watch:css": "tailwindcss -i ./app/assets/stylesheets/data_drip/application.tailwind.css -o ./app/assets/stylesheets/data_drip/tailwind.css --watch"
+  },
+  "devDependencies": {
+    "@tailwindcss/cli": "4.1.10",
+    "tailwindcss": "4.1.10"
+  }
+}

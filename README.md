@@ -365,12 +365,32 @@ Navigate to `/data_drip/backfill_runs` in your application to access the DataDri
 
 - View all available backfills
 - Create new backfill runs with configurable options
-- Monitor progress and status
-- View error messages and logs
+- Monitor progress live (progress bars, throughput, estimated time remaining)
+- Filter runs by class name and status
+- Inspect per-batch errors and retry failed batches
 - Stop running backfills
 - Schedule backfills for future execution
 
 When creating a new backfill run, the interface dynamically generates form fields based on the attributes defined in your backfill class, making it easy to customize each run without code changes.
+
+The interface supports light and dark mode (following the OS preference) and ships as precompiled CSS inside the gem — host applications need no Node, Tailwind, or any other frontend tooling.
+
+## Development
+
+The UI is styled with Tailwind CSS v4, compiled at development time and checked in as `app/assets/stylesheets/data_drip/tailwind.css`:
+
+```bash
+bin/tailwind                     # watch mode while working on views
+bundle exec rake data_drip:css   # one-shot build
+```
+
+Both commands install the pinned toolchain from `package.json` on first use (Node is only needed to develop the gem itself). CI fails if the compiled CSS is out of date with the views.
+
+To play with the UI locally, boot the dummy app and visit `http://localhost:3000/data_drip/backfill_runs`:
+
+```bash
+bin/dev
+```
 
 ## Contributing
 

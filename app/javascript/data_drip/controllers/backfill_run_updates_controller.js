@@ -1,74 +1,60 @@
 import { Controller } from "@hotwired/stimulus"
 
+// Polls the run's `updates` endpoint while it is active and swaps in the
+// server-rendered fragments (status badge, progress hero, batches table).
 export default class extends Controller {
-  static targets = ["status", "processedCount", "totalCount", "batchesTable"]
+  static targets = ["status", "progress", "batchesTable", "batchesMeta"]
   static values = {
-    backfillRunId: Number
+    url: String,
+    status: String,
+    interval: { type: Number, default: 3000 }
   }
 
   connect() {
-    // Temporarily disabled SSE to fix connection issues
-    // this.startSSE()
+    // When the user paginated or filtered the batches table, leave it alone —
+    // the updates payload always contains the first, unfiltered page.
+    const params = new URLSearchParams(window.location.search)
+    this.skipBatches = Boolean(params.get("batch_page") || params.get("batch_status"))
+
+    if (this.#active()) this.#schedule()
   }
 
   disconnect() {
-    this.stopSSE()
+    clearTimeout(this.timer)
   }
 
-  startSSE() {
+  #active() {
+    return ["pending", "enqueued", "running"].includes(this.statusValue)
+  }
+
+  #schedule() {
+    this.timer = setTimeout(() => this.#poll(), this.intervalValue)
+  }
+
+  async #poll() {
     try {
-      this.eventSource = new EventSource(`/data_drip/backfill_runs/${this.backfillRunIdValue}/stream`)
-
-      this.eventSource.onmessage = (event) => {
-        try {
-          const data = JSON.parse(event.data)
-
-          if (data.error) {
-            console.error("SSE error:", data.error)
-            return
-          }
-
-          this.updateUI(data)
-
-          if (data.status === 'completed' || data.status === 'failed' || data.status === 'stopped') {
-            console.log(`Backfill ${data.status}, stopping SSE`)
-            this.stopSSE()
-          }
-        } catch (error) {
-          console.error("Error parsing SSE data:", error)
-        }
+      const response = await fetch(this.urlValue, { headers: { Accept: "application/json" } })
+      if (!response.ok) {
+        this.#schedule()
+        return
       }
 
-      this.eventSource.onerror = (error) => {
-        console.error("SSE connection error:", error)
-      }
-    } catch (error) {
-      console.error("Error starting SSE:", error)
+      const data = await response.json()
+      this.#render(data)
+      this.statusValue = data.status
+      if (!data.terminal) this.#schedule()
+    } catch {
+      this.#schedule()
     }
   }
 
-  stopSSE() {
-    if (this.eventSource) {
-      this.eventSource.close()
-      this.eventSource = null
-    }
-  }
+  #render(data) {
+    if (this.hasStatusTarget) this.statusTarget.innerHTML = data.status_html
+    if (this.hasProgressTarget) this.progressTarget.innerHTML = data.progress_html
 
-  updateUI(data) {
-    if (this.hasStatusTarget) {
-      this.statusTarget.innerHTML = data.status_html
-    }
+    if (this.skipBatches) return
 
-    if (this.hasProcessedCountTarget) {
-      this.processedCountTarget.textContent = data.processed_count
-    }
-
-    if (this.hasTotalCountTarget) {
-      this.totalCountTarget.textContent = data.total_count
-    }
-
-    if (this.hasBatchesTableTarget) {
-      this.batchesTableTarget.innerHTML = data.batches_html
-    }
+    if (this.hasBatchesMetaTarget) this.batchesMetaTarget.innerHTML = data.batches_meta_html
+    if (this.hasBatchesTableTarget) this.batchesTableTarget.innerHTML = data.batches_html
   }
 }

@@ -1,144 +1,110 @@
-<div class="min-h-screen flex bg-white" 
-     data-controller="backfill-run-updates"
-     data-backfill-run-updates-backfill-run-id-value="<%= @backfill_run.id %>">
-  <div
-    class="
-      hidden md:flex flex-col m-2 justify-between w-72 bg-gradient-to-b from-slate-700
-      to-gray-900 fixed inset-y-0 left-0
-    "
-  >
-    <div class="p-6 flex justify-center items-center">
-      <%= link_to backfill_runs_path, class: "block" do %>
-        <span
-          class="
-            text-4xl font-bold tracking-widest bg-clip-text text-transparent
-          "
-          style="background: linear-gradient(135deg, #f72585 10%, #b5179e 50%, #7209b7 90%); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; text-fill-color: transparent;"
-        >DATADRIP
-        </span>
+<div
+  data-controller="backfill-run-updates"
+  data-backfill-run-updates-url-value="<%= updates_backfill_run_path(@backfill_run) %>"
+  data-backfill-run-updates-status-value="<%= @backfill_run.status %>"
+>
+  <nav aria-label="Breadcrumb" class="flex items-center gap-x-2 text-sm">
+    <%= link_to "Backfill runs", backfill_runs_path, class: "text-zinc-500 hover:text-zinc-700 dark:text-zinc-400 dark:hover:text-zinc-200" %>
+    <span class="text-zinc-400 dark:text-zinc-600" aria-hidden="true">/</span>
+    <span class="text-zinc-700 dark:text-zinc-300" aria-current="page">Run #<%= @backfill_run.id %></span>
+  </nav>
+
+  <div class="mt-4 flex flex-wrap items-center gap-3">
+    <h1 class="text-xl font-semibold tracking-tight text-zinc-900 dark:text-white"><%= @backfill_run.backfill_class_name %></h1>
+    <span data-backfill-run-updates-target="status"><%= status_tag(@backfill_run.status) %></span>
+
+    <div class="flex flex-1 justify-end gap-x-2">
+      <% if @backfill_run.running? %>
+        <%= button_to "Stop run",
+            stop_backfill_run_path(@backfill_run),
+            method: :post,
+            form: { data: { turbo_confirm: "Stop this backfill run? Batches that are already running will finish." } },
+            class: danger_button_classes %>
+      <% elsif @backfill_run.enqueued? %>
+        <%= button_to "Delete run",
+            backfill_run_path(@backfill_run),
+            method: :delete,
+            form: { data: { turbo_confirm: "Delete this backfill run?" } },
+            class: danger_button_classes %>
       <% end %>
     </div>
   </div>
+  <p class="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
+    Started by <%= @backfill_run.backfiller_name %>
+    · created <%= relative_time(@backfill_run.created_at, @user_timezone) %>
+  </p>
 
-  <div class="flex-1 flex flex-col items-center justify-start py-10">
-    <div class="w-full max-w-5xl mb-8">
-      <div
-        class="
-          bg-gradient-to-r from-slate-700 to-gray-900 rounded-lg p-6 shadow text-white
-        "
-      >
-        <div class="flex flex-row gap-4 mb-4">
-          <div class="flex-1">
-            <h1 class="text-2xl text-left"><%= @backfill_run.backfill_class_name %></h1>
-            <p>by
-              <%= @backfill_run.backfiller_name %></p>
-          </div>
-          <div class="flex-1 flex justify-end items-center">
-            <% if @backfill_run.running? %>
-              <%= button_to "STOP",
-              stop_backfill_run_path(@backfill_run),
-              method: :post,
-              data: {
-                confirm: "Are you sure you want to stop this backfill run?",
-                disable_with: "stopping",
-              },
-              class: "px-4 py-2 text-white rounded font-bold shadow",
-              style: "background-color: #ef4444; border: 1px solid #f97316;" %>
-            <% elsif @backfill_run.enqueued? %>
-              <%= button_to "DELETE",
-              backfill_run_path(@backfill_run),
-              method: :delete,
-              data: {
-                confirm: "Are you sure you want to delete?",
-                disable_with: "deleting",
-              },
-              class: "px-4 py-2 text-white rounded font-bold shadow",
-              style: "background-color: #ef4444; border: 1px solid #dc2626;" %>
-            <% end %>
-          </div>
-        </div>
-        <div class="flex flex-row gap-4 mt-4">
-          <div class="flex-1 flex flex-col gap-1">
-            <p class="text-sm font-light text-left mt-0.5">
-              <span class="font-semibold">Status:</span>
-              <span data-backfill-run-updates-target="status">
-                <%= status_tag(@backfill_run.status) %>
-              </span>
-            </p>
-            <p class="text-sm font-light text-left mt-0.5"><span class="font-semibold">Processed:</span>
-              <span data-backfill-run-updates-target="processedCount">
-                <%= @backfill_run.processed_count %>
-              </span>
-              <%= if @backfill_run.amount_of_elements
-                "(Maximum amount of elements: #{@backfill_run.amount_of_elements})"
-              else
-                ""
-              end %></p>
-            <p class="text-sm font-light text-left mt-0.5"><span class="font-semibold">Total:</span>
-              <span data-backfill-run-updates-target="totalCount">
-                <%= @backfill_run.total_count %>
-              </span>
-            </p>
-            <% if @backfill_run.options.present? %>
-              <p class="text-sm font-light text-left mt-0.5"><span class="font-semibold">Options:</span>
-                <span data-backfill-run-updates-target="totalCount">
-                  <% @backfill_run.options.each do |key, value| %>
-                    <% next if value.blank? %>
-                    <%= "#{key} = #{value}" %>
-                  <% end %>
-                </span>
-              </p>
-            <% end %>
-          </div>
-          <div class="flex-1 flex flex-col gap-1">
-            <p class="text-sm font-light text-left mt-0.5"><span class="font-semibold">Batch Size:</span>
-              <%= @backfill_run.batches.first&.batch_size || @backfill_run.batch_size %></p>
-            <p class="text-sm font-light text-left mt-0.5"><span class="font-semibold">Created At:</span>
-              <%= format_datetime_in_user_timezone(@backfill_run.created_at, @user_timezone) %>
-            </p>
-            <p class="text-sm font-light text-left mt-0.5"><span class="font-semibold">Starting At:</span>
-              <%= format_datetime_in_user_timezone(@backfill_run.start_at, @user_timezone) %>
-            </p>
-          </div>
-        </div>
-      </div>
+  <div class="mt-8 grid items-start gap-x-12 gap-y-8 lg:grid-cols-[3fr_2fr]">
+    <div data-backfill-run-updates-target="progress">
+      <%= render "progress", backfill_run: @backfill_run %>
     </div>
 
-    <div class="w-full max-w-5xl flex-1 flex flex-col">
-      <div
-        class="
-          bg-white rounded-lg border border-gray-200 p-6 flex-1 flex flex-col
-        "
-      >
-        <div class="flex justify-between items-center mb-6">
-          <div>
-            <h2 class="text-lg font-semibold text-gray-700">Batches</h2>
-            <p class="text-sm text-gray-400 pt-2">Check the status of each batch</p>
-          </div>
+    <dl class="grid grid-cols-[auto_1fr] content-start gap-x-6 gap-y-2 text-sm">
+      <dt class="text-zinc-500 dark:text-zinc-400">Batch size</dt>
+      <dd class="font-medium text-zinc-900 tabular-nums dark:text-white"><%= number_with_delimiter(@backfill_run.batches.first&.batch_size || @backfill_run.batch_size) %></dd>
+
+      <% if @backfill_run.amount_of_elements.present? %>
+        <dt class="text-zinc-500 dark:text-zinc-400">Maximum records</dt>
+        <dd class="font-medium text-zinc-900 tabular-nums dark:text-white"><%= number_with_delimiter(@backfill_run.amount_of_elements) %></dd>
+      <% end %>
+
+      <dt class="text-zinc-500 dark:text-zinc-400">Created</dt>
+      <dd class="font-medium text-zinc-900 dark:text-white"><%= format_datetime_in_user_timezone(@backfill_run.created_at, @user_timezone) %></dd>
+
+      <dt class="text-zinc-500 dark:text-zinc-400">Scheduled start</dt>
+      <dd class="font-medium text-zinc-900 dark:text-white"><%= format_datetime_in_user_timezone(@backfill_run.start_at, @user_timezone) %></dd>
+
+      <% if @backfill_run.options.present? %>
+        <div class="col-span-full mt-2 rounded-lg bg-zinc-50 p-3 dark:bg-white/5">
+          <p class="mb-1 font-mono text-xs font-medium text-zinc-400 dark:text-zinc-500">options</p>
+          <% @backfill_run.options.each do |key, value| %>
+            <p class="font-mono text-xs leading-6 text-zinc-600 dark:text-zinc-300"><%= key %> = <%= value.nil? ? "nil" : value %></p>
+          <% end %>
         </div>
-        <div class="overflow-x-auto">
-          <table class="w-full text-left">
+      <% end %>
+    </dl>
+  </div>
+
+  <div class="mt-12">
+    <div class="flex flex-wrap items-center gap-3" data-backfill-run-updates-target="batchesMeta">
+      <%= render "batches_meta", backfill_run: @backfill_run, batch_status: params[:batch_status] %>
+    </div>
+
+    <%# Render the (possibly empty) table while the run is active so the
+        polling controller has a tbody to fill as batches appear. %>
+    <% if @batches.any? || (!@backfill_run.terminal? && params[:batch_status].blank?) %>
+      <div class="-mx-4 -my-2 mt-2 overflow-x-auto whitespace-nowrap sm:-mx-6 lg:-mx-8">
+        <div class="inline-block min-w-full px-4 py-2 align-middle sm:px-6 lg:px-8">
+          <table class="w-full text-left" data-controller="batch-errors">
             <thead>
               <tr>
-                <th class="py-2 px-4 text-gray-400 font-semibold text-sm">STATUS</th>
-                <th class="py-2 px-4 text-gray-400 font-semibold text-sm">BATCH SIZE</th>
-                <th class="py-2 px-4 text-gray-400 font-semibold text-sm">FINISHED AT</th>
-                <th class="py-2 px-4 text-gray-400 font-semibold text-sm">START ID</th>
-                <th class="py-2 px-4 text-gray-400 font-semibold text-sm">FINISH ID</th>
-                <th class="py-2 px-4 text-gray-400 font-semibold text-sm">ERRORS</th>
+                <th class="border-b border-zinc-950/10 py-2.5 pr-4 text-sm font-medium whitespace-nowrap text-zinc-500 dark:border-white/10 dark:text-zinc-400">Status</th>
+                <th class="border-b border-zinc-950/10 py-2.5 pr-4 text-sm font-medium whitespace-nowrap text-zinc-500 dark:border-white/10 dark:text-zinc-400">Record range</th>
+                <th class="border-b border-zinc-950/10 py-2.5 pr-4 text-sm font-medium whitespace-nowrap text-zinc-500 dark:border-white/10 dark:text-zinc-400">Size</th>
+                <th class="border-b border-zinc-950/10 py-2.5 pr-4 text-sm font-medium whitespace-nowrap text-zinc-500 dark:border-white/10 dark:text-zinc-400">Finished</th>
+                <th class="border-b border-zinc-950/10 py-2.5 text-sm font-medium whitespace-nowrap text-zinc-500 dark:border-white/10 dark:text-zinc-400">Error</th>
               </tr>
             </thead>
-            <tbody data-backfill-run-updates-target="batchesTable">
-              <%= render 'batches_table', backfill_run: @backfill_run %>
+            <tbody class="divide-y divide-zinc-950/5 dark:divide-white/5" data-backfill-run-updates-target="batchesTable">
+              <%= render "batches_table", batches: @batches %>
             </tbody>
           </table>
         </div>
-        
-        <%= render 'data_drip/shared/pagination', 
-            pagination: @batch_pagination, 
-            item_name: "batches", 
-            page_param: :batch_page %>
       </div>
-    </div>
+
+      <%= render 'data_drip/shared/pagination',
+          pagination: @batch_pagination,
+          item_name: "batches",
+          page_param: :batch_page,
+          additional_params: { batch_status: params[:batch_status].presence }.compact %>
+    <% else %>
+      <div class="mt-2 border-t border-zinc-950/5 py-12 text-center dark:border-white/5">
+        <p class="text-sm text-zinc-500 dark:text-zinc-400">
+          <%= params[:batch_status] == "failed" ?
+            "No failed batches." :
+            "No batches yet — they are created when the run starts." %>
+        </p>
+      </div>
+    <% end %>
   </div>
 </div>
