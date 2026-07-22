@@ -10,6 +10,12 @@ begin
 rescue LoadError
   # Coverage not measured under this bundle.
 else
+  # Bootsnap's iseq compile cache serializes compiled instruction sequences,
+  # which Ruby forbids for code compiled while coverage is running ("should not
+  # compile with coverage", raised on Ruby 4.0). Since SimpleCov turns coverage
+  # on below, disable just bootsnap's compile cache for this process.
+  ENV["DISABLE_BOOTSNAP_COMPILE_CACHE"] = "1"
+
   SimpleCov.start do
     enable_coverage :branch
 
