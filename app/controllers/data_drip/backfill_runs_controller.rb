@@ -3,12 +3,11 @@
 module DataDrip
   class BackfillRunsController < DataDrip.base_controller_class.constantize
     include DataDrip::Paginatable
+    include DataDrip::BackfillerContext
 
     layout "data_drip/layouts/application"
-    helper_method :backfill_class_names, :find_current_backfiller
+    helper_method :backfill_class_names
     helper DataDrip::BackfillRunsHelper
-
-    before_action :set_user_timezone
 
     def index
       @current_tab = params[:tab] || "my_runs"
@@ -227,26 +226,6 @@ module DataDrip
     end
 
     private
-
-    # Exposed to views via helper_method (see top of class), but not a routable action.
-    def find_current_backfiller
-      if DataDrip.current_backfiller_method.blank?
-        raise "Missing DataDrip.current_backfiller_method, please set it in an initializer (like DataDrip.current_backfiller_method = :current_user"
-      end
-      unless respond_to?(DataDrip.current_backfiller_method, true)
-        raise "Invalid DataDrip.current_backfiller_method: #{DataDrip.current_backfiller_method}. Maybe you need to change the `base_controller_class` for DataDrip (currently: #{DataDrip.base_controller_class})?"
-      end
-
-      send(DataDrip.current_backfiller_method)
-    end
-
-    def set_user_timezone
-      @user_timezone =
-        params[:user_timezone].presence || session[:user_timezone] || "UTC"
-      session[:user_timezone] = @user_timezone if params[
-        :user_timezone
-      ].present?
-    end
 
     def backfill_run_params
       params.require(:backfill_run).permit(

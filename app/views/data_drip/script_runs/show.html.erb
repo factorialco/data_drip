@@ -1,0 +1,80 @@
+<div
+  data-controller="script-run-updates"
+  data-script-run-updates-url-value="<%= updates_script_run_path(@script_run) %>"
+  data-script-run-updates-status-value="<%= @script_run.status %>"
+>
+  <nav aria-label="Breadcrumb" class="flex items-center gap-x-2 text-sm">
+    <%= link_to "Script runs", script_runs_path, class: "text-zinc-500 hover:text-zinc-700 dark:text-zinc-400 dark:hover:text-zinc-200" %>
+    <span class="text-zinc-400 dark:text-zinc-600" aria-hidden="true">/</span>
+    <span class="text-zinc-700 dark:text-zinc-300" aria-current="page">Run #<%= @script_run.id %></span>
+  </nav>
+
+  <div class="mt-4 flex flex-wrap items-center gap-3">
+    <h1 class="text-xl font-semibold tracking-tight text-zinc-900 dark:text-white"><%= @script_run.script_class_name %></h1>
+    <span data-script-run-updates-target="status"><%= status_tag(@script_run.status) %></span>
+
+    <div class="flex flex-1 justify-end gap-x-2">
+      <% if @script_run.enqueued? %>
+        <%= button_to "Delete run",
+            script_run_path(@script_run),
+            method: :delete,
+            form: { data: { turbo_confirm: "Delete this script run?" } },
+            class: danger_button_classes %>
+      <% end %>
+    </div>
+  </div>
+  <p class="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
+    <% if @script_run.script_class&.description.present? %>
+      <%= @script_run.script_class.description %>
+      <span class="text-zinc-400 dark:text-zinc-600" aria-hidden="true">·</span>
+    <% end %>
+    Started by <%= @script_run.backfiller_name %>
+    <span class="text-zinc-400 dark:text-zinc-600" aria-hidden="true">·</span>
+    created <%= relative_time(@script_run.created_at, @user_timezone) %>
+  </p>
+
+  <div class="mt-8 grid items-start gap-x-12 gap-y-8 lg:grid-cols-[3fr_2fr]">
+    <div>
+      <div
+        class="mb-6 <%= @script_run.failed? ? "" : "hidden" %> overflow-x-auto rounded-lg bg-red-50 p-4 dark:bg-red-400/10"
+        data-script-run-updates-target="errorSection"
+        role="alert"
+      >
+        <h2 class="text-sm font-semibold text-red-800 dark:text-red-300">Error</h2>
+        <p class="mt-1 text-sm text-red-700 dark:text-red-400" data-script-run-updates-target="errorMessage"><%= @script_run.error_message %></p>
+        <pre class="mt-3 font-mono text-xs leading-5 whitespace-pre-wrap text-red-700/90 dark:text-red-400/90" data-script-run-updates-target="errorBacktrace"><%= @script_run.error_backtrace %></pre>
+      </div>
+
+      <h2 class="text-base font-semibold text-zinc-900 dark:text-white">Output</h2>
+      <p class="mt-1 text-sm text-zinc-500 dark:text-zinc-400">Everything the script logged while running.</p>
+      <pre
+        class="mt-3 min-h-24 overflow-x-auto rounded-lg bg-zinc-50 p-4 font-mono text-xs leading-6 whitespace-pre-wrap text-zinc-700 dark:bg-white/5 dark:text-zinc-300"
+        data-script-run-updates-target="output"
+      ><%= @script_run.output %></pre>
+    </div>
+
+    <dl class="grid grid-cols-[auto_1fr] content-start gap-x-6 gap-y-2 text-sm">
+      <dt class="text-zinc-500 dark:text-zinc-400">Created</dt>
+      <dd class="font-medium text-zinc-900 dark:text-white"><%= format_datetime_in_user_timezone(@script_run.created_at, @user_timezone) %></dd>
+
+      <dt class="text-zinc-500 dark:text-zinc-400">Scheduled start</dt>
+      <dd class="font-medium text-zinc-900 dark:text-white"><%= format_datetime_in_user_timezone(@script_run.start_at, @user_timezone) %></dd>
+
+      <dt class="text-zinc-500 dark:text-zinc-400">Started</dt>
+      <dd class="font-medium text-zinc-900 dark:text-white" data-script-run-updates-target="startedAt"><%= format_datetime_in_user_timezone(@script_run.started_at, @user_timezone) %></dd>
+
+      <dt class="text-zinc-500 dark:text-zinc-400">Finished</dt>
+      <dd class="font-medium text-zinc-900 dark:text-white" data-script-run-updates-target="finishedAt"><%= format_datetime_in_user_timezone(@script_run.finished_at, @user_timezone) %></dd>
+
+      <% present_inputs = (@script_run.inputs || {}).reject { |_key, value| value.blank? } %>
+      <% if present_inputs.present? %>
+        <div class="col-span-full mt-2 rounded-lg bg-zinc-50 p-3 dark:bg-white/5">
+          <p class="mb-1 font-mono text-xs font-medium text-zinc-400 dark:text-zinc-500">inputs</p>
+          <% present_inputs.each do |key, value| %>
+            <p class="font-mono text-xs leading-6 text-zinc-600 dark:text-zinc-300"><%= key %> = <%= value %></p>
+          <% end %>
+        </div>
+      <% end %>
+    </dl>
+  </div>
+</div>

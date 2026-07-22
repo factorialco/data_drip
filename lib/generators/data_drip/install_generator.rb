@@ -30,6 +30,11 @@ module DataDrip
         say_status("create", "Created app/backfills directory", :green)
       end
 
+      def create_scripts_directory
+        empty_directory "app/scripts"
+        say_status("create", "Created app/scripts directory", :green)
+      end
+
       def create_backfill_run_migration
         migration_file =
           "db/migrate/#{Time.now.utc.strftime("%Y%m%d%H%M%S")}_create_data_drip_backfill_runs.rb"
@@ -69,6 +74,30 @@ module DataDrip
           say_status(
             "create",
             "Created DataDrip backfill run batch migration",
+            :green
+          )
+        end
+      end
+
+      def create_script_run_migration
+        if Dir.glob(
+             Rails.root.join("db/migrate/*_create_data_drip_script_runs.rb")
+           ).any?
+          say_status(
+            "skipped",
+            "DataDrip script run migration already exists",
+            :yellow
+          )
+        else
+          migration_file =
+            "db/migrate/#{Time.now.utc.strftime("%Y%m%d%H%M%S").to_i + 2}_create_data_drip_script_runs.rb"
+          template "script_run_migration.rb.erb",
+                   migration_file,
+                   migration_version: migration_version
+          run "rails db:migrate"
+          say_status(
+            "create",
+            "Created DataDrip script run migration",
             :green
           )
         end

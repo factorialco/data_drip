@@ -13,4 +13,9 @@ DataDrip::Engine.routes.draw do
   post "backfill_runs/set_timezone",
        to: "backfill_runs#set_timezone",
        as: :set_timezone_backfill_runs
+
+  resources :script_runs, only: %i[index show new create destroy] do
+    get :updates, on: :member
+    get :script_inputs, on: :collection
+  end
 end

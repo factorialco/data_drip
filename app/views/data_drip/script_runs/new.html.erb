@@ -1,0 +1,104 @@
+<nav aria-label="Breadcrumb" class="flex items-center gap-x-2 text-sm">
+  <%= link_to "Script runs", script_runs_path, class: "text-zinc-500 hover:text-zinc-700 dark:text-zinc-400 dark:hover:text-zinc-200" %>
+  <span class="text-zinc-400 dark:text-zinc-600" aria-hidden="true">/</span>
+  <span class="text-zinc-700 dark:text-zinc-300" aria-current="page">New run</span>
+</nav>
+
+<h1 class="mt-4 text-xl font-semibold tracking-tight text-zinc-900 dark:text-white">New script run</h1>
+<p class="mt-1 text-sm text-pretty text-zinc-500 dark:text-zinc-400">Pick a script, fill in its inputs, and run it now or schedule it for later.</p>
+
+<%= form_with model: @script_run, url: script_runs_path,
+    data: {
+      controller: "script-options",
+      script_options_url_value: script_inputs_script_runs_path
+    },
+    html: { class: "mt-8 max-w-lg" } do |f| %>
+
+  <% if @script_run.errors.any? %>
+    <div class="mb-6 rounded-lg bg-red-50 p-4 dark:bg-red-400/10" role="alert">
+      <h2 class="text-sm font-semibold text-red-800 dark:text-red-300">There were errors</h2>
+      <ul class="mt-2 list-inside list-disc text-sm text-red-700 dark:text-red-400">
+        <% @script_run.errors.full_messages.each do |message| %>
+          <li><%= message %></li>
+        <% end %>
+      </ul>
+    </div>
+  <% end %>
+
+  <div class="mb-5" data-controller="combobox" data-action="focusout->combobox#focusout">
+    <%= f.label :script_class_name, "Script class", class: DataDrip::BackfillRunsHelper::LABEL_CLASSES %>
+    <div class="relative mt-1.5">
+      <%= f.text_field :script_class_name,
+          placeholder: "Search scripts…",
+          autocomplete: "off",
+          role: "combobox",
+          aria: { expanded: false, autocomplete: "list", controls: "script_class_listbox" },
+          data: {
+            combobox_target: "input",
+            action: "input->combobox#filter focus->combobox#open keydown->combobox#keydown change->script-options#refresh"
+          },
+          class: DataDrip::BackfillRunsHelper::INPUT_CLASSES %>
+      <ul
+        id="script_class_listbox"
+        role="listbox"
+        hidden
+        data-combobox-target="list"
+        class="absolute inset-x-0 top-full z-10 mt-1.5 max-h-72 overflow-y-auto rounded-lg bg-white p-1 shadow-lg ring-1 ring-zinc-950/10 dark:bg-zinc-900 dark:shadow-none dark:ring-white/10"
+      >
+        <% if @recent_script_class_names.present? %>
+          <li role="presentation" data-combobox-target="recentHeader" class="px-2.5 pt-2 pb-1 text-xs font-semibold tracking-wide text-zinc-400 uppercase dark:text-zinc-500">Recent</li>
+          <% @recent_script_class_names.each do |name| %>
+            <%= backfill_class_option_tag(name, recent: true) %>
+          <% end %>
+        <% end %>
+
+        <li role="presentation" data-combobox-target="allHeader" class="flex items-baseline justify-between px-2.5 pt-2 pb-1 text-xs font-semibold tracking-wide text-zinc-400 uppercase dark:text-zinc-500">
+          <span>All scripts</span>
+          <span class="font-normal normal-case tabular-nums" data-combobox-target="count"></span>
+        </li>
+        <% script_class_names.each do |name| %>
+          <%= backfill_class_option_tag(name) %>
+        <% end %>
+
+        <li data-combobox-target="empty" role="presentation" class="hidden px-2.5 py-2 text-center text-sm text-zinc-400 dark:text-zinc-500">No matching scripts.</li>
+      </ul>
+    </div>
+    <p class="mt-1.5 text-sm text-zinc-500 dark:text-zinc-400">The <code class="font-mono text-xs">DataDrip::Script</code> subclass to run once.</p>
+  </div>
+
+  <div data-script-options-target="container">
+    <%= script_input_fields(@script_run) if @script_run.script_class_name.present? %>
+  </div>
+
+  <% scheduled_later = @script_run.start_at.present? && @script_run.start_at > 1.minute.from_now %>
+  <fieldset class="mb-5" data-controller="schedule">
+    <legend class="<%= DataDrip::BackfillRunsHelper::LABEL_CLASSES %>">Schedule</legend>
+    <div class="mt-2 flex h-lh items-center gap-x-2 text-sm">
+      <%= radio_button_tag :schedule_mode, "now", !scheduled_later,
+          class: "size-4 accent-drip-700 dark:accent-drip-400",
+          data: { action: "change->schedule#toggle" } %>
+      <%= label_tag :schedule_mode_now, "Run immediately", class: "text-zinc-700 dark:text-zinc-300" %>
+    </div>
+    <div class="mt-2 flex flex-wrap items-center gap-x-2 gap-y-2 text-sm">
+      <%= radio_button_tag :schedule_mode, "later", scheduled_later,
+          class: "size-4 accent-drip-700 dark:accent-drip-400",
+          data: { action: "change->schedule#toggle" } %>
+      <%= label_tag :schedule_mode_later, "Schedule for later", class: "text-zinc-700 dark:text-zinc-300" %>
+      <%= f.datetime_field :start_at,
+          disabled: !scheduled_later,
+          aria: { label: "Start date and time" },
+          data: { schedule_target: "field" },
+          class: "#{DataDrip::BackfillRunsHelper::INPUT_CLASSES} max-w-60 disabled:opacity-50" %>
+      <span class="text-xs text-zinc-400 dark:text-zinc-500" data-timezone-target="label"></span>
+    </div>
+  </fieldset>
+
+  <%= hidden_field_tag :user_timezone, "", data: { timezone_target: "field" } %>
+
+  <div class="mt-8 flex items-center gap-x-3">
+    <%= f.submit "Create script run",
+        class: "#{primary_button_classes} cursor-pointer",
+        data: { turbo_submits_with: "Creating…" } %>
+    <%= link_to "Cancel", script_runs_path, class: ghost_button_classes %>
+  </div>
+<% end %>

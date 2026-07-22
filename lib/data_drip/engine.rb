@@ -4,6 +4,7 @@ require "importmap-rails"
 require "turbo-rails"
 require "stimulus-rails"
 require_relative "concerns/paginatable"
+require_relative "concerns/backfiller_context"
 
 module DataDrip
   class Engine < ::Rails::Engine
@@ -25,9 +26,13 @@ module DataDrip
     end
 
     initializer "data_drip.eager_load" do |app|
-      if !app.config.eager_load && Rails.root.join("app/backfills").exist?
-        app.config.to_prepare do
-          Rails.autoloaders.main.eager_load_dir("#{Rails.root}/app/backfills")
+      unless app.config.eager_load
+        %w[app/backfills app/scripts].each do |dir|
+          next unless Rails.root.join(dir).exist?
+
+          app.config.to_prepare do
+            Rails.autoloaders.main.eager_load_dir("#{Rails.root}/#{dir}")
+          end
         end
       end
     end
