@@ -2,6 +2,23 @@
 
 ENV["RAILS_ENV"] = "test"
 
+require "simplecov"
+SimpleCov.start do
+  enable_coverage :branch
+
+  # Only measure the engine's own code, not the dummy test app or the suite.
+  root File.expand_path("..", __dir__)
+  skip "/spec/"
+  skip "/lib/data_drip/version.rb"
+
+  group "Controllers", "app/controllers"
+  group "Models", "app/models"
+  group "Jobs", "app/jobs"
+  group "Helpers", "app/helpers"
+  group "Library", "lib"
+  group "Generators", "lib/generators"
+end
+
 Dir.chdir(File.join(__dir__, "test_app")) do
   require_relative "test_app/config/environment"
 end

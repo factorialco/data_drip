@@ -246,6 +246,220 @@ RSpec.describe DataDrip::BackfillRun, type: :model do
     end
   end
 
+  describe "#terminal?" do
+    def run_with(status)
+      run =
+        DataDrip::BackfillRun.new(
+          backfill_class_name: "AddRoleToEmployee",
+          batch_size: 100,
+          start_at: 1.hour.from_now,
+          backfiller: backfiller,
+          options: { age: 25 }
+        )
+      run.save!(validate: false)
+      run.update_column(:status, DataDrip::BackfillRun.statuses[status])
+      run.reload
+    end
+
+    it "is true for completed, failed and stopped runs" do
+      expect(run_with(:completed)).to be_terminal
+      expect(run_with(:failed)).to be_terminal
+      expect(run_with(:stopped)).to be_terminal
+    end
+
+    it "is false for pending, enqueued and running runs" do
+      expect(run_with(:pending)).not_to be_terminal
+      expect(run_with(:enqueued)).not_to be_terminal
+      expect(run_with(:running)).not_to be_terminal
+    end
+  end
+
+  describe "progress and timing metrics" do
+    let(:run) do
+      run =
+        DataDrip::BackfillRun.new(
+          backfill_class_name: "AddRoleToEmployee",
+          batch_size: 100,
+          start_at: 1.hour.from_now,
+          backfiller: backfiller,
+          options: { age: 25 }
+        )
+      run.save!(validate: false)
+      run
+    end
+
+    def add_batch(created_at:, updated_at:, status: :completed)
+      batch =
+        DataDrip::BackfillRunBatch.new(
+          backfill_run: run,
+          batch_size: 100,
+          start_id: 1,
+          finish_id: 100
+        )
+      batch.save!(validate: false)
+      batch.update_columns(
+        status: DataDrip::BackfillRunBatch.statuses[status],
+        created_at: created_at,
+        updated_at: updated_at
+      )
+      batch
+    end
+
+    describe "#progress_percent" do
+      it "is 100 once the run is completed, regardless of counts" do
+        run.update_columns(
+          status: DataDrip::BackfillRun.statuses[:completed],
+          total_count: 0,
+          processed_count: 0
+        )
+
+        expect(run.reload.progress_percent).to eq(100)
+      end
+
+      it "is 0 when nothing is known yet" do
+        run.update_columns(total_count: 0, processed_count: 0)
+
+        expect(run.reload.progress_percent).to eq(0)
+      end
+
+      it "floors the processed/total ratio" do
+        run.update_columns(total_count: 3, processed_count: 2)
+
+        # 2/3 = 66.6% -> floored to 66
+        expect(run.reload.progress_percent).to eq(66)
+      end
+
+      it "never reports more than 100" do
+        run.update_columns(total_count: 10, processed_count: 15)
+
+        expect(run.reload.progress_percent).to eq(100)
+      end
+    end
+
+    describe "#processing_started_at and #last_activity_at" do
+      it "return nil before any batch exists" do
+        expect(run.processing_started_at).to be_nil
+        expect(run.last_activity_at).to be_nil
+      end
+
+      it "track the earliest creation and latest update across batches" do
+        first = Time.utc(2030, 1, 1, 10, 0, 0)
+        last = Time.utc(2030, 1, 1, 10, 5, 0)
+        add_batch(created_at: first, updated_at: first)
+        add_batch(created_at: last, updated_at: last)
+
+        expect(run.processing_started_at).to be_within(1.second).of(first)
+        expect(run.last_activity_at).to be_within(1.second).of(last)
+      end
+    end
+
+    describe "#elapsed_seconds" do
+      it "is nil until processing has started" do
+        expect(run.elapsed_seconds).to be_nil
+      end
+
+      it "measures wall-clock between first and last batch for terminal runs" do
+        started = Time.utc(2030, 1, 1, 10, 0, 0)
+        finished = Time.utc(2030, 1, 1, 10, 2, 0)
+        add_batch(created_at: started, updated_at: finished)
+        run.update_column(:status, DataDrip::BackfillRun.statuses[:completed])
+
+        expect(run.reload.elapsed_seconds).to be_within(1).of(120)
+      end
+
+      it "measures from the first batch until now for active runs" do
+        started = 30.seconds.ago
+        add_batch(created_at: started, updated_at: started, status: :running)
+        run.update_column(:status, DataDrip::BackfillRun.statuses[:running])
+
+        expect(run.reload.elapsed_seconds).to be >= 29
+      end
+    end
+
+    describe "#throughput_per_minute" do
+      it "is nil when no time has elapsed" do
+        expect(run.throughput_per_minute).to be_nil
+      end
+
+      it "is nil when nothing has been processed" do
+        started = Time.utc(2030, 1, 1, 10, 0, 0)
+        finished = Time.utc(2030, 1, 1, 10, 2, 0)
+        add_batch(created_at: started, updated_at: finished)
+        run.update_columns(
+          status: DataDrip::BackfillRun.statuses[:completed],
+          processed_count: 0
+        )
+
+        expect(run.reload.throughput_per_minute).to be_nil
+      end
+
+      it "computes records per minute" do
+        started = Time.utc(2030, 1, 1, 10, 0, 0)
+        finished = Time.utc(2030, 1, 1, 10, 2, 0)
+        add_batch(created_at: started, updated_at: finished)
+        run.update_columns(
+          status: DataDrip::BackfillRun.statuses[:completed],
+          processed_count: 300
+        )
+
+        # 300 records over 120s -> 150 records/min
+        expect(run.reload.throughput_per_minute).to be_within(1).of(150)
+      end
+    end
+
+    describe "#eta_seconds" do
+      it "is nil unless the run is running with a known total" do
+        run.update_columns(
+          status: DataDrip::BackfillRun.statuses[:completed],
+          total_count: 100
+        )
+        expect(run.reload.eta_seconds).to be_nil
+      end
+
+      it "is nil when throughput cannot be computed yet" do
+        run.update_columns(
+          status: DataDrip::BackfillRun.statuses[:running],
+          total_count: 100,
+          processed_count: 0
+        )
+        expect(run.reload.eta_seconds).to be_nil
+      end
+
+      it "estimates the remaining seconds from the current throughput" do
+        started = 60.seconds.ago
+        add_batch(
+          created_at: started,
+          updated_at: 1.second.ago,
+          status: :completed
+        )
+        run.update_columns(
+          status: DataDrip::BackfillRun.statuses[:running],
+          total_count: 100,
+          processed_count: 50
+        )
+
+        # ~50 records/min, 50 remaining -> ~60s
+        expect(run.reload.eta_seconds).to be_within(15).of(60)
+      end
+
+      it "is nil when more records were processed than the total" do
+        started = 60.seconds.ago
+        add_batch(
+          created_at: started,
+          updated_at: 1.second.ago,
+          status: :completed
+        )
+        run.update_columns(
+          status: DataDrip::BackfillRun.statuses[:running],
+          total_count: 50,
+          processed_count: 60
+        )
+
+        expect(run.reload.eta_seconds).to be_nil
+      end
+    end
+  end
+
   describe "status enum" do
     it "has the correct status values" do
       backfill_run = DataDrip::BackfillRun.allocate

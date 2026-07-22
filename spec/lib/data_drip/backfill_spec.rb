@@ -221,6 +221,53 @@ RSpec.describe DataDrip::Backfill, type: :model do
       expect(employee2.reload.role).to be_nil
     end
   end
+
+  describe "#call" do
+    let!(:employee1) { Employee.create!(name: "John", role: nil, age: 25) }
+    let!(:employee2) { Employee.create!(name: "Jane", role: nil, age: 25) }
+
+    it "processes every batch in the scope" do
+      backfill = test_backfill_class.new(backfill_options: { age: 25 }, batch_size: 1)
+
+      backfill.call
+
+      expect(employee1.reload.role).to eq("intern")
+      expect(employee2.reload.role).to eq("intern")
+    end
+
+    it "invokes the DataDrip.before_backfill callback" do
+      called = false
+      original = DataDrip.before_backfill
+      DataDrip.before_backfill = -> { called = true }
+
+      begin
+        test_backfill_class.new(backfill_options: { age: 25 }).call
+      ensure
+        DataDrip.before_backfill = original
+      end
+
+      expect(called).to be(true)
+    end
+
+    it "honors start_id and finish_id bounds" do
+      backfill = test_backfill_class.new(backfill_options: { age: 25 })
+
+      backfill.call(start_id: employee2.id)
+
+      expect(employee1.reload.role).to be_nil
+      expect(employee2.reload.role).to eq("intern")
+    end
+  end
+
+  describe "#explain" do
+    let!(:employee) { Employee.create!(name: "John", role: nil, age: 25) }
+
+    it "logs the scope's query plan without raising" do
+      backfill = test_backfill_class.new(backfill_options: { age: 25 })
+
+      expect { backfill.explain }.not_to raise_error
+    end
+  end
 end
 
 module BackfillSpec
