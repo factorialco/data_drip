@@ -27,6 +27,7 @@ module DataDrip
               },
               allow_nil: true
 
+    before_create :capture_backfiller_name
     after_commit :enqueue
     after_commit :run_hooks
 
@@ -36,9 +37,15 @@ module DataDrip
       %i[pending enqueued running completed failed stopped]
     )
 
-    def backfiller_name
-      @backfiller_name ||=
-        backfiller.send(DataDrip.backfiller_name_attribute.to_sym)
+    DELETED_BACKFILLER_LABEL = "Deleted user"
+
+    # backfiller_name is snapshotted onto the row at creation so it survives the
+    # backfiller being deleted. Use this for display: it falls back to the live
+    # association (for rows created before the column existed), then a placeholder.
+    def backfiller_display_name
+      backfiller_name.presence ||
+        backfiller&.send(DataDrip.backfiller_name_attribute.to_sym) ||
+        DELETED_BACKFILLER_LABEL
     end
 
     def terminal?
@@ -112,6 +119,11 @@ module DataDrip
     end
 
     private
+
+    # Snapshot the backfiller's display name so it survives the record's deletion.
+    def capture_backfiller_name
+      self.backfiller_name = backfiller&.send(DataDrip.backfiller_name_attribute.to_sym)
+    end
 
     def run_hooks
       return unless status_previously_changed?

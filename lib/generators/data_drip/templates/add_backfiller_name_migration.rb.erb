@@ -1,0 +1,5 @@
+class AddBackfillerNameToDataDripBackfillRuns < ActiveRecord::Migration<%= migration_version %>
+  def change
+    add_column :data_drip_backfill_runs, :backfiller_name, :string
+  end
+end

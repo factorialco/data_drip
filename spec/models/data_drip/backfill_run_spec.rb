@@ -184,6 +184,54 @@ RSpec.describe DataDrip::BackfillRun, type: :model do
     end
   end
 
+  describe "backfiller name" do
+    let(:valid_attributes) do
+      {
+        backfill_class_name: "AddRoleToEmployee",
+        batch_size: 100,
+        start_at: 1.hour.from_now,
+        backfiller: backfiller,
+        options: {
+          age: 25
+        }
+      }
+    end
+
+    it "snapshots the backfiller's name onto the row at creation" do
+      run = DataDrip::BackfillRun.create!(valid_attributes)
+
+      expect(run.backfiller_name).to eq("Test User")
+      expect(run.backfiller_display_name).to eq("Test User")
+    end
+
+    it "retains the name for display after the backfiller record is deleted" do
+      run = DataDrip::BackfillRun.create!(valid_attributes)
+      backfiller.delete
+      run.reload
+
+      expect(run.backfiller).to be_nil
+      expect { run.backfiller_display_name }.not_to raise_error
+      expect(run.backfiller_display_name).to eq("Test User")
+    end
+
+    it "falls back to the live association for rows without a snapshot" do
+      run = DataDrip::BackfillRun.create!(valid_attributes)
+      run.update_column(:backfiller_name, nil)
+      run.reload
+
+      expect(run.backfiller_display_name).to eq("Test User")
+    end
+
+    it "falls back to a placeholder when neither snapshot nor backfiller exist" do
+      run = DataDrip::BackfillRun.create!(valid_attributes)
+      run.update_column(:backfiller_name, nil)
+      backfiller.delete
+      run.reload
+
+      expect(run.backfiller_display_name).to eq("Deleted user")
+    end
+  end
+
   describe "#backfill_class" do
     it "returns the correct backfill class" do
       backfill_run =

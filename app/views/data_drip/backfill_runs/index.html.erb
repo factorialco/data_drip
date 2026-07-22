@@ -104,7 +104,7 @@
                   </div>
                 </td>
                 <td class="py-3 pr-4 text-sm text-zinc-600 tabular-nums dark:text-zinc-300"><%= number_with_delimiter(backfill_run.batch_size) %></td>
-                <td class="py-3 pr-4 text-sm text-zinc-600 dark:text-zinc-300"><%= backfill_run.backfiller_name %></td>
+                <td class="py-3 pr-4 text-sm text-zinc-600 dark:text-zinc-300"><%= backfill_run.backfiller_display_name %></td>
                 <td class="py-3 pr-4 text-sm text-zinc-500 dark:text-zinc-400"><%= relative_time(backfill_run.created_at, @user_timezone) %></td>
                 <td class="py-3 text-right text-zinc-400 dark:text-zinc-600" aria-hidden="true">›</td>
               </tr>

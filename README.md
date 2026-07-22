@@ -38,6 +38,16 @@ This will:
 - Create the `app/backfills` directory
 - Generate and run migrations for `data_drip_backfill_runs` and `data_drip_backfill_run_batches` tables
 
+### Upgrading
+
+If you installed DataDrip before the `backfiller_name` column existed, add it with:
+
+```bash
+rails generate data_drip:add_backfiller_name
+```
+
+This snapshots the backfiller's display name onto each run so it is preserved even if the backfiller record is later deleted.
+
 ## Requirements
 
 - **Ruby**: >= 3.1.0
