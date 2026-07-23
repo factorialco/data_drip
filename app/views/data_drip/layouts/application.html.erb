@@ -6,7 +6,10 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <%= csrf_meta_tags %>
   <%= csp_meta_tag %>
-  <%= stylesheet_link_tag 'data_drip/tailwind', media: :all, data: { turbo_track: :reload } %>
+  <%# Linked directly (not via stylesheet_link_tag) so the request never routes
+      through the host asset pipeline. See DataDrip::AssetsController. %>
+  <link rel="stylesheet" media="all" data-turbo-track="reload"
+        href="<%= tailwind_stylesheet_path(v: DataDrip.compiled_css_digest) %>">
   <%= javascript_importmap_tags "application", importmap: DataDrip.importmap %>
   <%# No web fonts: the CSS falls back to the system sans stack (see --font-sans),
       keeping the admin UI self-contained and free of external requests. %>

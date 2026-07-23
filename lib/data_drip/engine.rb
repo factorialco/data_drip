@@ -11,9 +11,7 @@ module DataDrip
     isolate_namespace DataDrip
 
     initializer "data_drip.assets" do |app|
-      app.config.assets.paths << root.join("app/assets/stylesheets")
       app.config.assets.paths << root.join("app/javascript")
-      app.config.assets.precompile << "data_drip_manifest.js"
     end
 
     initializer "data_drip.importmap", after: "importmap" do |_app|

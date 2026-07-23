@@ -3,6 +3,9 @@
 DataDrip::Engine.routes.draw do
   root to: "backfill_runs#index"
 
+  # Compiled Tailwind CSS, served outside the host asset pipeline.
+  get "tailwind.css", to: "assets#stylesheet", as: :tailwind_stylesheet
+
   resources :backfill_runs, only: %i[index show new create destroy] do
     post :stop, on: :member
     post :retry_failed_batches, on: :member

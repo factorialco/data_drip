@@ -401,6 +401,8 @@ When creating a new backfill run, the interface dynamically generates form field
 
 The interface supports light and dark mode (following the OS preference) and ships as precompiled CSS inside the gem — host applications need no Node, Tailwind, or any other frontend tooling.
 
+The compiled stylesheet is served directly by the engine (`GET /data_drip/tailwind.css`, handled by `DataDrip::AssetsController`) and is deliberately **not** routed through the host's asset pipeline. Tailwind v4 output uses modern CSS (cascade layers, `oklch()`, media query range syntax) that a libsass/SassC-based Sprockets pipeline cannot parse — and such hosts recompress every CSS asset through SassC — so keeping the CSS out of the pipeline makes DataDrip work identically under Sprockets, Propshaft, or no asset pipeline at all. No `config.assets.precompile` entry is required on the host.
+
 ## Development
 
 The UI is styled with Tailwind CSS v4, compiled at development time and checked in as `app/assets/stylesheets/data_drip/tailwind.css`:
