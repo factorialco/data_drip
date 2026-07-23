@@ -1,0 +1,29 @@
+<% if @sorbet_enabled %># typed: strict<% end %>
+class <%= class_name %> < DataDrip::Script
+<% if @sorbet_enabled %>  extend T::Sig
+
+<% end %>  # Shown in the DataDrip UI so other developers know what this script does.
+  description "TODO: describe what this script does"
+
+  # Declare the inputs this script accepts. Each input gets a form field in
+  # the UI, values are coerced to the declared type, and `required: true`
+  # inputs are validated before the run is created.
+  #
+  # Supported types: :string, :integer, :decimal, :float, :boolean, :date,
+  # :time, :datetime and :enum (with values: [...]).
+  #
+  # Examples:
+  # input :company_id, :integer, required: true
+  # input :mode, :enum, values: %w[fast thorough], required: true
+  # input :dry_run, :boolean, default: true
+
+<% if @sorbet_enabled %>  sig { void }
+<% end %>  def call
+    # Implement your script here. Inputs are available as reader methods.
+    # Use `log` to record output — it is stored on the run and shown live
+    # in the UI:
+    #
+    # log "Processing company #{company_id}..."
+    raise NotImplementedError
+  end
+end

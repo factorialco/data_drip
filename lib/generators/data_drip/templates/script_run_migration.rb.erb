@@ -1,0 +1,17 @@
+class CreateDataDripScriptRuns < ActiveRecord::Migration<%= migration_version %>
+  def change
+    create_table :data_drip_script_runs, id: :bigint do |t|
+      t.string :script_class_name, null: false
+      t.json :inputs, null: false, default: {}
+      t.text :output
+      t.text :error_message
+      t.text :error_backtrace
+      t.integer :status, null: false, default: 0, index: true
+      t.bigint :backfiller_id, null: false, index: true
+      t.datetime :start_at, null: false
+      t.datetime :started_at
+      t.datetime :finished_at
+      t.timestamps null: false
+    end
+  end
+end

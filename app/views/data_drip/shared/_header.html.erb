@@ -1,5 +1,5 @@
 <header class="border-b border-zinc-950/10 dark:border-white/10">
-  <div class="mx-auto flex max-w-6xl items-center gap-x-6 px-4 py-3 sm:px-6 lg:px-8">
+  <div class="mx-auto flex max-w-6xl items-center gap-x-4 px-4 py-3 sm:gap-x-6 sm:px-6 lg:px-8">
     <%= link_to "DATADRIP",
         backfill_runs_path,
         class:
@@ -7,6 +7,16 @@
           "bg-clip-text text-lg font-bold tracking-widest text-transparent " \
           "rounded-sm focus-visible:outline-2 focus-visible:outline-offset-2 " \
           "focus-visible:outline-drip-700" %>
+
+    <% scripts_section = controller_name == "script_runs" %>
+    <nav class="flex items-center gap-x-1" aria-label="Primary">
+      <%= link_to "Backfills", backfill_runs_path,
+          class: nav_link_classes(active: !scripts_section),
+          aria: (scripts_section ? {} : { current: "page" }) %>
+      <%= link_to "Scripts", script_runs_path,
+          class: nav_link_classes(active: scripts_section),
+          aria: (scripts_section ? { current: "page" } : {}) %>
+    </nav>
 
     <div class="flex flex-1 items-center justify-end gap-x-4">
       <% backfiller_name = find_current_backfiller.send(DataDrip.backfiller_name_attribute) %>
@@ -18,8 +28,14 @@
         <span class="text-sm text-zinc-500 max-sm:hidden dark:text-zinc-400"><%= backfiller_name %></span>
       </div>
 
-      <% unless current_page?(new_backfill_run_path) %>
-        <%= link_to "New backfill run", new_backfill_run_path, class: primary_button_classes %>
+      <% if scripts_section %>
+        <% unless current_page?(new_script_run_path) %>
+          <%= link_to "New script run", new_script_run_path, class: primary_button_classes %>
+        <% end %>
+      <% else %>
+        <% unless current_page?(new_backfill_run_path) %>
+          <%= link_to "New backfill run", new_backfill_run_path, class: primary_button_classes %>
+        <% end %>
       <% end %>
     </div>
   </div>

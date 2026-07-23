@@ -5,7 +5,9 @@ require "rails"
 require "active_model"
 require "data_drip/engine"
 require "data_drip/types/enum"
+require "data_drip/concerns/schematized_options"
 require "data_drip/backfill"
+require "data_drip/script"
 
 module DataDrip
   mattr_accessor :backfiller_class, default: "::User"
@@ -15,6 +17,7 @@ module DataDrip
   mattr_accessor :base_job_class, default: "ActiveJob::Base"
   mattr_accessor :queue_name, default: (ENV["DATA_DRIP_QUEUE"].presence || "data_drip").to_sym
   mattr_accessor :child_queue_name, default: (ENV["DATA_DRIP_CHILD_QUEUE"].presence || "data_drip_child").to_sym
+  mattr_accessor :script_queue_name, default: (ENV["DATA_DRIP_SCRIPT_QUEUE"].presence || "data_drip_script").to_sym
   mattr_accessor :importmap, default: Importmap::Map.new
   mattr_accessor :before_backfill, default: nil
   mattr_accessor :sleep_time, default: 5
@@ -31,6 +34,10 @@ module DataDrip
 
   def self.all
     DataDrip::Backfill.descendants.uniq
+  end
+
+  def self.scripts
+    DataDrip::Script.descendants.uniq
   end
 
   def self.cross_rails_enum(klass, name, values)

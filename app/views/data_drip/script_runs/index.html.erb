@@ -1,0 +1,93 @@
+<h1 class="text-xl font-semibold tracking-tight text-zinc-900 dark:text-white">Script runs</h1>
+
+<dl class="mt-6 flex flex-wrap gap-y-4">
+  <div class="pr-6 sm:pr-10">
+    <dt class="text-sm text-zinc-500 dark:text-zinc-400">Running</dt>
+    <dd class="mt-0.5 text-2xl font-semibold tracking-tight text-zinc-900 tabular-nums dark:text-white"><%= @stats[:running] %></dd>
+  </div>
+  <div class="border-l border-zinc-950/10 px-6 sm:px-10 dark:border-white/10">
+    <dt class="text-sm text-zinc-500 dark:text-zinc-400">Enqueued</dt>
+    <dd class="mt-0.5 text-2xl font-semibold tracking-tight text-zinc-900 tabular-nums dark:text-white"><%= @stats[:enqueued] %></dd>
+  </div>
+  <div class="border-l border-zinc-950/10 px-6 sm:px-10 dark:border-white/10">
+    <dt class="text-sm text-zinc-500 dark:text-zinc-400">Failed <span class="text-zinc-400 dark:text-zinc-500">· last 7 days</span></dt>
+    <dd class="mt-0.5 text-2xl font-semibold tracking-tight text-zinc-900 tabular-nums dark:text-white"><%= @stats[:failed_recently] %></dd>
+  </div>
+  <div class="border-l border-zinc-950/10 pl-6 sm:pl-10 dark:border-white/10">
+    <dt class="text-sm text-zinc-500 dark:text-zinc-400">Completed <span class="text-zinc-400 dark:text-zinc-500">· last 7 days</span></dt>
+    <dd class="mt-0.5 text-2xl font-semibold tracking-tight text-zinc-900 tabular-nums dark:text-white"><%= @stats[:completed_recently] %></dd>
+  </div>
+</dl>
+
+<%= turbo_frame_tag "runs", data: { turbo_action: "advance" } do %>
+  <nav class="mt-8 flex gap-x-6 border-b border-zinc-950/10 dark:border-white/10" aria-label="Tabs">
+    <% [["my_runs", "My runs", @my_runs_count], ["all", "All runs", @all_runs_count]].each do |tab, label, count| %>
+      <% active = @current_tab == tab %>
+      <%= link_to script_runs_path(tab: tab),
+          class:
+            "-mb-px flex items-center gap-x-2 border-b-2 px-1 py-2.5 text-sm font-medium " +
+              (active ?
+                "border-drip-700 text-drip-700 dark:border-drip-400 dark:text-drip-400" :
+                "border-transparent text-zinc-500 hover:border-zinc-300 hover:text-zinc-700 dark:text-zinc-400 dark:hover:border-zinc-600 dark:hover:text-zinc-200"),
+          aria: (active ? { current: "page" } : {}) do %>
+        <%= label %>
+        <span class="rounded-full px-2 py-0.5 text-xs tabular-nums <%= active ? "bg-drip-50 text-drip-700 dark:bg-drip-400/10 dark:text-drip-300" : "bg-zinc-100 text-zinc-500 dark:bg-white/10 dark:text-zinc-400" %>"><%= count %></span>
+      <% end %>
+    <% end %>
+  </nav>
+
+  <% if @script_runs.any? %>
+    <div class="-mx-4 -my-2 mt-2 overflow-x-auto whitespace-nowrap sm:-mx-6 lg:-mx-8">
+      <div class="inline-block min-w-full px-4 py-2 align-middle sm:px-6 lg:px-8">
+        <table class="w-full text-left">
+          <thead>
+            <tr>
+              <th class="border-b border-zinc-950/10 py-2.5 pr-4 text-sm font-medium whitespace-nowrap text-zinc-500 dark:border-white/10 dark:text-zinc-400">Script class</th>
+              <th class="border-b border-zinc-950/10 py-2.5 pr-4 text-sm font-medium whitespace-nowrap text-zinc-500 dark:border-white/10 dark:text-zinc-400">Status</th>
+              <th class="border-b border-zinc-950/10 py-2.5 pr-4 text-sm font-medium whitespace-nowrap text-zinc-500 dark:border-white/10 dark:text-zinc-400">Run by</th>
+              <th class="border-b border-zinc-950/10 py-2.5 pr-4 text-sm font-medium whitespace-nowrap text-zinc-500 dark:border-white/10 dark:text-zinc-400">Created</th>
+              <th class="border-b border-zinc-950/10 py-2.5 dark:border-white/10"><span class="sr-only">View</span></th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-zinc-950/5 dark:divide-white/5">
+            <% @script_runs.each do |script_run| %>
+              <tr
+                class="group cursor-pointer hover:bg-zinc-950/2.5 dark:hover:bg-white/2.5"
+                data-controller="row-link"
+                data-row-link-url-value="<%= script_run_path(script_run) %>"
+                data-action="click->row-link#visit"
+              >
+                <td class="py-3 pr-4">
+                  <%= link_to script_run.script_class_name,
+                      script_run_path(script_run),
+                      class: "font-medium text-zinc-900 group-hover:text-drip-700 dark:text-white dark:group-hover:text-drip-400",
+                      data: { turbo_frame: "_top" } %>
+                </td>
+                <td class="py-3 pr-4"><%= status_tag(script_run.status) %></td>
+                <td class="py-3 pr-4 text-sm text-zinc-600 dark:text-zinc-300"><%= script_run.backfiller_name %></td>
+                <td class="py-3 pr-4 text-sm text-zinc-500 dark:text-zinc-400"><%= relative_time(script_run.created_at, @user_timezone) %></td>
+                <td class="py-3 text-right text-zinc-400 dark:text-zinc-600" aria-hidden="true">›</td>
+              </tr>
+            <% end %>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <%= render 'data_drip/shared/pagination',
+        pagination: @pagination,
+        item_name: "runs",
+        page_param: :page,
+        additional_params: { tab: @current_tab } %>
+  <% else %>
+    <div class="border-t border-zinc-950/5 py-16 text-center dark:border-white/5">
+      <p class="text-sm font-semibold text-zinc-900 dark:text-white">No script runs yet.</p>
+      <p class="mx-auto mt-1 max-w-[45ch] text-sm text-pretty text-zinc-500 dark:text-zinc-400">
+        Trigger your first script to run one-off code with typed inputs.
+      </p>
+      <div class="mt-5">
+        <%= link_to "New script run", new_script_run_path, class: secondary_button_classes, data: { turbo_frame: "_top" } %>
+      </div>
+    </div>
+  <% end %>
+<% end %>

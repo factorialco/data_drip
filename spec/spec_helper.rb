@@ -69,13 +69,14 @@ RSpec.configure do |config|
       DataDrip::BackfillRunBatch.delete_all
     end
     DataDrip::BackfillRun.delete_all if defined?(DataDrip::BackfillRun)
+    DataDrip::ScriptRun.delete_all if defined?(DataDrip::ScriptRun)
     Employee.delete_all if defined?(Employee)
     User.delete_all if defined?(User)
     HookNotifier.instance.clear
 
     if ActiveRecord::Base.connection.adapter_name == "SQLite"
       ActiveRecord::Base.connection.execute(
-        "DELETE FROM sqlite_sequence WHERE name IN ('users', 'employees', 'data_drip_backfill_runs', 'data_drip_backfill_run_batches')"
+        "DELETE FROM sqlite_sequence WHERE name IN ('users', 'employees', 'data_drip_backfill_runs', 'data_drip_backfill_run_batches', 'data_drip_script_runs')"
       )
     end
   end

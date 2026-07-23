@@ -168,6 +168,21 @@ module DataDrip
         "text-zinc-600 hover:bg-zinc-950/5 dark:text-zinc-400 dark:hover:bg-white/5"
     end
 
+    # Pill styling for the primary section navigation (Backfills / Scripts) in
+    # the shared header.
+    def nav_link_classes(active:)
+      base = "rounded-lg px-3 py-1.5 text-sm font-medium transition-colors"
+      state =
+        if active
+          "bg-drip-50 text-drip-700 dark:bg-drip-400/10 dark:text-drip-300"
+        else
+          "text-zinc-600 hover:bg-zinc-950/5 hover:text-zinc-900 " \
+            "dark:text-zinc-400 dark:hover:bg-white/5 dark:hover:text-zinc-200"
+        end
+
+      "#{base} #{state}"
+    end
+
     # A single option row in the backfill-class combobox. `data-name` /
     # `data-component` / `data-value` feed the fuzzy matcher in the Stimulus
     # controller; the name span is re-rendered with match highlights on filter.
@@ -208,32 +223,60 @@ module DataDrip
     end
 
     def backfill_option_inputs(backfill_run)
-      return "" unless backfill_run.backfill_class&.backfill_options_class
+      backfill_class = backfill_run.backfill_class
+      return "" unless backfill_class&.backfill_options_class
 
-      options_class = backfill_run.backfill_class.backfill_options_class
+      typed_option_inputs(
+        options_class: backfill_class.backfill_options_class,
+        values: backfill_run.options,
+        field_prefix: "backfill_run[options]",
+        title: "Options · #{backfill_run.backfill_class_name}",
+        required_attributes: backfill_class.required_option_names
+      )
+    end
+
+    # Renders the typed input fields for an options/inputs schema. Shared by
+    # backfills (prefix `backfill_run[options]`) and scripts (prefix
+    # `script_run[inputs]`) through the `field_prefix` argument.
+    def typed_option_inputs(
+      options_class:,
+      values:,
+      field_prefix:,
+      title:,
+      required_attributes: [],
+      description: nil
+    )
       attribute_types = options_class.attribute_types
-      return "" if attribute_types.empty?
+      return "" if attribute_types.empty? && description.blank?
 
+      required_names = required_attributes.map(&:to_s).to_set
       defaults = options_class.new
+      values ||= {}
 
       content_tag :div, class: "mb-5 rounded-xl bg-zinc-50 p-4 dark:bg-white/5" do
         header =
           content_tag :h3,
-                      "Options · #{backfill_run.backfill_class_name}",
+                      title,
                       class:
-                        "mb-4 font-mono text-xs font-medium text-zinc-500 dark:text-zinc-400"
+                        "#{description.present? ? "mb-1" : "mb-4"} font-mono text-xs font-medium text-zinc-500 dark:text-zinc-400"
+
+        description_block =
+          if description.present?
+            content_tag :p,
+                        description,
+                        class: "mb-4 text-sm text-zinc-500 dark:text-zinc-400"
+          else
+            "".html_safe
+          end
 
         inputs =
           safe_join(
             attribute_types.map do |name, type|
-              required =
-                backfill_run.backfill_class.required_option_names.include?(
-                  name.to_sym
-                )
+              required = required_names.include?(name.to_s)
 
               content_tag :div, class: "mb-4 last:mb-0" do
                 label =
-                  label_tag "backfill_run[options][#{name}]",
+                  label_tag "#{field_prefix}[#{name}]",
                             class:
                               "mb-1.5 block font-mono text-sm font-medium " \
                               "text-zinc-700 dark:text-zinc-300" do
@@ -256,11 +299,17 @@ module DataDrip
 
                 input =
                   if type.is_a?(DataDrip::Types::Enum)
-                    build_enum_input(name, type, backfill_run)
+                    build_enum_input(name, type, values, field_prefix)
                   else
-                    current = backfill_run.options[name]
+                    current = values[name]
                     value = current.nil? ? defaults.public_send(name) : current
-                    build_standard_input(name, type, value, required: required)
+                    build_standard_input(
+                      name,
+                      type,
+                      value,
+                      field_prefix,
+                      required: required
+                    )
                   end
 
                 label + input
@@ -268,14 +317,14 @@ module DataDrip
             end
           )
 
-        header + inputs
+        header + description_block + inputs
       end
     end
 
     private
 
-    def build_standard_input(name, type, value, required: false)
-      field_name = "backfill_run[options][#{name}]"
+    def build_standard_input(name, type, value, field_prefix, required: false)
+      field_name = "#{field_prefix}[#{name}]"
 
       case type
       when ActiveModel::Type::String, ActiveModel::Type::ImmutableString
@@ -314,14 +363,14 @@ module DataDrip
       end
     end
 
-    def build_enum_input(name, type, backfill_run)
+    def build_enum_input(name, type, values, field_prefix)
       raw_choices = type.available_values
       # Normalize to [label, value] pairs — supports both ["a","b"] and [["Label","val"],...]
       pairs = raw_choices.map { |choice| choice.is_a?(Array) ? choice : [ choice, choice ] }
 
-      field_name = "backfill_run[options][#{name}]"
+      field_name = "#{field_prefix}[#{name}]"
       field_id = "enum_#{name}"
-      current_value = backfill_run.options[name].to_s
+      current_value = values[name].to_s
       selected_values =
         current_value.present? ? current_value.split(",") : pairs.map(&:last).map(&:to_s)
 

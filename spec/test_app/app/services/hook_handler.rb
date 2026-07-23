@@ -14,4 +14,12 @@ class HookHandler
   def self.on_batch_completed(batch)
     puts "on_batch_completed"
   end
+
+  def self.on_script_run_enqueued(run)
+    HookNotifier.instance.set('HookHandler_script_run_enqueued', run.id)
+  end
+
+  def self.on_script_run_completed(run)
+    HookNotifier.instance.set('HookHandler_script_run_completed', run.id)
+  end
 end

@@ -418,6 +418,82 @@ To play with the UI locally, boot the dummy app and visit `http://localhost:3000
 bin/dev
 ```
 
+## Scripts
+
+Besides backfills, DataDrip can run **scripts**: arbitrary one-shot pieces of code with typed inputs, triggered from the web UI. Unlike backfills there is no collection to iterate — a script runs once, in a background job, and everything it logs is stored and shown live in the UI.
+
+Every script run is recorded permanently in the `data_drip_script_runs` table: who triggered it, the inputs given, the full log output, any error (message and backtrace), and created/started/finished timestamps.
+
+### Installing
+
+Fresh installs of DataDrip get everything through `rails generate data_drip:install`. If you installed DataDrip before scripts existed, run the upgrade generator:
+
+```bash
+rails generate data_drip:install_scripts
+```
+
+This creates the `app/scripts` directory and the `data_drip_script_runs` migration.
+
+### Creating Scripts
+
+Generate a new script:
+
+```bash
+rails generate data_drip:script BackfillCompanyTimezones
+```
+
+A script declares its inputs with the `input` DSL and implements a single `call` method:
+
+```ruby
+# app/scripts/backfill_company_timezones.rb
+class BackfillCompanyTimezones < DataDrip::Script
+  description "Recomputes the timezone of a company from its address."
+
+  input :company_id, :integer, required: true
+  input :mode, :enum, values: %w[fast thorough], required: true
+  input :dry_run, :boolean, default: true
+  input :effective_date, :date
+
+  def call
+    company = Company.find(company_id)
+    log "Recomputing timezone for #{company.name} (mode: #{mode})"
+
+    timezone = TimezoneResolver.call(company.address, mode: mode)
+
+    if dry_run
+      log "[dry run] would set timezone to #{timezone}"
+    else
+      company.update!(timezone: timezone)
+      log "Timezone updated to #{timezone}"
+    end
+  end
+end
+```
+
+- **`description`** is shown in the UI so other developers know what the script does.
+- **`input name, type, default:, required:`** declares a typed input. The UI form is generated automatically from these declarations, values are coerced to the declared type, and `required: true` inputs are validated before the run is created (required booleans accept `false` but not missing). Supported types are the same as backfill attributes: `:string`, `:integer`, `:decimal`, `:float`, `:boolean`, `:date`, `:time`, `:datetime` and `:enum`.
+- **`log(message)`** appends a timestamped line to the run's output, persisted immediately and streamed to the show page. Note each `log` call issues one database update — log sparsely inside hot loops.
+
+### Running Scripts
+
+Navigate to `/data_drip/script_runs`, pick a script, fill in its inputs and trigger it — immediately or scheduled for later. The show page displays live status, output, and the error with backtrace if the script failed. Runs can only be deleted while they are still enqueued; anything that executed stays in the history.
+
+### Script Hooks
+
+Scripts fire lifecycle hooks with the same precedence rules as backfills (script class first, then the global handler): `on_script_run_pending`, `on_script_run_enqueued`, `on_script_run_running`, `on_script_run_completed`, `on_script_run_failed`. Each receives the `ScriptRun`.
+
+### Script Configuration
+
+```ruby
+# The Active Job queue for script runs (default: ENV["DATA_DRIP_SCRIPT_QUEUE"] or :data_drip_script)
+DataDrip.script_queue_name = :scripts
+```
+
+### Notes
+
+- Datetime inputs are interpreted without timezone conversion (only the run's top-level "start at" field is converted from your browser timezone).
+- If your `base_job_class` retries on errors, a failed script will re-run from scratch. Make scripts idempotent, or configure `discard_on` in your base job class.
+
 ## Contributing
 
 Bug reports and pull requests are welcome on GitHub at https://github.com/factorialco/data_drip.
