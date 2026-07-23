@@ -2,7 +2,7 @@
 
 module DataDrip
   class ScriptRunner < DataDrip.base_job_class.safe_constantize
-    queue_as { DataDrip.script_queue_name }
+    queue_as { DataDrip.queue_name }
 
     def perform(script_run)
       script_run.update!(status: :running, started_at: Time.current)

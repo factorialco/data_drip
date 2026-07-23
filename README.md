@@ -482,15 +482,9 @@ Navigate to `/data_drip/script_runs`, pick a script, fill in its inputs and trig
 
 Scripts fire lifecycle hooks with the same precedence rules as backfills (script class first, then the global handler): `on_script_run_pending`, `on_script_run_enqueued`, `on_script_run_running`, `on_script_run_completed`, `on_script_run_failed`. Each receives the `ScriptRun`.
 
-### Script Configuration
-
-```ruby
-# The Active Job queue for script runs (default: ENV["DATA_DRIP_SCRIPT_QUEUE"] or :data_drip_script)
-DataDrip.script_queue_name = :scripts
-```
-
 ### Notes
 
+- Script runs are enqueued on the shared `DataDrip.queue_name` queue (default: `ENV["DATA_DRIP_QUEUE"]` or `:data_drip`), the same one backfills use — make sure your worker processes it.
 - Datetime inputs are interpreted without timezone conversion (only the run's top-level "start at" field is converted from your browser timezone).
 - If your `base_job_class` retries on errors, a failed script will re-run from scratch. Make scripts idempotent, or configure `discard_on` in your base job class.
 
