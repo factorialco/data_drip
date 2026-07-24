@@ -17,8 +17,8 @@ RSpec.describe DataDrip::BackfillRun, type: :model do
       }
     end
 
-    describe "validate_scope" do
-      context "when scope has records" do
+    describe "validate_options_are_known" do
+      context "when the options are known attributes" do
         it "is valid" do
           backfill_run =
             DataDrip::BackfillRun.new(
@@ -29,45 +29,40 @@ RSpec.describe DataDrip::BackfillRun, type: :model do
         end
       end
 
-      context "when scope has no records" do
-        it "is invalid with appropriate error message" do
+      context "when an option is not a known attribute" do
+        it "is invalid with an unknown attributes error" do
+          backfill_run =
+            DataDrip::BackfillRun.new(
+              valid_attributes.merge(options: { not_a_real_option: 1 })
+            )
+
+          expect(backfill_run).not_to be_valid
+          expect(backfill_run.errors[:options].join).to match(
+            /unknown attributes/
+          )
+        end
+      end
+
+      context "when the scope has no records" do
+        # The scope count is intentionally *not* run at creation time (it can
+        # exceed the request timeout on large tables), so an empty scope no
+        # longer blocks creating the run.
+        it "is still valid" do
           backfill_run =
             DataDrip::BackfillRun.new(
               valid_attributes.merge(options: { age: 999 })
             )
 
-          expect(backfill_run).not_to be_valid
-          expect(backfill_run.errors[:base]).to include(
-            "No records to process with the current configuration. Please adjust your options or select a different backfill class."
-          )
+          expect(backfill_run).to be_valid
         end
       end
 
-      context "when base scope has no records" do
+      context "when the base scope has no records" do
         before { Employee.update_all(role: "existing") }
 
-        it "is invalid" do
+        it "is still valid" do
           backfill_run =
             DataDrip::BackfillRun.new(valid_attributes.merge(options: {}))
-
-          expect(backfill_run).not_to be_valid
-          expect(backfill_run.errors[:base]).to include(
-            "No records to process with the current configuration. Please adjust your options or select a different backfill class."
-          )
-        end
-      end
-
-      context "with amount_of_elements limit" do
-        it "is valid when limited scope has records" do
-          backfill_run =
-            DataDrip::BackfillRun.new(
-              valid_attributes.merge(
-                options: {
-                  age: 25
-                },
-                amount_of_elements: 1
-              )
-            )
 
           expect(backfill_run).to be_valid
         end

@@ -16,7 +16,7 @@ module DataDrip
     validate :backfill_class_exists
     validate :backfill_class_properly_configured?
     validate :validate_required_options, on: :create
-    validate :validate_scope, on: :create
+    validate :validate_options_are_known, on: :create
     validate :no_active_run_for_same_class, on: :create
     validate :start_at_must_be_valid_datetime
     validates :start_at, presence: true
@@ -168,38 +168,24 @@ module DataDrip
         errors.add(:options, "#{error.attribute} #{error.message}")
       end
     rescue ActiveModel::UnknownAttributeError
-      # Unknown option keys are reported by validate_scope.
+      # Unknown option keys are reported by validate_options_are_known.
     end
 
-    def validate_scope
+    # Verifies the provided options map onto the backfill class's known
+    # attributes. We deliberately do *not* count the scope here: that query can
+    # run for a long time on large tables and would blow the request timeout.
+    # An empty scope is handled at run time instead, not blocked at creation.
+    def validate_options_are_known
       return unless backfill_class_name.present?
       return unless backfill_class
-      # A missing required option would make the scope blow up (or count the
-      # wrong records) — the validate_required_options error is enough.
       return if errors[:options].any?
 
-      begin
-        backfill =
-          backfill_class.new(
-            batch_size: batch_size || 100,
-            backfill_options: options || {}
-          )
-        scope = backfill.scope
-
-        scope =
-          scope.limit(amount_of_elements) if amount_of_elements.present? &&
-          amount_of_elements.positive?
-
-        final_count = scope.count
-        return unless final_count.zero?
-
-        errors.add(
-          :base,
-          "No records to process with the current configuration. Please adjust your options or select a different backfill class."
-        )
-      rescue ActiveModel::UnknownAttributeError => e
-        errors.add(:options, "contains unknown attributes: #{e.message}")
-      end
+      backfill_class.new(
+        batch_size: batch_size || 100,
+        backfill_options: options || {}
+      )
+    rescue ActiveModel::UnknownAttributeError => e
+      errors.add(:options, "contains unknown attributes: #{e.message}")
     end
 
     def start_at_must_be_valid_datetime
