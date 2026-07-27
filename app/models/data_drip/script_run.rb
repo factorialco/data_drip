@@ -29,6 +29,18 @@ module DataDrip
         backfiller.send(DataDrip.backfiller_name_attribute.to_sym)
     end
 
+    # Still safe to delete: the run has not started executing yet. Once it is
+    # running or terminal we keep it as history and no longer allow deletion.
+    def not_yet_run?
+      pending? || enqueued?
+    end
+
+    # Whether the given backfiller owns this run. Actions (delete) are
+    # restricted to the run's own author.
+    def owned_by?(backfiller)
+      backfiller.present? && backfiller_id == backfiller.id
+    end
+
     def script_class
       @script_class ||=
         DataDrip.scripts.find { |klass| klass.name == script_class_name }

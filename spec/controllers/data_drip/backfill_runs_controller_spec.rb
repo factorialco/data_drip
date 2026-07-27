@@ -240,6 +240,23 @@ RSpec.describe DataDrip::BackfillRunsController, type: :controller do
         expect(flash[:alert]).to eq("Backfill run is not currently running.")
       end
     end
+
+    context "when the backfill run belongs to another user" do
+      let!(:other_user) { User.create!(name: "Bob") }
+
+      before do
+        backfill_run.update!(status: "running", backfiller: other_user)
+      end
+
+      it "does not stop the run and redirects with an alert" do
+        post :stop, params: { id: backfill_run.id }
+
+        expect(backfill_run.reload.status).to eq("running")
+        expect(flash[:alert]).to eq(
+          "You can only stop backfill runs you created."
+        )
+      end
+    end
   end
 
   describe "DELETE #destroy" do
@@ -273,7 +290,7 @@ RSpec.describe DataDrip::BackfillRunsController, type: :controller do
         expect(DataDrip::BackfillRun.exists?(backfill_run.id)).to be_truthy
         expect(response).to redirect_to(backfill_runs_path(tab: "my_runs"))
         expect(flash[:alert]).to eq(
-          "Backfill run cannot be deleted while it is pending or running."
+          "Backfill run can only be deleted before it has run."
         )
       end
     end
@@ -281,11 +298,30 @@ RSpec.describe DataDrip::BackfillRunsController, type: :controller do
     context "when the backfill run is in a terminal state" do
       before { backfill_run.update!(status: "completed") }
 
-      it "deletes the backfill run so finished runs can be cleaned up" do
+      it "does not delete the run, since it is kept as history" do
         delete :destroy, params: { id: backfill_run.id }
 
-        expect(DataDrip::BackfillRun.exists?(backfill_run.id)).to be_falsey
-        expect(flash[:notice]).to eq("Backfill run has been deleted.")
+        expect(DataDrip::BackfillRun.exists?(backfill_run.id)).to be_truthy
+        expect(flash[:alert]).to eq(
+          "Backfill run can only be deleted before it has run."
+        )
+      end
+    end
+
+    context "when the backfill run belongs to another user" do
+      let!(:other_user) { User.create!(name: "Bob") }
+
+      before do
+        backfill_run.update!(status: "enqueued", backfiller: other_user)
+      end
+
+      it "does not delete the run and redirects with an alert" do
+        delete :destroy, params: { id: backfill_run.id }
+
+        expect(DataDrip::BackfillRun.exists?(backfill_run.id)).to be_truthy
+        expect(flash[:alert]).to eq(
+          "You can only delete backfill runs you created."
+        )
       end
     end
 

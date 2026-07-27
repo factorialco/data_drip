@@ -14,7 +14,7 @@
     <span data-script-run-updates-target="status"><%= status_tag(@script_run.status) %></span>
 
     <div class="flex flex-1 justify-end gap-x-2">
-      <% if @script_run.enqueued? %>
+      <% if @script_run.owned_by?(find_current_backfiller) && @script_run.not_yet_run? %>
         <%= button_to "Delete run",
             script_run_path(@script_run),
             method: :delete,

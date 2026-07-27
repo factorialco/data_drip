@@ -52,6 +52,18 @@ module DataDrip
       completed? || failed? || stopped?
     end
 
+    # Still safe to delete: the run has not started executing yet. Once it is
+    # running or terminal we keep it as history and no longer allow deletion.
+    def not_yet_run?
+      pending? || enqueued?
+    end
+
+    # Whether the given backfiller owns this run. Actions (stop/delete) are
+    # restricted to the run's own author.
+    def owned_by?(backfiller)
+      backfiller.present? && backfiller_id == backfiller.id
+    end
+
     def progress_percent
       return 100 if completed?
       return 0 if total_count.to_i.zero?

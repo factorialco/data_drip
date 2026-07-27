@@ -104,22 +104,26 @@ module DataDrip
 
     def destroy
       @backfill_run = DataDrip::BackfillRun.find(params[:id])
-      # Deletable when not in flight: still-enqueued, or finished (completed/
-      # failed/stopped) so old runs can be cleaned up.
-      if @backfill_run.enqueued? || @backfill_run.terminal?
-        @backfill_run.destroy!
-        flash[:notice] = "Backfill run has been deleted."
-      else
+      # Only the run's author may delete it, and only before it has started
+      # running — once it has run we keep it as history.
+      if !@backfill_run.owned_by?(find_current_backfiller)
+        flash[:alert] = "You can only delete backfill runs you created."
+      elsif !@backfill_run.not_yet_run?
         flash[
           :alert
-        ] = "Backfill run cannot be deleted while it is pending or running."
+        ] = "Backfill run can only be deleted before it has run."
+      else
+        @backfill_run.destroy!
+        flash[:notice] = "Backfill run has been deleted."
       end
       redirect_to backfill_runs_path(tab: params[:tab] || "my_runs")
     end
 
     def stop
       @backfill_run = DataDrip::BackfillRun.find(params[:id])
-      if @backfill_run.running?
+      if !@backfill_run.owned_by?(find_current_backfiller)
+        flash[:alert] = "You can only stop backfill runs you created."
+      elsif @backfill_run.running?
         @backfill_run.stopped!
         flash[:notice] = "Backfill run has been stopped."
       else

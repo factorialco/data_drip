@@ -79,13 +79,17 @@ module DataDrip
 
     def destroy
       @script_run = DataDrip::ScriptRun.find(params[:id])
-      if @script_run.enqueued?
-        @script_run.destroy!
-        flash[:notice] = "Script run has been deleted."
-      else
+      # Only the run's author may delete it, and only before it has started
+      # running — once it has run we keep it as history.
+      if !@script_run.owned_by?(find_current_backfiller)
+        flash[:alert] = "You can only delete script runs you created."
+      elsif !@script_run.not_yet_run?
         flash[
           :alert
-        ] = "Script run cannot be deleted as it is not in an enqueued state."
+        ] = "Script run can only be deleted before it has run."
+      else
+        @script_run.destroy!
+        flash[:notice] = "Script run has been deleted."
       end
       redirect_to script_runs_path(tab: params[:tab] || "my_runs")
     end

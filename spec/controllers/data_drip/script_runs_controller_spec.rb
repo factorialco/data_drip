@@ -178,7 +178,22 @@ RSpec.describe DataDrip::ScriptRunsController, type: :controller do
         delete :destroy, params: { id: script_run.id }
       end.not_to change(DataDrip::ScriptRun, :count)
 
-      expect(flash[:alert]).to include("cannot be deleted")
+      expect(flash[:alert]).to eq(
+        "Script run can only be deleted before it has run."
+      )
+    end
+
+    it "refuses to delete a run belonging to another user" do
+      other_user = User.create!(name: "Bob")
+      script_run = create_script_run(backfiller: other_user)
+
+      expect do
+        delete :destroy, params: { id: script_run.id }
+      end.not_to change(DataDrip::ScriptRun, :count)
+
+      expect(flash[:alert]).to eq(
+        "You can only delete script runs you created."
+      )
     end
   end
 

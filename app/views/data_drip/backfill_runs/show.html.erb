@@ -14,18 +14,20 @@
     <span data-backfill-run-updates-target="status"><%= status_tag(@backfill_run.status) %></span>
 
     <div class="flex flex-1 justify-end gap-x-2">
-      <% if @backfill_run.running? %>
-        <%= button_to "Stop run",
-            stop_backfill_run_path(@backfill_run),
-            method: :post,
-            form: { data: { turbo_confirm: "Stop this backfill run? Batches that are already running will finish." } },
-            class: danger_button_classes %>
-      <% elsif @backfill_run.enqueued? || @backfill_run.terminal? %>
-        <%= button_to "Delete run",
-            backfill_run_path(@backfill_run),
-            method: :delete,
-            form: { data: { turbo_confirm: "Delete this backfill run?" } },
-            class: danger_button_classes %>
+      <% if @backfill_run.owned_by?(find_current_backfiller) %>
+        <% if @backfill_run.running? %>
+          <%= button_to "Stop run",
+              stop_backfill_run_path(@backfill_run),
+              method: :post,
+              form: { data: { turbo_confirm: "Stop this backfill run? Batches that are already running will finish." } },
+              class: danger_button_classes %>
+        <% elsif @backfill_run.not_yet_run? %>
+          <%= button_to "Delete run",
+              backfill_run_path(@backfill_run),
+              method: :delete,
+              form: { data: { turbo_confirm: "Delete this backfill run?" } },
+              class: danger_button_classes %>
+        <% end %>
       <% end %>
     </div>
   </div>
