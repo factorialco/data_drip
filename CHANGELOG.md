@@ -17,6 +17,7 @@
 - The unused SSE `GET :stream` endpoint (live updates now poll the existing `updates` endpoint).
 
 ### Fixed
+- The runs list search field keeps focus (and the caret position) when the debounced filter refreshes the results. The form lives inside the Turbo Frame it navigates, so each submit replaced the very input being typed into; the `autosubmit` controller now restores focus, caret, and any keystroke that landed while the request was in flight.
 - Boolean option checkboxes now submit an explicit `"0"` when unchecked. Previously, an unchecked checkbox dropped the key from the form params entirely, causing the attribute's `default:` to silently re-apply server-side. Pairs the `check_box_tag` with a `hidden_field_tag` (the same idiom Rails' `form.check_box` uses internally).
 
 ## [0.1.0] - 2025-05-05
