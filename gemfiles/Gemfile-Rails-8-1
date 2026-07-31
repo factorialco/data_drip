@@ -26,3 +26,5 @@ gem "rubocop-rails-omakase"
 gem "byebug"
 
 gem "propshaft"
+
+gem "webmock"

@@ -91,10 +91,13 @@
                 data-action="click->row-link#visit"
               >
                 <td class="py-3 pr-4">
-                  <%= link_to backfill_run.backfill_class_name,
-                      backfill_run_path(backfill_run),
-                      class: "font-medium text-zinc-900 group-hover:text-drip-700 dark:text-white dark:group-hover:text-drip-400",
-                      data: { turbo_frame: "_top" } %>
+                  <div class="flex items-center gap-x-2">
+                    <%= link_to backfill_run.backfill_class_name,
+                        backfill_run_path(backfill_run),
+                        class: "font-medium text-zinc-900 group-hover:text-drip-700 dark:text-white dark:group-hover:text-drip-400",
+                        data: { turbo_frame: "_top" } %>
+                    <%= cell_badge(backfill_run) %>
+                  </div>
                 </td>
                 <td class="py-3 pr-4"><%= status_tag(backfill_run.status) %></td>
                 <td class="py-3 pr-4">

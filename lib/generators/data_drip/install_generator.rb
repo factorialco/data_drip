@@ -103,6 +103,30 @@ module DataDrip
         end
       end
 
+      def create_cell_dispatch_migration
+        if Dir.glob(
+             Rails.root.join("db/migrate/*_create_data_drip_cell_dispatches.rb")
+           ).any?
+          say_status(
+            "skipped",
+            "DataDrip cell dispatches migration already exists",
+            :yellow
+          )
+        else
+          migration_file =
+            "db/migrate/#{Time.now.utc.strftime("%Y%m%d%H%M%S").to_i + 3}_create_data_drip_cell_dispatches.rb"
+          template "cell_dispatch_migration.rb.erb",
+                   migration_file,
+                   migration_version: migration_version
+          run "rails db:migrate"
+          say_status(
+            "create",
+            "Created DataDrip cell dispatches migration",
+            :green
+          )
+        end
+      end
+
       def migration_version
         "[#{Rails::VERSION::MAJOR}.#{Rails::VERSION::MINOR}]"
       end
