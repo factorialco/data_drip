@@ -911,6 +911,9 @@
   .text-pretty {
     text-wrap: pretty;
   }
+  .wrap-anywhere {
+    overflow-wrap: anywhere;
+  }
   .whitespace-nowrap {
     white-space: nowrap;
   }

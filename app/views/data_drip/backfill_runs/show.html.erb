@@ -59,9 +59,13 @@
       <% if @backfill_run.options.present? %>
         <div class="col-span-full mt-2 rounded-lg bg-zinc-50 p-3 dark:bg-white/5">
           <p class="mb-1 font-mono text-xs font-medium text-zinc-400 dark:text-zinc-500">options</p>
-          <% @backfill_run.options.each do |key, value| %>
-            <p class="font-mono text-xs leading-6 text-zinc-600 dark:text-zinc-300"><%= key %> = <%= value.nil? ? "nil" : value %></p>
-          <% end %>
+          <%# Option values can be huge (an id list, say): wrap them so they
+              never widen the layout, and cap the block's height. %>
+          <div class="max-h-64 overflow-y-auto">
+            <% @backfill_run.options.each do |key, value| %>
+              <p class="font-mono text-xs leading-6 wrap-anywhere text-zinc-600 dark:text-zinc-300"><%= key %> = <%= value.nil? ? "nil" : value %></p>
+            <% end %>
+          </div>
         </div>
       <% end %>
     </dl>
