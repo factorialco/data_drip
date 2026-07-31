@@ -12,6 +12,10 @@ class CreateDataDripBackfillRuns < ActiveRecord::Migration<%= migration_version 
       t.bigint :backfiller_id, null: false
       t.string :backfiller_name
       t.datetime :start_at, null: false
+      t.string :group_uuid
+      t.string :cell_id
+      t.integer :origin, null: false, default: 0
+      t.string :origin_cell_id
       t.timestamps null: false
 
       # "My runs" filters by backfiller and sorts by created_at; "All runs"
@@ -19,6 +23,10 @@ class CreateDataDripBackfillRuns < ActiveRecord::Migration<%= migration_version 
       t.index [ :backfiller_id, :created_at ],
               name: "idx_backfill_runs_on_backfiller_and_created_at"
       t.index :created_at
+      # Multi-cell dispatch is idempotent per (group, cell).
+      t.index [ :group_uuid, :cell_id ],
+              unique: true,
+              name: "idx_backfill_runs_on_group_and_cell"
     end
   end
 end

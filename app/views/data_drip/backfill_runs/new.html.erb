@@ -84,6 +84,8 @@
     <%= backfill_option_inputs(@run) if @run.backfill_class_name.present? %>
   </div>
 
+  <%= render "data_drip/shared/cell_scope" %>
+
   <% scheduled_later = @run.start_at.present? && @run.start_at > 1.minute.from_now %>
   <fieldset class="mb-5" data-controller="schedule">
     <legend class="<%= DataDrip::BackfillRunsHelper::LABEL_CLASSES %>">Schedule</legend>

@@ -1,0 +1,70 @@
+<%# "Where to run" section of the new-run forms, only rendered in multi-cell
+    mode. The current cell is always included — the run is being created here —
+    so the custom picker only offers the remote cells. %>
+<% if DataDrip.multi_cell? %>
+  <% current_cell = DataDrip.resolved_current_cell_id %>
+  <% remote_cells = DataDrip.remote_cell_ids %>
+  <% selected_scope = params[:cell_scope].presence_in(%w[all local custom]) || "all" %>
+  <% selected_cells = Array(params[:target_cell_ids]).map(&:to_s) %>
+
+  <fieldset class="mb-5" data-controller="cell-scope">
+    <legend class="<%= DataDrip::BackfillRunsHelper::LABEL_CLASSES %>">Where to run</legend>
+
+    <div class="mt-2 flex h-lh items-center gap-x-2 text-sm">
+      <%= radio_button_tag :cell_scope, "all", selected_scope == "all",
+          class: "size-4 accent-drip-700 dark:accent-drip-400",
+          data: { action: "change->cell-scope#toggle" } %>
+      <%= label_tag :cell_scope_all, class: "text-zinc-700 dark:text-zinc-300" do %>
+        All cells <span class="text-zinc-400 dark:text-zinc-500">· <%= DataDrip.resolved_cell_ids.size %> cells</span>
+      <% end %>
+    </div>
+
+    <div class="mt-2 flex h-lh items-center gap-x-2 text-sm">
+      <%= radio_button_tag :cell_scope, "local", selected_scope == "local",
+          class: "size-4 accent-drip-700 dark:accent-drip-400",
+          data: { action: "change->cell-scope#toggle" } %>
+      <%= label_tag :cell_scope_local, class: "text-zinc-700 dark:text-zinc-300" do %>
+        Only this cell <span class="font-mono text-xs text-zinc-400 dark:text-zinc-500"><%= current_cell %></span>
+      <% end %>
+    </div>
+
+    <div class="mt-2 flex h-lh items-center gap-x-2 text-sm">
+      <%= radio_button_tag :cell_scope, "custom", selected_scope == "custom",
+          class: "size-4 accent-drip-700 dark:accent-drip-400",
+          data: { action: "change->cell-scope#toggle" } %>
+      <%= label_tag :cell_scope_custom, "Choose cells…", class: "text-zinc-700 dark:text-zinc-300" %>
+    </div>
+
+    <div
+      class="mt-2 ml-6 space-y-2 rounded-lg bg-zinc-50 p-3 dark:bg-white/5"
+      data-cell-scope-target="custom"
+      <%= "hidden" unless selected_scope == "custom" %>
+    >
+      <div class="flex items-center gap-x-2 text-sm">
+        <%= check_box_tag "current_cell_always", "1", true,
+            disabled: true,
+            class: "size-4 accent-drip-700 opacity-50 dark:accent-drip-400" %>
+        <span class="font-mono text-xs text-zinc-500 dark:text-zinc-400"><%= current_cell %></span>
+        <span class="text-xs text-zinc-400 dark:text-zinc-500">· this cell, always included</span>
+      </div>
+      <% remote_cells.each do |cell_id| %>
+        <div class="flex items-center gap-x-2 text-sm">
+          <%= check_box_tag "target_cell_ids[]",
+              cell_id,
+              selected_scope != "custom" || selected_cells.include?(cell_id),
+              id: "target_cell_#{cell_id.parameterize(separator: "_")}",
+              disabled: selected_scope != "custom",
+              class: "size-4 accent-drip-700 dark:accent-drip-400",
+              data: { cell_scope_target: "checkbox" } %>
+          <%= label_tag "target_cell_#{cell_id.parameterize(separator: "_")}",
+              cell_id,
+              class: "font-mono text-xs text-zinc-700 dark:text-zinc-300" %>
+        </div>
+      <% end %>
+    </div>
+
+    <p class="mt-1.5 text-sm text-pretty text-zinc-500 dark:text-zinc-400">
+      The run executes independently in each cell, against that cell's data.
+    </p>
+  </fieldset>
+<% end %>

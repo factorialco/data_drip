@@ -1,0 +1,18 @@
+class CreateDataDripCellDispatches < ActiveRecord::Migration<%= migration_version %>
+  def change
+    create_table :data_drip_cell_dispatches, id: :bigint do |t|
+      t.string :group_uuid, null: false
+      t.string :cell_id, null: false
+      t.integer :runnable_type, null: false, default: 0
+      t.integer :status, null: false, default: 0
+      t.bigint :remote_run_id
+      t.text :error_message
+      t.json :payload, null: false, default: {}
+      t.timestamps null: false
+
+      t.index [ :group_uuid, :cell_id ],
+              unique: true,
+              name: "idx_cell_dispatches_on_group_and_cell"
+    end
+  end
+end

@@ -2,6 +2,7 @@
   data-controller="script-run-updates"
   data-script-run-updates-url-value="<%= updates_script_run_path(@script_run) %>"
   data-script-run-updates-status-value="<%= @script_run.status %>"
+  data-script-run-updates-cells-active-value="<%= @cells_active %>"
 >
   <nav aria-label="Breadcrumb" class="flex items-center gap-x-2 text-sm">
     <%= link_to "Script runs", script_runs_path, class: "text-zinc-500 hover:text-zinc-700 dark:text-zinc-400 dark:hover:text-zinc-200" %>
@@ -28,10 +29,19 @@
       <%= @script_run.script_class.description %>
       <span class="text-zinc-400 dark:text-zinc-600" aria-hidden="true">·</span>
     <% end %>
-    Started by <%= @script_run.backfiller_name %>
+    Started by <%= @script_run.backfiller_display_name %>
     <span class="text-zinc-400 dark:text-zinc-600" aria-hidden="true">·</span>
     created <%= relative_time(@script_run.created_at, @user_timezone) %>
   </p>
+
+  <% if @dispatches.any? %>
+    <div class="mt-8" data-script-run-updates-target="cells">
+      <%= render "data_drip/shared/cells",
+          run: @script_run,
+          dispatches: @dispatches,
+          cell_statuses: @cell_statuses %>
+    </div>
+  <% end %>
 
   <div class="mt-8 grid items-start gap-x-12 gap-y-8 lg:grid-cols-[3fr_2fr]">
     <div>

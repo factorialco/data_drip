@@ -500,6 +500,75 @@ Scripts fire lifecycle hooks with the same precedence rules as backfills (script
 - Datetime inputs are interpreted without timezone conversion (only the run's top-level "start at" field is converted from your browser timezone).
 - If your `base_job_class` retries on errors, a failed script will re-run from scratch. Make scripts idempotent, or configure `discard_on` in your base job class.
 
+## Multi-cell deployments
+
+If your application runs as several independent copies ("cells") — each with its own database, job queue, and workers — DataDrip can coordinate the same backfill or script across all of them: a developer triggers it **once**, from any cell's UI, and DataDrip creates and executes an independent copy of the run in every cell.
+
+Execution stays strictly cell-local (each cell's own workers process each cell's own data); only control traffic crosses cells over HTTPS. Everything is opt-in — without the configuration below, nothing changes.
+
+### How it works
+
+- The cell whose UI created the run is the **coordinator**: it holds the `local` run plus one *dispatch* record per target cell, and delivers each one through a background job (`POST` to that cell's **Cell API**).
+- Runs are correlated by a `group_uuid`, and creation is idempotent per `(group_uuid, cell_id)` — duplicate deliveries and retries are safe.
+- The coordinator's show page renders one card per cell with that cell's own live status, progress, errors, and (for scripts) log output, fetched from each cell on every poll. Cells genuinely can have different results — the UI shows exactly that.
+- A cell that can't be reached shows as "unreachable" without blocking anything; a dispatch the target cell rejected (e.g. the class isn't deployed there yet) shows the error with a **Retry dispatch** button.
+- Stopping or deleting a coordinator run fans the action out to the other cells, which re-apply the usual rules (owner-only, runs that already executed are kept as history).
+
+### Configuration
+
+```ruby
+# config/initializers/data_drip.rb
+
+# This deployment's own cell id. nil (the default) => single-cell mode.
+DataDrip.current_cell_id = -> { ENV["CELL_ID"] }
+
+# All cell ids, including this one.
+DataDrip.cell_ids = -> { ENV.fetch("CELL_IDS", "").split(",") }
+
+# Token(s) this cell accepts on its own Cell API (array supports rotation).
+DataDrip.cell_api_tokens = -> { [ENV["DATA_DRIP_CELL_SECRET"]].compact }
+
+# How to reach the other cells' Cell API. The built-in HTTP transport sends
+# JSON over HTTPS; `url`, `query` and `headers` accept values or callables.
+DataDrip.cell_transport = DataDrip::CellTransport::Http.new(
+  url: ->(cell_id) { "https://api.#{cell_id}.example.com/data_drip/cell_api" },
+  headers: -> { { "Authorization" => "Bearer #{ENV["DATA_DRIP_CELL_SECRET"]}" } }
+)
+
+# Optional: lets the UI deep-link into other cells' DataDrip UIs.
+DataDrip.cell_ui_url = ->(cell_id, path) {
+  "https://api.#{cell_id}.example.com/data_drip#{path}"
+}
+```
+
+Any transport object responding to `call(cell_id:, method:, path:, body: nil)` and returning a `DataDrip::CellTransport::Response`-like object works — swap in your own if your infrastructure routes between cells differently (e.g. a routing query parameter on a single shared hostname).
+
+### Mounting the Cell API
+
+The Cell API is a separate engine so it can live outside whatever staff/admin gate protects the human UI (machine-to-machine calls carry only the bearer token, no user session):
+
+```ruby
+# config/routes.rb
+mount DataDrip::Engine => "/data_drip"                    # human UI (behind your admin auth)
+mount DataDrip::CellApi::Engine => "/data_drip/cell_api"  # cell-to-cell API (token auth only)
+```
+
+With no `cell_api_tokens` configured the Cell API rejects every request, so mounting it in a single-cell app is harmless.
+
+### Upgrading an existing install
+
+```bash
+rails generate data_drip:add_multi_cell
+```
+
+This adds the multi-cell columns (`group_uuid`, `cell_id`, `origin`, `origin_cell_id`, and `backfiller_name` on script runs) and the `data_drip_cell_dispatches` table. Fresh installs get everything from `data_drip:install`.
+
+### Notes
+
+- The run creator's user record only needs to exist in the coordinator's cell: other cells store the id verbatim (ids are assumed globally unique across cells) and display the name snapshot taken at creation.
+- The "no identical active run" guard stays local to each cell; cross-cell duplicates of the same trigger are prevented by the `(group_uuid, cell_id)` unique index instead.
+- Scheduled runs are dispatched immediately with their `start_at`; each cell honors the schedule on its own, so a coordinator outage doesn't delay the other cells.
+
 ## Contributing
 
 Bug reports and pull requests are welcome on GitHub at https://github.com/factorialco/data_drip.
