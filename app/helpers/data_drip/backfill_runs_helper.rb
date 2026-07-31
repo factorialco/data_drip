@@ -138,6 +138,46 @@ module DataDrip
       name.to_s.split.map { |part| part[0] }.first(2).join.upcase
     end
 
+    # Small pill flagging a run's multi-cell nature in the run lists: where a
+    # remote run came from, or how many cells a coordinator run fans out to.
+    def cell_badge(run)
+      label =
+        if run.remote?
+          "from #{run.origin_cell_id.presence || "another cell"}"
+        elsif run.multi_cell_group?
+          "#{run.dispatches.size + 1} cells"
+        end
+      return if label.nil?
+
+      content_tag(
+        :span,
+        label,
+        class:
+          "inline-flex items-center rounded-full bg-drip-50 px-2 py-0.5 " \
+          "text-xs font-medium text-drip-700 " \
+          "dark:bg-drip-400/10 dark:text-drip-300"
+      )
+    end
+
+    # Link into another cell's own DataDrip UI, when the host configured
+    # DataDrip.cell_ui_url.
+    def cell_ui_link(cell_id, path, label = "Open in #{cell_id}")
+      return unless DataDrip.cell_ui_url
+
+      url = DataDrip.cell_ui_url.call(cell_id, path)
+      return if url.blank?
+
+      link_to(
+        label,
+        url,
+        target: "_blank",
+        rel: "noopener",
+        class:
+          "text-xs font-medium text-drip-700 hover:text-drip-600 " \
+          "dark:text-drip-400 dark:hover:text-drip-300"
+      )
+    end
+
     def primary_button_classes
       "inline-flex items-center rounded-lg bg-drip-700 px-3 py-1.5 text-sm " \
         "font-semibold text-white hover:bg-drip-600 focus-visible:outline-2 " \

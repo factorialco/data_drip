@@ -31,3 +31,5 @@ gem "propshaft"
 
 # Dev server for the dummy app (spec/test_app)
 gem "puma"
+
+gem "webmock"
