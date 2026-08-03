@@ -31,6 +31,36 @@ RSpec.describe DataDrip::BackfillsController, type: :controller do
       expect(response.body.scan("AddRoleToEmployee").size).to eq(1)
     end
 
+    it "keeps the description when a stale duplicate has lost it" do
+      # Reloading can leave a stale copy that no longer carries its description
+      # alongside the live one; dedup must surface the copy that still has it,
+      # regardless of order.
+      with_description =
+        Class.new(DataDrip::Backfill) do
+          description "Kept from the described copy."
+
+          def scope
+            Employee.all
+          end
+        end
+      without_description =
+        Class.new(DataDrip::Backfill) do
+          def scope
+            Employee.all
+          end
+        end
+      allow(with_description).to receive(:name).and_return("DuplicatedBackfill")
+      allow(without_description).to receive(:name).and_return("DuplicatedBackfill")
+      allow(DataDrip).to receive(:all).and_return(
+        [ without_description, with_description ]
+      )
+
+      get :index
+
+      expect(response.body.scan("DuplicatedBackfill").size).to eq(1)
+      expect(response.body).to include("Kept from the described copy.")
+    end
+
     it "shows a backfill's description and its configurable fields" do
       # Scope to a single backfill so the assertions don't depend on how many
       # other named backfills happen to be loaded in the suite.

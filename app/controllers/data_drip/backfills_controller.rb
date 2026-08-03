@@ -16,18 +16,18 @@ module DataDrip
     def index
       @query = params[:q].to_s.strip
 
-      # Resolve each backfill to its current constant and dedupe by name. In
+      # Dedupe by name, preferring a copy that carries a description. In
       # development, Zeitwerk reloading leaves stale class copies in
-      # DataDrip::Backfill.descendants (DataDrip.all) — without this the catalog
-      # lists the same backfill several times (and stale copies lose their
-      # `description`). Anonymous subclasses (nil name, e.g. those defined in
-      # tests) drop out here, since only named backfills belong in the catalog.
+      # DataDrip::Backfill.descendants (DataDrip.all): the same backfill would
+      # otherwise be listed several times, and only some copies retain their
+      # `description` (so we can't just pick the current constant). Anonymous
+      # subclasses (nil name, e.g. those defined in tests) drop out here, since
+      # only named backfills belong in the catalog.
       backfills =
         DataDrip.all
-                .map(&:name)
-                .compact
-                .uniq
-                .filter_map(&:safe_constantize)
+                .select { |klass| klass.name.present? }
+                .group_by(&:name)
+                .map { |_name, copies| copies.find { |c| described?(c) } || copies.first }
                 .sort_by(&:name)
       backfills = filter_backfills(backfills, @query) if @query.present?
 
@@ -37,6 +37,11 @@ module DataDrip
     end
 
     private
+
+    def described?(backfill_class)
+      backfill_class.respond_to?(:description) &&
+        backfill_class.description.present?
+    end
 
     # Client asks for a needle; we match it (case-insensitively) against the
     # class name, the description, and each option name — so searching
