@@ -21,18 +21,18 @@
   <% if @backfills.any? %>
     <div class="-mx-4 mt-2 overflow-x-auto sm:-mx-6 lg:-mx-8">
       <div class="inline-block min-w-full px-4 py-2 align-middle sm:px-6 lg:px-8">
-        <table class="w-full text-left">
+        <table class="w-full table-fixed text-left">
           <thead>
             <tr>
-              <th class="w-1/5 border-b border-zinc-950/10 py-2.5 pr-4 text-sm font-medium whitespace-nowrap text-zinc-500 dark:border-white/10 dark:text-zinc-400">Backfill class</th>
-              <th class="border-b border-zinc-950/10 py-2.5 pr-4 text-sm font-medium whitespace-nowrap text-zinc-500 dark:border-white/10 dark:text-zinc-400">Description</th>
-              <th class="w-1/3 border-b border-zinc-950/10 py-2.5 text-sm font-medium whitespace-nowrap text-zinc-500 dark:border-white/10 dark:text-zinc-400">Configurable fields</th>
+              <th class="w-1/4 border-b border-zinc-950/10 py-2.5 pr-4 text-sm font-medium whitespace-nowrap text-zinc-500 dark:border-white/10 dark:text-zinc-400">Backfill class</th>
+              <th class="w-1/2 border-b border-zinc-950/10 py-2.5 pr-4 text-sm font-medium whitespace-nowrap text-zinc-500 dark:border-white/10 dark:text-zinc-400">Description</th>
+              <th class="w-1/4 border-b border-zinc-950/10 py-2.5 text-sm font-medium whitespace-nowrap text-zinc-500 dark:border-white/10 dark:text-zinc-400">Configurable fields</th>
             </tr>
           </thead>
           <tbody class="divide-y divide-zinc-950/5 dark:divide-white/5">
             <% @backfills.each do |backfill| %>
               <tr class="align-top">
-                <td class="py-3 pr-4">
+                <td class="py-3 pr-4 break-words">
                   <span class="font-mono text-sm font-medium text-zinc-900 dark:text-white"><%= backfill.name %></span>
                 </td>
                 <td class="py-3 pr-4 text-sm text-pretty text-zinc-600 dark:text-zinc-300">

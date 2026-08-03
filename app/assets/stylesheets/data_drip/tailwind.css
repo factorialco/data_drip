@@ -452,11 +452,11 @@
   .w-\(--progress\) {
     width: var(--progress);
   }
-  .w-1\/3 {
-    width: calc(1/3 * 100%);
+  .w-1\/2 {
+    width: calc(1/2 * 100%);
   }
-  .w-1\/5 {
-    width: calc(1/5 * 100%);
+  .w-1\/4 {
+    width: calc(1/4 * 100%);
   }
   .w-9 {
     width: calc(var(--spacing) * 9);
@@ -496,6 +496,9 @@
   }
   .flex-1 {
     flex: 1;
+  }
+  .table-fixed {
+    table-layout: fixed;
   }
   .-translate-1\/2 {
     --tw-translate-x: calc(calc(1/2 * 100%) * -1);
@@ -953,6 +956,9 @@
   }
   .text-pretty {
     text-wrap: pretty;
+  }
+  .break-words {
+    overflow-wrap: break-word;
   }
   .wrap-anywhere {
     overflow-wrap: anywhere;
