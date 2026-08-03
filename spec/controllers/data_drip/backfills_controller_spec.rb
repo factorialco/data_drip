@@ -19,6 +19,18 @@ RSpec.describe DataDrip::BackfillsController, type: :controller do
       expect(response.body).to include("Backfills catalog")
     end
 
+    it "lists each backfill once even when DataDrip.all has stale duplicates" do
+      # Zeitwerk reloading in development can leave duplicate class objects in
+      # DataDrip.all; the catalog must dedupe them by name.
+      allow(DataDrip).to receive(:all).and_return(
+        [ AddRoleToEmployee, AddRoleToEmployee ]
+      )
+
+      get :index
+
+      expect(response.body.scan("AddRoleToEmployee").size).to eq(1)
+    end
+
     it "shows a backfill's description and its configurable fields" do
       # Scope to a single backfill so the assertions don't depend on how many
       # other named backfills happen to be loaded in the suite.

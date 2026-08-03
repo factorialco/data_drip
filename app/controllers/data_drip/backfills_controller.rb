@@ -16,10 +16,19 @@ module DataDrip
     def index
       @query = params[:q].to_s.strip
 
-      # Skip anonymous subclasses (e.g. those created in tests) — only real,
-      # named backfills belong in the catalog.
+      # Resolve each backfill to its current constant and dedupe by name. In
+      # development, Zeitwerk reloading leaves stale class copies in
+      # DataDrip::Backfill.descendants (DataDrip.all) — without this the catalog
+      # lists the same backfill several times (and stale copies lose their
+      # `description`). Anonymous subclasses (nil name, e.g. those defined in
+      # tests) drop out here, since only named backfills belong in the catalog.
       backfills =
-        DataDrip.all.select { |klass| klass.name.present? }.sort_by(&:name)
+        DataDrip.all
+                .map(&:name)
+                .compact
+                .uniq
+                .filter_map(&:safe_constantize)
+                .sort_by(&:name)
       backfills = filter_backfills(backfills, @query) if @query.present?
 
       pagination_data = paginate_collection(backfills, per_page: 10)
