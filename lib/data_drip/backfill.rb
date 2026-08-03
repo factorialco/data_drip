@@ -24,6 +24,22 @@ module DataDrip
       schema_options_class
     end
 
+    # Human-readable one-line summary of what this backfill does, shown in the
+    # backfills catalog. Acts as both setter (`description "..."`) and getter
+    # (`description`). Returns nil when unset. Mirrors DataDrip::Script.description.
+    def self.description(text = nil)
+      @description = text unless text.nil?
+      @description
+    end
+
+    # Markdown guidance shown in the New Backfill Run form when this backfill is
+    # selected. Same setter/getter idiom as `description`
+    # (`instructions <<~MARKDOWN ... MARKDOWN`). Returns nil when unset.
+    def self.instructions(text = nil)
+      @instructions = text unless text.nil?
+      @instructions
+    end
+
     def initialize(
       batch_size: 100,
       sleep_time: DataDrip.sleep_time,

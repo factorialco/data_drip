@@ -8,14 +8,19 @@
           "rounded-sm focus-visible:outline-2 focus-visible:outline-offset-2 " \
           "focus-visible:outline-drip-700" %>
 
+    <% backfills_section = controller_name == "backfill_runs" %>
     <% scripts_section = controller_name == "script_runs" %>
+    <% catalog_section = controller_name == "backfills" %>
     <nav class="flex items-center gap-x-1" aria-label="Primary">
       <%= link_to "Backfills", backfill_runs_path,
-          class: nav_link_classes(active: !scripts_section),
-          aria: (scripts_section ? {} : { current: "page" }) %>
+          class: nav_link_classes(active: backfills_section),
+          aria: (backfills_section ? { current: "page" } : {}) %>
       <%= link_to "Scripts", script_runs_path,
           class: nav_link_classes(active: scripts_section),
           aria: (scripts_section ? { current: "page" } : {}) %>
+      <%= link_to "Catalog", backfills_path,
+          class: nav_link_classes(active: catalog_section),
+          aria: (catalog_section ? { current: "page" } : {}) %>
     </nav>
 
     <div class="flex flex-1 items-center justify-end gap-x-4">
