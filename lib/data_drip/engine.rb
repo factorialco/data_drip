@@ -12,6 +12,16 @@ module DataDrip
 
     initializer "data_drip.assets" do |app|
       app.config.assets.paths << root.join("app/javascript")
+
+      # Declare the engine's importmap JS for precompilation. Building the import
+      # map (javascript_importmap_tags) calls asset_path for every pinned module,
+      # so a host on a strict Sprockets pipeline (check_precompiled_asset) raises
+      # "asset was not declared to be precompiled" without this. JS only — never
+      # sweep the compiled CSS in (it is served outside the pipeline; see
+      # DataDrip::AssetsController). Guarded to a real Array so Propshaft hosts,
+      # which serve path assets directly, are unaffected.
+      precompile = app.config.assets.precompile
+      precompile << %r{\Adata_drip/.+\.js\z} if precompile.is_a?(Array)
     end
 
     initializer "data_drip.importmap", after: "importmap" do |_app|

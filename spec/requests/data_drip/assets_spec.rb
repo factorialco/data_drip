@@ -73,5 +73,22 @@ RSpec.describe "DataDrip stylesheet delivery", type: :request do
         DataDrip::Engine.root.join("app/assets/config/data_drip_manifest.js")
       ).not_to exist
     end
+
+    it "declares the engine JS (but not the CSS) for host precompilation" do
+      # A strict Sprockets host (check_precompiled_asset) resolves every pinned
+      # importmap module through asset_path when javascript_importmap_tags builds
+      # the import map, so the engine JS must be declared for precompilation or
+      # the layout raises "asset was not declared to be precompiled". The CSS
+      # must stay out (served by DataDrip::AssetsController), per the tests above.
+      precompile = Rails.application.config.assets.precompile
+      js_matcher =
+        precompile.grep(Regexp).find { |re| re.match?("data_drip/application.js") }
+
+      expect(js_matcher).to be_present
+      expect(
+        js_matcher.match?("data_drip/controllers/autosubmit_controller.js")
+      ).to be(true)
+      expect(js_matcher.match?("data_drip/tailwind.css")).to be(false)
+    end
   end
 end
