@@ -66,6 +66,66 @@ RSpec.describe DataDrip::Dripper, type: :job do
       expect(backfill_run.batches.first.batch_size).to eq(1)
     end
 
+    it "leaves the run running while its batches are still outstanding" do
+      described_class.new.perform(backfill_run)
+
+      backfill_run.reload
+      expect(backfill_run.batches.count).to be_positive
+      expect(backfill_run.status).to eq("running")
+      expect(backfill_run).not_to be_terminal
+    end
+
+    context "when the scope matches no records" do
+      let(:backfill_run) do
+        DataDrip::BackfillRun.create!(
+          backfill_class_name: "AddRoleToEmployee",
+          batch_size: 2,
+          start_at: 1.hour.from_now,
+          backfiller: backfiller,
+          options: {
+            age: 999
+          }
+        )
+      end
+
+      it "completes the run instead of leaving it stuck in running" do
+        expect { described_class.new.perform(backfill_run) }.not_to change(
+          DataDrip::BackfillRunBatch,
+          :count
+        )
+
+        backfill_run.reload
+        expect(backfill_run.batches.count).to eq(0)
+        expect(backfill_run.total_count).to eq(0)
+        expect(backfill_run.status).to eq("completed")
+        expect(backfill_run).to be_terminal
+      end
+
+      it "fires the on_run_completed hook" do
+        described_class.new.perform(backfill_run)
+
+        expect(
+          HookNotifier.instance.get("AddRoleToEmployee_run_completed")
+        ).to eq(backfill_run.id)
+      end
+
+      it "no longer blocks a later identical run from being created" do
+        described_class.new.perform(backfill_run)
+
+        expect do
+          DataDrip::BackfillRun.create!(
+            backfill_class_name: "AddRoleToEmployee",
+            batch_size: 2,
+            start_at: 1.hour.from_now,
+            backfiller: backfiller,
+            options: {
+              age: 999
+            }
+          )
+        end.to change(DataDrip::BackfillRun, :count).by(1)
+      end
+    end
+
     it "handles errors and sets failed status" do
       run =
         DataDrip::BackfillRun.new(

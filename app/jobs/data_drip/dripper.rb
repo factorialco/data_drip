@@ -36,7 +36,11 @@ module DataDrip
             { start_id: start_id, finish_id: finish_id, actual_size: ids.size }
           end
 
-      backfill_run.update!(total_count: scope.count)
+      # Sum the sizes already plucked above rather than issuing a second count
+      # query, which on a large table is the expensive scan we avoid on create.
+      backfill_run.update!(
+        total_count: batch_ids.sum { |batch| batch[:actual_size] }
+      )
 
       BackfillRun.transaction do
         batch_ids.each do |batch|
@@ -49,6 +53,13 @@ module DataDrip
           )
         end
       end
+
+      # An empty scope yields no batches, so no DripperChild will ever run to
+      # settle this run and it would sit in `running` forever. Finalizing here
+      # completes it immediately; when batches *were* created they are still
+      # active (pending/enqueued) and this is a no-op, leaving the children to
+      # settle the run as usual.
+      backfill_run.finalize_if_batches_finished!
     rescue StandardError => e
       backfill_run.failed!
       backfill_run.update!(error_message: e.message)
