@@ -69,8 +69,7 @@ export default class extends Controller {
     )
     this.counterTarget.textContent = `${values.length}/${visible.length} selected`
     this.selectAllTarget.checked = visible.length > 0 && values.length === visible.length
-    this.selectAllTarget.indeterminate =
-      values.length > 0 && values.length < this.checkboxTargets.length
+    this.selectAllTarget.indeterminate = values.length > 0 && values.length < visible.length
   }
 
   #applyFilter() {
@@ -88,7 +87,9 @@ export default class extends Controller {
   }
 
   #dependencyFieldValue() {
-    const field = document.querySelector(`[name$="[${this.dependsOnValue}]"]`)
+    const field = this.element
+      .closest("form")
+      ?.querySelector(`[name$="[${this.dependsOnValue}]"]`)
     return field?.value || ""
   }
 

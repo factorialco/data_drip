@@ -357,6 +357,38 @@ DataDrip supports various attribute types that automatically generate appropriat
 - **`:date`** - Date picker
 - **`:time`** - Time picker
 - **`:datetime`** - Date and time picker
+- **`:enum`** - Searchable selector constrained to declared values
+
+#### Enum Selectors
+
+Enums are multi-value selectors by default and submit the selected values as a
+comma-separated string. Set `multiple: false` for a single-value selector:
+
+```ruby
+attribute :entity,
+          :enum,
+          values: %w[employees contracts],
+          multiple: false,
+          default: "employees"
+```
+
+A multi-value enum can depend on another enum. Dependent choices use
+`[label, value, parent_value]`; the UI displays and submits only choices whose
+parent value matches the current selection:
+
+```ruby
+attribute :columns,
+          :enum,
+          values: [
+            [ "Attendable", "employees:attendable", "employees" ],
+            [ "Job title", "contracts:job_title", "contracts" ]
+          ],
+          depends_on: :entity
+```
+
+The server still validates submitted values against the full declared
+allowlist. Backfills should additionally validate cross-field rules, such as
+ensuring every submitted column belongs to the selected entity.
 
 ### Backfill Structure
 
