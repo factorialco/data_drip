@@ -3,8 +3,12 @@
 module DataDrip
   module Types
     class Enum < ActiveModel::Type::String
-      def initialize(values: [], **options)
+      attr_reader :depends_on
+
+      def initialize(values: [], multiple: true, depends_on: nil, **options)
         @values_source = values
+        @multiple = multiple
+        @depends_on = depends_on&.to_sym
         super(**options)
       end
 
@@ -14,6 +18,10 @@ module DataDrip
 
       def available_values
         @values_source.respond_to?(:call) ? @values_source.call : @values_source
+      end
+
+      def multiple?
+        @multiple
       end
     end
   end
