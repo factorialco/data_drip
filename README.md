@@ -54,6 +54,12 @@ To add the performance indexes to an older install (composite indexes on the run
 rails generate data_drip:add_performance_indexes
 ```
 
+If your scripts hit `Data too long for column 'output'` on MySQL, widen the script run log column (the original migration created a 64KB `TEXT`):
+
+```bash
+rails generate data_drip:widen_script_run_output
+```
+
 ## Requirements
 
 - **Ruby**: >= 3.1.0
@@ -435,6 +441,10 @@ rails generate data_drip:install_scripts
 ```
 
 This creates the `app/scripts` directory and the `data_drip_script_runs` migration.
+
+### Output size
+
+Everything a script logs is appended to `data_drip_script_runs.output`, a `MEDIUMTEXT` column on MySQL (16MB) and unbounded `text` elsewhere. DataDrip caps a single run's log at 1MB: past that, further lines are dropped and the log ends with `[output truncated: ...]`. Installs created before the column was widened should run `rails generate data_drip:widen_script_run_output`, otherwise MySQL rejects the write at 64KB with `Data too long for column 'output'`.
 
 ### Creating Scripts
 

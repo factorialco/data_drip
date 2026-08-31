@@ -173,5 +173,39 @@ RSpec.describe DataDrip::ScriptRun, type: :model do
 
       expect(script_run.reload.output).to eq("line one\nline two\n")
     end
+
+    it "stops appending once the output reaches the limit" do
+      script_run = DataDrip::ScriptRun.create!(valid_attributes)
+      filled = "x" * (DataDrip::ScriptRun::OUTPUT_LIMIT - 10)
+      script_run.update_column(:output, filled)
+
+      script_run.append_output("a line that no longer fits")
+
+      expect(script_run.reload.output).to eq(
+        "#{filled}#{DataDrip::ScriptRun::TRUNCATION_NOTICE}"
+      )
+    end
+
+    it "does not append the truncation notice more than once" do
+      script_run = DataDrip::ScriptRun.create!(valid_attributes)
+      filled = "x" * (DataDrip::ScriptRun::OUTPUT_LIMIT - 10)
+      script_run.update_column(:output, filled)
+
+      script_run.append_output("first line over the limit")
+      script_run.append_output("second line over the limit")
+
+      expect(script_run.reload.output).to eq(
+        "#{filled}#{DataDrip::ScriptRun::TRUNCATION_NOTICE}"
+      )
+    end
+
+    it "keeps appending while the output fits" do
+      script_run = DataDrip::ScriptRun.create!(valid_attributes)
+      script_run.update_column(:output, "x" * 100)
+
+      script_run.append_output("still fits")
+
+      expect(script_run.reload.output).to eq("#{"x" * 100}still fits\n")
+    end
   end
 end

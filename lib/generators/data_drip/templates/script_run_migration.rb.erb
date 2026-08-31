@@ -3,7 +3,10 @@ class CreateDataDripScriptRuns < ActiveRecord::Migration<%= migration_version %>
     create_table :data_drip_script_runs, id: :bigint do |t|
       t.string :script_class_name, null: false
       t.json :inputs, null: false, default: {}
-      t.text :output
+      # Script logs get long: MySQL's default TEXT tops out at 64KB, which a
+      # chatty script blows past mid-run. `limit` makes it MEDIUMTEXT there and
+      # is ignored by PostgreSQL and SQLite.
+      t.text :output, limit: 1.megabyte
       t.text :error_message
       t.text :error_backtrace
       t.integer :status, null: false, default: 0, index: true

@@ -24,6 +24,13 @@ module DataDrip
       %i[pending enqueued running completed failed]
     )
 
+    # `output` is a MEDIUMTEXT column (16MB) but a runaway script can still
+    # outgrow it, and every appended line rewrites the whole blob — so a log
+    # that big is slow long before the database complains. Keep the first
+    # OUTPUT_LIMIT bytes and replace the rest with a single notice.
+    OUTPUT_LIMIT = 1.megabyte
+    TRUNCATION_NOTICE = "[output truncated: reached the #{OUTPUT_LIMIT} byte limit]\n"
+
     def backfiller_name
       @backfiller_name ||=
         backfiller.send(DataDrip.backfiller_name_attribute.to_sym)
@@ -54,7 +61,15 @@ module DataDrip
     end
 
     def append_output(line)
-      update_column(:output, "#{output}#{line}\n")
+      current = output.to_s
+      return if current.end_with?(TRUNCATION_NOTICE)
+
+      appended = "#{current}#{line}\n"
+      if appended.bytesize > OUTPUT_LIMIT
+        appended = "#{current}#{TRUNCATION_NOTICE}"
+      end
+
+      update_column(:output, appended)
     end
 
     private
