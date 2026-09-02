@@ -9,6 +9,7 @@ DataDrip is a Rails engine that provides a robust framework for running data bac
 - ⏰ **Scheduled Execution**: Schedule backfills to run at specific times
 - 🛡️ **Error Handling**: Comprehensive error tracking and recovery
 - 🔧 **Flexible Processing**: Choose between batch-level or element-level processing
+- ⚙️ **Per-run Concurrency**: Optionally cap queued and running batch workers for each backfill run; omit the limit to keep the full fan-out behavior
 - 📈 **Progress Tracking**: Real-time progress updates and batch monitoring
 - 🎯 **Scoped Processing**: Define custom scopes for targeted data processing
 
@@ -59,6 +60,14 @@ If your scripts hit `Data too long for column 'output'` on MySQL, widen the scri
 ```bash
 rails generate data_drip:widen_script_run_output
 ```
+
+To configure a per-run limit for parallel batch workers in an older install:
+
+```bash
+rails generate data_drip:add_max_parallel_workers
+```
+
+The field is optional per run. Leaving it blank preserves the existing behavior and enqueues every batch; setting it limits the combined number of queued and running batch jobs for that run.
 
 ## Requirements
 

@@ -170,6 +170,60 @@ RSpec.describe DataDrip::Dripper, type: :job do
         expect(backfill_run.batches.count).to eq(2) # 2 batches: [2, 1]
       end
     end
+
+    context "with max_parallel_workers" do
+      let(:backfill_run) do
+        DataDrip::BackfillRun.create!(
+          backfill_class_name: "AddRoleToEmployee",
+          batch_size: 1,
+          start_at: 1.hour.from_now,
+          backfiller: backfiller,
+          options: {},
+          max_parallel_workers: max_parallel_workers
+        )
+      end
+
+      before { ActiveJob::Base.queue_adapter.enqueued_jobs.clear }
+
+      context "when omitted" do
+        let(:max_parallel_workers) { nil }
+
+        it "preserves the existing full fan-out" do
+          expect { described_class.new.perform(backfill_run) }.to have_enqueued_job(
+            DataDrip::DripperChild
+          ).exactly(3).times
+
+          expect(backfill_run.batches.enqueued.count).to eq(3)
+          expect(backfill_run.batches.pending.count).to eq(0)
+        end
+      end
+
+      context "when smaller than the number of batches" do
+        let(:max_parallel_workers) { 2 }
+
+        it "only enqueues that many batches" do
+          expect { described_class.new.perform(backfill_run) }.to have_enqueued_job(
+            DataDrip::DripperChild
+          ).exactly(2).times
+
+          expect(backfill_run.batches.enqueued.count).to eq(2)
+          expect(backfill_run.batches.pending.count).to eq(1)
+        end
+      end
+
+      context "when greater than the number of batches" do
+        let(:max_parallel_workers) { 10 }
+
+        it "enqueues every batch" do
+          expect { described_class.new.perform(backfill_run) }.to have_enqueued_job(
+            DataDrip::DripperChild
+          ).exactly(3).times
+
+          expect(backfill_run.batches.enqueued.count).to eq(3)
+          expect(backfill_run.batches.pending.count).to eq(0)
+        end
+      end
+    end
   end
 end
 

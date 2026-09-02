@@ -26,6 +26,12 @@ module DataDrip
                 greater_than_or_equal_to: 0
               },
               allow_nil: true
+    validates :max_parallel_workers,
+              numericality: {
+                only_integer: true,
+                greater_than: 0
+              },
+              allow_nil: true
 
     before_create :capture_backfiller_name
     after_commit :enqueue
@@ -50,6 +56,10 @@ module DataDrip
 
     def terminal?
       completed? || failed? || stopped?
+    end
+
+    def parallel_workers_limited?
+      max_parallel_workers.present?
     end
 
     # Still safe to delete: the run has not started executing yet. Once it is
@@ -124,18 +134,96 @@ module DataDrip
       enqueued!
     end
 
+    def enqueue_available_batches!
+      return unless parallel_workers_limited?
+
+      batch_ids =
+        with_lock do
+          reload
+          next [] unless running?
+
+          active_workers =
+            batches.where(status: %i[enqueued running]).count
+          available_workers = max_parallel_workers - active_workers
+          next [] unless available_workers.positive?
+
+          reserved_batches =
+            batches.pending.order(:id).limit(available_workers).to_a
+          reserved_batches.each(&:enqueued!)
+          reserved_batches.map(&:id)
+        end
+
+      batch_ids.each_with_index do |batch_id, index|
+        batch = DataDrip::BackfillRunBatch.find(batch_id)
+        DataDrip::DripperChild.perform_later(batch)
+      rescue StandardError
+        release_reserved_batches!(batch_ids.drop(index))
+        raise
+      end
+    end
+
+    def retry_failed_batches!
+      batch_ids =
+        with_lock do
+          reload
+          failed_batches = batches.failed.to_a
+          next [] if failed_batches.empty?
+
+          failed_batches.each do |batch|
+            batch.update!(status: :pending, error_message: nil)
+          end
+          running! unless running?
+          failed_batches.map(&:id)
+        end
+
+      if parallel_workers_limited?
+        enqueue_available_batches!
+      else
+        batches.where(id: batch_ids).find_each(&:enqueue)
+      end
+
+      batch_ids.size
+    end
+
+    def stop!
+      with_lock do
+        reload
+        next false unless running?
+
+        stopped!
+        if parallel_workers_limited?
+          batches.pending.update_all(
+            status: DataDrip::BackfillRunBatch.statuses.fetch(:stopped),
+            updated_at: Time.current
+          )
+        end
+        true
+      end
+    end
+
     # Called after each batch reaches a terminal state. Once no batch is still
     # active, the run settles on its own terminal state: failed if any batch
     # failed, otherwise completed. A run that was stopped is left untouched.
     def finalize_if_batches_finished!
-      reload
-      return if terminal?
-      return if batches.where(status: ACTIVE_STATUSES).exists?
+      with_lock do
+        reload
+        next if terminal?
+        next if batches.where(status: ACTIVE_STATUSES).exists?
 
-      batches.failed.exists? ? failed! : completed!
+        batches.failed.exists? ? failed! : completed!
+      end
     end
 
     private
+
+    def release_reserved_batches!(batch_ids)
+      with_lock do
+        batches.where(id: batch_ids, status: :enqueued).update_all(
+          status: DataDrip::BackfillRunBatch.statuses.fetch(:pending),
+          updated_at: Time.current
+        )
+      end
+    end
 
     # Snapshot the backfiller's display name so it survives the record's deletion.
     def capture_backfiller_name

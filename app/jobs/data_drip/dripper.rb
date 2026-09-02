@@ -5,13 +5,14 @@ module DataDrip
     queue_as { DataDrip.queue_name }
 
     def perform(backfill_run)
-      # Idempotency guard: a run only transitions enqueued -> running once.
-      # A duplicate delivery (at-least-once queues, accidental re-enqueue) finds
-      # the run already running/terminal and is a no-op, so we never build a
-      # second set of batches for the same run.
-      return unless backfill_run.enqueued?
+      claimed =
+        backfill_run.with_lock do
+          next false unless backfill_run.enqueued?
 
-      backfill_run.running!
+          backfill_run.running!
+          true
+        end
+      return unless claimed
 
       new_backfill =
         backfill_run.backfill_class.new(
@@ -53,6 +54,8 @@ module DataDrip
           )
         end
       end
+
+      backfill_run.enqueue_available_batches!
 
       # An empty scope yields no batches, so no DripperChild will ever run to
       # settle this run and it would sit in `running` forever. Finalizing here

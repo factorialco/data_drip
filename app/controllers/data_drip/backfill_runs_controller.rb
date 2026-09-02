@@ -123,8 +123,7 @@ module DataDrip
       @backfill_run = DataDrip::BackfillRun.find(params[:id])
       if !@backfill_run.owned_by?(find_current_backfiller)
         flash[:alert] = "You can only stop backfill runs you created."
-      elsif @backfill_run.running?
-        @backfill_run.stopped!
+      elsif @backfill_run.stop!
         flash[:notice] = "Backfill run has been stopped."
       else
         flash[:alert] = "Backfill run is not currently running."
@@ -135,18 +134,11 @@ module DataDrip
 
     def retry_failed_batches
       @backfill_run = DataDrip::BackfillRun.find(params[:id])
-      failed_batches = @backfill_run.batches.failed
+      count = @backfill_run.retry_failed_batches!
 
-      if failed_batches.none?
+      if count.zero?
         flash[:alert] = "This run has no failed batches to retry."
       else
-        count = 0
-        failed_batches.find_each do |batch|
-          batch.update!(status: :pending, error_message: nil)
-          batch.enqueue
-          count += 1
-        end
-        @backfill_run.running! unless @backfill_run.running?
         flash[
           :notice
         ] = "Re-enqueued #{count} failed #{count == 1 ? "batch" : "batches"}."
@@ -237,6 +229,7 @@ module DataDrip
         :batch_size,
         :start_at,
         :amount_of_elements,
+        :max_parallel_workers,
         options: {}
       )
     end
