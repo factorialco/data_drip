@@ -18,7 +18,14 @@ module DataDrip
       page = total_pages if total_pages.positive? && page > total_pages
 
       offset = (page - 1) * per_page
-      paginated_collection = collection.limit(per_page).offset(offset)
+      # Works for both an ActiveRecord relation (the runs lists) and a plain
+      # Array (the backfills catalog, which paginates an in-memory list).
+      paginated_collection =
+        if collection.respond_to?(:limit)
+          collection.limit(per_page).offset(offset)
+        else
+          collection[offset, per_page] || []
+        end
 
       {
         collection: paginated_collection,

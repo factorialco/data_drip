@@ -11,6 +11,7 @@ DataDrip is a Rails engine that provides a robust framework for running data bac
 - 🔧 **Flexible Processing**: Choose between batch-level or element-level processing
 - 📈 **Progress Tracking**: Real-time progress updates and batch monitoring
 - 🎯 **Scoped Processing**: Define custom scopes for targeted data processing
+- 📚 **Self-Documenting**: Give backfills a `description` and Markdown `instructions`, browsable in a searchable catalog
 
 ## Installation
 
@@ -364,6 +365,38 @@ DataDrip supports various attribute types that automatically generate appropriat
 - **`:time`** - Time picker
 - **`:datetime`** - Date and time picker
 
+### Documenting Backfills
+
+Backfills can document themselves so operators know what each one does and how to fill in its options — without reading the source.
+
+```ruby
+class AddRoleToEmployee < DataDrip::Backfill
+  # One-line summary, listed in the backfills catalog.
+  description "Assigns the default 'intern' role to employees that don't have one yet."
+
+  # Richer guidance (Markdown), shown in the New Backfill Run form the moment
+  # this backfill is selected.
+  instructions <<~MARKDOWN
+    # Assign default role
+    Sets the **intern** role on all employees that don't have one yet.
+
+    ## Options
+    - `age`: Filter employees by age (optional)
+    - `name`: Filter by exact name match (optional)
+  MARKDOWN
+
+  attribute :age, :integer
+  attribute :name, :string
+
+  # ...
+end
+```
+
+- **`description`** — a one-line summary shown in the [backfills catalog](#web-interface). Optional; defaults to `nil`.
+- **`instructions`** — Markdown rendered as formatted rich text in the New Backfill Run form when the backfill is selected. A small, dependency-free renderer supports headings (`#`/`##`/`###`), `**bold**`, `` `inline code` ``, bullet lists, and fenced code blocks. Optional; defaults to `nil`.
+
+Both are declared with the same setter/getter idiom (a plain `def self.instructions` override also works).
+
 ### Backfill Structure
 
 Every backfill must inherit from `DataDrip::Backfill` and implement:
@@ -403,7 +436,9 @@ Navigate to `/data_drip/backfill_runs` in your application to access the DataDri
 - Stop running backfills
 - Schedule backfills for future execution
 
-When creating a new backfill run, the interface dynamically generates form fields based on the attributes defined in your backfill class, making it easy to customize each run without code changes.
+When creating a new backfill run, the interface dynamically generates form fields based on the attributes defined in your backfill class, making it easy to customize each run without code changes. If the backfill declares [`instructions`](#documenting-backfills), they render as formatted guidance above the options.
+
+You can also browse a searchable **backfills catalog** at `/data_drip/backfills` (the **Catalog** tab in the header): every backfill available in the app, with its description and the configurable fields it accepts — search by name, description, or field name to find, say, every backfill that takes `company_ids`.
 
 The interface supports light and dark mode (following the OS preference) and ships as precompiled CSS inside the gem — host applications need no Node, Tailwind, or any other frontend tooling.
 
