@@ -1,6 +1,7 @@
 ## [Unreleased]
 
 ### Added
+- A backfill class can declare `self.max_parallel_batches` (default `nil`, unlimited). With a limit, a run only keeps that many children enqueued or running; the rest stay `pending` and the finishing child enqueues the next one. For backfills whose batches serialize on a shared resource this stops hundreds of children from holding worker threads while they wait, and a stopped run releases its pending batches as `stopped`.
 - Backfill options can be declared as mandatory with `attribute :name, :string, required: true`. The form marks required fields and the server rejects runs with blank required options (also guarding `scope` from running with missing options).
 - Full UI redesign: slim header shell (replaces the empty sidebar), stats strip, tabbed runs list with class-name search and status filter, progress bars, relative timestamps, empty states, and dark mode support (follows the OS preference).
 - Run detail page now shows a live progress hero (percent, throughput, estimated time remaining, elapsed) that auto-refreshes while the run is active, plus a metadata panel with the run's options.

@@ -107,6 +107,43 @@ RSpec.describe DataDrip::DripperChild, type: :job do
       expect(run.reload.status).to eq("stopped")
     end
   end
+  context "when the backfill limits parallel batches" do
+    let(:run) { build_run("DripperChildSpec::SequentialBackfill") }
+    let!(:batch1) { build_batch(run, start_id: employee1.id, finish_id: employee2.id) }
+    let!(:batch2) { build_batch(run, start_id: employee3.id, finish_id: employee4.id) }
+
+    it "hands the slot to the oldest pending batch when one finishes" do
+      expect { described_class.new.perform(batch1) }.to have_enqueued_job(
+        DataDrip::DripperChild
+      ).with(batch2)
+
+      expect(batch1.reload.status).to eq("completed")
+      expect(batch2.reload.status).to eq("enqueued")
+    end
+
+    it "hands the slot over even when the batch failed" do
+      failing_run = build_run("DripperChildSpec::SequentialFailBackfill")
+      first = build_batch(failing_run, start_id: employee3.id, finish_id: employee3.id)
+      second = build_batch(failing_run, start_id: employee4.id, finish_id: employee4.id)
+
+      expect do
+        expect { described_class.new.perform(first) }.to raise_error(StandardError, /boom/)
+      end.to have_enqueued_job(DataDrip::DripperChild).with(second)
+
+      expect(second.reload.status).to eq("enqueued")
+    end
+
+    it "releases the pending batches as stopped when the run was stopped meanwhile" do
+      run.update_column(:status, DataDrip::BackfillRun.statuses[:stopped])
+
+      expect { described_class.new.perform(batch1) }.not_to have_enqueued_job(
+        DataDrip::DripperChild
+      )
+
+      expect(batch1.reload.status).to eq("stopped")
+      expect(batch2.reload.status).to eq("stopped")
+    end
+  end
 end
 
 module DripperChildSpec
@@ -129,6 +166,18 @@ module DripperChildSpec
       raise "boom on #{element.name}" if element.name == "BOOM"
 
       element.update!(role: "done")
+    end
+  end
+
+  class SequentialBackfill < OkBackfill
+    def self.max_parallel_batches
+      1
+    end
+  end
+
+  class SequentialFailBackfill < SelectiveFailBackfill
+    def self.max_parallel_batches
+      1
     end
   end
 end
