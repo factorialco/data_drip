@@ -137,6 +137,28 @@ RSpec.describe DataDrip::ScriptRun, type: :model do
         a_value_within(1.second).of(start_at)
       )
     end
+
+    # Regression: the job used to be enqueued before the `enqueued!` transition
+    # committed. ScriptRunner starts work immediately, so a worker inside that
+    # window ran the script to completion and the trailing `enqueued!` then
+    # stomped the terminal status -- leaving a finished run displayed as
+    # enqueued forever.
+    it "commits the enqueued transition before the job becomes visible" do
+      status_when_enqueued = nil
+
+      allow(DataDrip::ScriptRunner).to receive(:set).and_wrap_original do |orig, *args|
+        orig.call(*args).tap do |configured|
+          allow(configured).to receive(:perform_later) do |script_run|
+            status_when_enqueued =
+              DataDrip::ScriptRun.find(script_run.id).status
+          end
+        end
+      end
+
+      DataDrip::ScriptRun.create!(valid_attributes)
+
+      expect(status_when_enqueued).to eq("enqueued")
+    end
   end
 
   describe "hooks" do

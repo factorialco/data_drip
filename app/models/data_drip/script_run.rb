@@ -56,8 +56,11 @@ module DataDrip
     def enqueue
       return unless pending?
 
-      DataDrip::ScriptRunner.set(wait_until: start_at).perform_later(self)
+      # The transition MUST commit before the job is enqueued. A worker can pick
+      # the job up the instant it is visible, and ScriptRunner starts work immediately,
+      # so enqueueing first leaves a window where the job sees the stale state.
       enqueued!
+      DataDrip::ScriptRunner.set(wait_until: start_at).perform_later(self)
     end
 
     def append_output(line)

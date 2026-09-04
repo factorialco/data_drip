@@ -217,6 +217,40 @@ RSpec.describe DataDrip::BackfillRun, type: :model do
     end
   end
 
+  describe "enqueueing" do
+    include ActiveJob::TestHelper
+
+    after { clear_enqueued_jobs }
+
+    # Regression: the job used to be enqueued before the `enqueued!` transition
+    # committed. A worker picking it up inside that window read `pending`, hit
+    # Dripper's `return unless enqueued?` guard, and silently dropped the run --
+    # which then sat in `enqueued` forever with no batches, no error and no
+    # retry, and (via no_active_run_for_same_class) blocked every later run of
+    # the same class.
+    it "commits the enqueued transition before the job becomes visible" do
+      status_when_enqueued = nil
+
+      allow(DataDrip::Dripper).to receive(:set).and_wrap_original do |orig, *args|
+        orig.call(*args).tap do |configured|
+          allow(configured).to receive(:perform_later) do |run|
+            status_when_enqueued =
+              DataDrip::BackfillRun.find(run.id).status
+          end
+        end
+      end
+
+      DataDrip::BackfillRun.create!(
+        backfill_class_name: "AddRoleToEmployee",
+        batch_size: 100,
+        start_at: 1.hour.from_now,
+        backfiller: backfiller
+      )
+
+      expect(status_when_enqueued).to eq("enqueued")
+    end
+  end
+
   describe "backfiller name" do
     let(:valid_attributes) do
       {
