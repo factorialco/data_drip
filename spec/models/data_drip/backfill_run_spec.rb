@@ -3,6 +3,44 @@
 require "spec_helper"
 
 RSpec.describe DataDrip::BackfillRun, type: :model do
+  describe "enqueueing" do
+    let(:backfiller) { User.create!(name: "Enqueue User") }
+
+    def build_pending_run(start_at:)
+      run =
+        DataDrip::BackfillRun.new(
+          backfill_class_name: "AddRoleToEmployee",
+          batch_size: 10,
+          start_at: start_at,
+          backfiller: backfiller,
+          options: { age: 25 }
+        )
+      run.save!(validate: false)
+      run
+    end
+
+    it "pushes a run due now without scheduling, so the inline adapter can run it" do
+      expect { build_pending_run(start_at: Time.current) }.to have_enqueued_job(
+        DataDrip::Dripper
+      ).at(:no_wait)
+    end
+
+    it "schedules a run whose start_at is in the future" do
+      start_at = 2.hours.from_now
+      expect { build_pending_run(start_at: start_at) }.to have_enqueued_job(
+        DataDrip::Dripper
+      ).at(start_at)
+    end
+
+    it "does not try to enqueue again when a pending run is destroyed" do
+      run = build_pending_run(start_at: 2.hours.from_now)
+      run.update_column(:status, DataDrip::BackfillRun.statuses[:pending])
+
+      expect { run.destroy! }.not_to raise_error
+      expect(DataDrip::BackfillRun.exists?(run.id)).to be(false)
+    end
+  end
+
   let!(:backfiller) { User.create!(name: "Test User") }
   let!(:employee1) { Employee.create!(name: "John", role: nil, age: 25) }
   let!(:employee2) { Employee.create!(name: "Jane", role: nil, age: 30) }

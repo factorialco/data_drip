@@ -28,7 +28,7 @@ module DataDrip
               allow_nil: true
 
     before_create :capture_backfiller_name
-    after_commit :enqueue
+    after_commit :enqueue, on: :create
     after_commit :run_hooks
 
     DataDrip.cross_rails_enum(
@@ -120,7 +120,14 @@ module DataDrip
     def enqueue
       return unless pending?
 
-      DataDrip::Dripper.set(wait_until: start_at).perform_later(self)
+      # A run scheduled for the future waits in the queue backend; one due now
+      # is pushed directly, which also keeps the inline adapter usable (it
+      # cannot schedule at all).
+      if start_at.present? && start_at > Time.current
+        DataDrip::Dripper.set(wait_until: start_at).perform_later(self)
+      else
+        DataDrip::Dripper.perform_later(self)
+      end
       enqueued!
     end
 
