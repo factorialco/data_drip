@@ -26,7 +26,9 @@ RSpec.describe DataDrip::BackfillRun, type: :model do
     end
 
     it "schedules a run whose start_at is in the future" do
-      start_at = 2.hours.from_now
+      # Whole seconds: the job's scheduled time is compared against the
+      # persisted value, and databases keep fewer fractional digits than Ruby.
+      start_at = 2.hours.from_now.floor
       expect { build_pending_run(start_at: start_at) }.to have_enqueued_job(
         DataDrip::Dripper
       ).at(start_at)
