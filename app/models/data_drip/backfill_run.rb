@@ -120,8 +120,11 @@ module DataDrip
     def enqueue
       return unless pending?
 
-      DataDrip::Dripper.set(wait_until: start_at).perform_later(self)
+      # The transition MUST commit before the job is enqueued. A worker can pick
+      # the job up the instant it is visible, and Dripper guards on `enqueued?`,
+      # so enqueueing first leaves a window where the job sees the stale state.
       enqueued!
+      DataDrip::Dripper.set(wait_until: start_at).perform_later(self)
     end
 
     # Called after each batch reaches a terminal state. Once no batch is still

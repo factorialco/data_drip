@@ -22,8 +22,12 @@ module DataDrip
     def enqueue
       return unless pending?
 
-      DataDrip::DripperChild.perform_later(self)
+      # The transition MUST commit before the job is enqueued. A worker can pick
+      # the job up the instant it is visible; if it runs the batch to completion
+      # first, a trailing `enqueued!` would stomp that terminal state and the
+      # parent run, seeing a forever-active batch, would never settle.
       enqueued!
+      DataDrip::DripperChild.perform_later(self)
     end
 
     def run!

@@ -147,6 +147,48 @@ RSpec.describe DataDrip::BackfillRunBatch, type: :model do
     end
   end
 
+  describe "#enqueue" do
+    include ActiveJob::TestHelper
+
+    let(:backfill_run) do
+      DataDrip::BackfillRun.create!(
+        backfill_class_name: "AddRoleToEmployee",
+        batch_size: 2,
+        start_at: 1.hour.from_now,
+        backfiller: backfiller,
+        options: {
+          age: 25
+        }
+      )
+    end
+
+    after { clear_enqueued_jobs }
+
+    # Regression: the job used to be enqueued before the `enqueued!` transition
+    # committed. DripperChild accepts a `pending` batch, so a worker inside that
+    # window ran the batch to completion and the trailing `enqueued!` then
+    # stomped that terminal state -- the work was done, but the parent run saw a
+    # forever-active batch and never settled out of `running`.
+    it "commits the enqueued transition before the job becomes visible" do
+      status_when_enqueued = nil
+
+      allow(DataDrip::DripperChild).to receive(:perform_later) do |batch|
+        status_when_enqueued =
+          DataDrip::BackfillRunBatch.find(batch.id).status
+      end
+
+      DataDrip::BackfillRunBatch.create!(
+        backfill_run: backfill_run,
+        status: :pending,
+        batch_size: 2,
+        start_id: 1,
+        finish_id: 2
+      )
+
+      expect(status_when_enqueued).to eq("enqueued")
+    end
+  end
+
   describe "validations" do
     let(:test_backfill_run) do
       backfill_run =
