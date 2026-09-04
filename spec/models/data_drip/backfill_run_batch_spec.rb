@@ -9,6 +9,58 @@ RSpec.describe DataDrip::BackfillRunBatch, type: :model do
   let!(:employee3) { Employee.create!(name: "Bob", role: nil, age: 25) }
   let!(:employee4) { Employee.create!(name: "Alice", role: "manager", age: 25) }
 
+  describe "#enqueue" do
+    def build_run(backfill_class_name)
+      run =
+        DataDrip::BackfillRun.new(
+          backfill_class_name: backfill_class_name,
+          batch_size: 10,
+          start_at: 1.hour.from_now,
+          backfiller: backfiller,
+          options: {}
+        )
+      run.save!(validate: false)
+      run.update_column(:status, DataDrip::BackfillRun.statuses[:running])
+      run
+    end
+
+    def build_pending_batch(run)
+      batch =
+        DataDrip::BackfillRunBatch.new(
+          backfill_run: run,
+          batch_size: 10,
+          start_id: employee1.id,
+          finish_id: employee2.id
+        )
+      batch.save!(validate: false)
+      batch.update_column(:status, DataDrip::BackfillRunBatch.statuses[:pending])
+      batch
+    end
+
+    it "enqueues every batch when the backfill sets no limit" do
+      run = build_run("BackfillRunBatchSpec::EmptyScopeBackfill")
+      first = build_pending_batch(run)
+      second = build_pending_batch(run)
+
+      expect { first.enqueue; second.enqueue }.to have_enqueued_job(
+        DataDrip::DripperChild
+      ).exactly(:twice)
+      expect([ first.reload.status, second.reload.status ]).to eq(%w[enqueued enqueued])
+    end
+
+    it "keeps batches pending once the limit of in-flight siblings is reached" do
+      run = build_run("BackfillRunBatchSpec::SequentialBackfill")
+      first = build_pending_batch(run)
+      second = build_pending_batch(run)
+
+      expect { first.enqueue; second.enqueue }.to have_enqueued_job(
+        DataDrip::DripperChild
+      ).exactly(:once)
+      expect(first.reload.status).to eq("enqueued")
+      expect(second.reload.status).to eq("pending")
+    end
+  end
+
   describe "#run!" do
     let(:backfill_run) do
       # Skip validation to allow creation for testing
@@ -270,5 +322,11 @@ module BackfillRunBatchSpec
     end
 
     def process_element(_element); end
+  end
+
+  class SequentialBackfill < EmptyScopeBackfill
+    def self.max_parallel_batches
+      1
+    end
   end
 end

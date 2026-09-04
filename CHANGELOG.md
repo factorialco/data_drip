@@ -1,6 +1,7 @@
 ## [Unreleased]
 
 ### Added
+- A backfill class can declare `self.max_parallel_batches` (default `nil`, unlimited). With a limit, a run only keeps that many children enqueued or running; the rest stay `pending` and the finishing child enqueues the next one. For backfills whose batches serialize on a shared resource this stops hundreds of children from holding worker threads while they wait, and a stopped run releases its pending batches as `stopped`.
 - Backfill options can be declared as mandatory with `attribute :name, :string, required: true`. The form marks required fields and the server rejects runs with blank required options (also guarding `scope` from running with missing options).
 - Full UI redesign: slim header shell (replaces the empty sidebar), stats strip, tabbed runs list with class-name search and status filter, progress bars, relative timestamps, empty states, and dark mode support (follows the OS preference).
 - Run detail page now shows a live progress hero (percent, throughput, estimated time remaining, elapsed) that auto-refreshes while the run is active, plus a metadata panel with the run's options.
@@ -17,6 +18,8 @@
 - The unused SSE `GET :stream` endpoint (live updates now poll the existing `updates` endpoint).
 
 ### Fixed
+- Deleting a `pending` run no longer raises `FrozenError`: the run's `after_commit :enqueue` fired on every commit, including the destroy, and tried to mark the frozen record `enqueued!`. It now runs only on create.
+- A run due now is enqueued with a plain `perform_later` instead of `set(wait_until:)`, so the inline ActiveJob adapter (development, tests) can execute it; only runs scheduled for the future are delayed.
 - Scripts that log a lot no longer die mid-run with `Mysql2::Error: Data too long for column 'output'`. The `data_drip_script_runs.output` column is created as `MEDIUMTEXT` on MySQL (`limit: 1.megabyte`; ignored by PostgreSQL and SQLite), and `rails generate data_drip:widen_script_run_output` migrates existing installs. `ScriptRun#append_output` also caps a run's log at 1MB — every line rewrites the whole blob, so a log that big is slow long before the database complains — and ends it with a truncation notice instead of raising.
 - A run whose scope matches no records now completes instead of hanging in `running` forever. With an empty scope the dripper creates no batches, and since only `DripperChild` settled a run to a terminal state, nothing ever finished it — leaving a zombie run that also blocked any later identical run (the duplicate-run guard treats `running` as active) and could not be deleted. The dripper now finalizes the run itself once batches are created. The dripper also derives `total_count` from the batch sizes it already plucked instead of issuing a second `scope.count`.
 - Large option/input values on the run detail pages no longer stretch the page sideways: the values wrap and the block scrolls past `max-h-64`.

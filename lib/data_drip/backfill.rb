@@ -20,6 +20,16 @@ module DataDrip
       schema_required_attributes
     end
 
+    # How many children of one run may be enqueued or running at once. nil
+    # means unlimited: every batch is enqueued the moment the dripper creates
+    # it. A backfill whose batches serialize on one shared resource (a global
+    # lock, one external system) overrides this with a small number so the
+    # waiting batches stay pending instead of holding worker threads; the
+    # finishing child enqueues the next pending one.
+    def self.max_parallel_batches
+      nil
+    end
+
     def self.backfill_options_class
       schema_options_class
     end
