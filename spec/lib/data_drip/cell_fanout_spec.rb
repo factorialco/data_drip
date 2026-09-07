@@ -57,18 +57,26 @@ RSpec.describe DataDrip::CellFanout do
     expect(Process.clock_gettime(Process::CLOCK_MONOTONIC) - started).to be < 0.6
   end
 
-  it "never runs more than MAX_CONCURRENCY cells at once" do
+  it "never runs more cells at once than the configured concurrency" do
+    DataDrip.cell_fanout_concurrency = 3
     running = Concurrent::AtomicFixnum.new(0)
     peak = Concurrent::AtomicFixnum.new(0)
 
-    cells = (1..described_class::MAX_CONCURRENCY + 6).map { |i| "cell-#{i}" }
-    described_class.call(cells, deadline: 5) do
+    described_class.call((1..9).map { |i| "cell-#{i}" }, deadline: 5) do
       current = running.increment
       peak.update { |seen| [ seen, current ].max }
       sleep 0.05
       running.decrement
     end
 
-    expect(peak.value).to be <= described_class::MAX_CONCURRENCY
+    expect(peak.value).to be <= 3
+  end
+
+  it "takes its deadline from the configuration when none is given" do
+    DataDrip.cell_fanout_deadline = 0.2
+
+    result = described_class.call(%w[slow]) { sleep 5 }
+
+    expect(result["slow"]).to be_a(described_class::TimedOut)
   end
 end

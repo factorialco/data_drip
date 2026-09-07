@@ -69,6 +69,23 @@ RSpec.describe DataDrip::MultiCellGroup do
       expect(described_class.new(run: run).status).to eq("completed")
     end
 
+    # Cells report their own status, so one on a newer DataDrip can name a
+    # status this version does not know. Never treat that as finished.
+    it "surfaces a status it does not recognise instead of ignoring it" do
+      run = build_run(status: :completed)
+      dispatch(cell_id: "cell-b", last_status: "paused")
+
+      expect(described_class.new(run: run).status).to eq("paused")
+    end
+
+    it "still lets an outright failure win over an unrecognised status" do
+      run = build_run(status: :completed)
+      dispatch(cell_id: "cell-b", last_status: "paused")
+      dispatch(cell_id: "cell-c", last_status: "failed")
+
+      expect(described_class.new(run: run).status).to eq("failed")
+    end
+
     it "ignores a cell it has never reached rather than guessing" do
       run = build_run(status: :completed)
       dispatch(cell_id: "cell-b")

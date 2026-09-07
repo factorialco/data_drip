@@ -52,7 +52,7 @@ module DataDrip
         OpenSSL::SSL::SSLError
       ].freeze
 
-      # Timeouts are deliberately close to CellFanout::DEFAULT_DEADLINE_SECONDS.
+      # Timeouts are deliberately close to DataDrip.cell_fanout_deadline.
       # Work the fan-out has already given up on keeps running until its socket
       # times out, so a read timeout far above the deadline would leave threads
       # parked on dead cells long after the request they belonged to returned.

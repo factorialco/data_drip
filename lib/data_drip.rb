@@ -55,6 +55,25 @@ module DataDrip
   # ->(cell_id, path) { "https://api.example.com/data_drip#{path}" } or nil.
   mattr_accessor :cell_ui_url, default: nil
 
+  # How many cells a single fan-out may talk to at once. The ceiling exists to
+  # keep a wide fan-out from starving the host's thread budget.
+  mattr_accessor :cell_fanout_concurrency, default: 8
+
+  # Seconds one fan-out may take in total, however many cells it spans. Raise it
+  # for cells that are far away or known to answer slowly; the cell transport's
+  # own timeouts should stay near this value.
+  mattr_accessor :cell_fanout_deadline, default: 5
+
+  # How long a cached per-cell snapshot is considered fresh. The coordinator's
+  # show page renders from cache and refreshes in the background, so this is the
+  # oldest status a viewer can see, not a request delay.
+  mattr_accessor :cell_status_refresh_interval, default: 3
+
+  # How much of a script's log a cross-cell snapshot carries. Snapshots travel
+  # once per cell per refresh, so the whole log would be a lot of traffic; the
+  # coordinator shows this much and links into the owning cell for the rest.
+  mattr_accessor :script_output_tail_bytes, default: 4_096
+
   class Error < StandardError
   end
 
@@ -72,6 +91,14 @@ module DataDrip
 
   def self.resolved_cell_api_tokens
     Array(resolve_setting(cell_api_tokens)).map(&:to_s).reject(&:empty?)
+  end
+
+  def self.resolved_cell_fanout_deadline
+    resolve_setting(cell_fanout_deadline).to_f
+  end
+
+  def self.resolved_cell_status_refresh_interval
+    resolve_setting(cell_status_refresh_interval).to_f
   end
 
   def self.multi_cell?

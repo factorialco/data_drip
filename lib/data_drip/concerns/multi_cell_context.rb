@@ -68,14 +68,14 @@ module DataDrip
       end
     end
 
-    # Loads everything the per-cell cards need. Legs that can still change are
-    # refreshed against their cells (bounded by one shared deadline); legs whose
-    # run already finished are served from the snapshot cached on the dispatch
-    # row, so a finished group's page costs nothing and survives its cells being
-    # decommissioned.
+    # Loads everything the per-cell cards need, entirely from the snapshots
+    # cached on the dispatch rows, and asks a background job to catch up any leg
+    # that has gone stale. The page therefore renders immediately, never waits on
+    # another cell, and never writes — which also keeps it safe on hosts that
+    # send GETs to a read replica.
     def load_cell_fanout(run)
       @group = run.group
-      @group.refresh! if @group.multi_cell?
+      @group.refresh_later
       @dispatches = @group.dispatches
       @cells_active = @group.active?
     end
