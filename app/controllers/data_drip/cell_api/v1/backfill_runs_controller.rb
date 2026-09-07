@@ -23,6 +23,7 @@ module DataDrip
           run.origin = :remote
 
           if run.save
+            audit("created", run_id: run.id)
             render_snapshot(run, status: :created)
           elsif (existing = find_existing)
             # Lost a race against a concurrent duplicate delivery (the unique
@@ -30,6 +31,7 @@ module DataDrip
             # group sibling).
             render_snapshot(existing)
           else
+            audit("rejected", errors: run.errors.full_messages)
             render json: { errors: run.errors.full_messages },
                    status: :unprocessable_entity
           end
@@ -38,10 +40,11 @@ module DataDrip
         end
 
         def destroy
-          run = DataDrip::BackfillRun.find_by(id: params[:id])
+          run = find_remote_run(DataDrip::BackfillRun)
           return render json: { error: "not_found" }, status: :not_found unless run
 
           unless run.backfiller_id == acting_backfiller_id
+            audit("forbidden", run_id: run.id)
             return render json: { error: "not_owner" }, status: :forbidden
           end
           unless run.not_yet_run?
@@ -49,14 +52,16 @@ module DataDrip
           end
 
           run.destroy!
+          audit("destroyed", run_id: run.id)
           head :no_content
         end
 
         def stop
-          run = DataDrip::BackfillRun.find_by(id: params[:id])
+          run = find_remote_run(DataDrip::BackfillRun)
           return render json: { error: "not_found" }, status: :not_found unless run
 
           unless run.backfiller_id == acting_backfiller_id
+            audit("forbidden", run_id: run.id)
             return render json: { error: "not_owner" }, status: :forbidden
           end
           unless run.running?
@@ -64,14 +69,16 @@ module DataDrip
           end
 
           run.stopped!
+          audit("stopped", run_id: run.id)
           render_snapshot(run)
         end
 
         def retry_failed_batches
-          run = DataDrip::BackfillRun.find_by(id: params[:id])
+          run = find_remote_run(DataDrip::BackfillRun)
           return render json: { error: "not_found" }, status: :not_found unless run
 
           unless run.backfiller_id == acting_backfiller_id
+            audit("forbidden", run_id: run.id)
             return render json: { error: "not_owner" }, status: :forbidden
           end
 
@@ -80,11 +87,14 @@ module DataDrip
             return render json: { error: "no_failed_batches" }, status: :conflict
           end
 
+          count = 0
           failed_batches.find_each do |batch|
             batch.update!(status: :pending, error_message: nil)
             batch.enqueue
+            count += 1
           end
           run.running! unless run.running?
+          audit("retried_batches", run_id: run.id, batches: count)
           render_snapshot(run)
         end
 

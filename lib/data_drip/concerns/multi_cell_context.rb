@@ -7,6 +7,49 @@ module DataDrip
   module MultiCellContext
     extend ActiveSupport::Concern
 
+    # Outcome of applying one action across a group's remote legs. Callers that
+    # can undo (delete) check `all_ok?` before committing; callers that cannot
+    # (stop) just report.
+    Fanout =
+      Struct.new(:outcomes, keyword_init: true) do
+        def any?
+          outcomes.any?
+        end
+
+        def failures
+          outcomes.reject { |outcome| outcome[:ok] }
+        end
+
+        def all_ok?
+          failures.empty?
+        end
+
+        def message
+          return nil if outcomes.empty?
+
+          if all_ok?
+            [ "All #{outcomes.size} remote #{"cell".pluralize(outcomes.size)} acknowledged.", notes ]
+              .compact
+              .join(" ")
+          else
+            "Some cells did not acknowledge — #{detail_list(failures)}."
+          end
+        end
+
+        # Details a cell reported while still acknowledging — a leg that had
+        # already run, say. Worth showing even on the happy path.
+        def notes
+          noted = outcomes.select { |outcome| outcome[:ok] && outcome[:detail].present? }
+          return nil if noted.empty?
+
+          "#{detail_list(noted)}."
+        end
+
+        def detail_list(entries)
+          entries.map { |outcome| "#{outcome[:cell_id]}: #{outcome[:detail]}" }.join("; ")
+        end
+      end
+
     private
 
     # Which remote cells the create form selected. The current cell is always
@@ -25,39 +68,16 @@ module DataDrip
       end
     end
 
-    # Loads everything the per-cell cards need: the dispatch records and a live
-    # status snapshot from each dispatched cell (bounded by the fetcher's
-    # shared deadline; unreachable cells render as such).
+    # Loads everything the per-cell cards need. Legs that can still change are
+    # refreshed against their cells (bounded by one shared deadline); legs whose
+    # run already finished are served from the snapshot cached on the dispatch
+    # row, so a finished group's page costs nothing and survives its cells being
+    # decommissioned.
     def load_cell_fanout(run)
-      @dispatches = run.multi_cell_group? ? run.dispatches.to_a : []
-      @cell_statuses = fetch_cell_statuses(run, @dispatches)
-      @cells_active = cells_active?(@dispatches, @cell_statuses)
-    end
-
-    def fetch_cell_statuses(run, dispatches)
-      cells = dispatches.select(&:dispatched?).map(&:cell_id)
-      return {} if cells.empty?
-
-      DataDrip::CellStatusFetcher.new(
-        group_uuid: run.group_uuid,
-        cell_ids: cells
-      ).call
-    end
-
-    # Whether any remote leg may still change: drives the show page's polling.
-    # An unreachable cell counts as active (we don't know, keep looking); a
-    # failed dispatch does not (it waits for a human to hit "Retry dispatch").
-    def cells_active?(dispatches, statuses)
-      dispatches.any? do |dispatch|
-        next true if dispatch.pending?
-        next false unless dispatch.dispatched?
-
-        snapshot = statuses[dispatch.cell_id]
-        next true if snapshot.nil? || snapshot["unreachable"]
-
-        runs = snapshot["runs"] || []
-        runs.empty? || runs.any? { |run| !run["terminal"] }
-      end
+      @group = run.group
+      @group.refresh! if @group.multi_cell?
+      @dispatches = @group.dispatches
+      @cells_active = @group.active?
     end
 
     def cell_client
@@ -68,31 +88,33 @@ module DataDrip
       run.dispatches.dispatched.find_by(cell_id: cell_id)
     end
 
-    # Fans an action out to every dispatched cell and reports per-cell
-    # outcomes. The block gets (dispatch) and returns [ok, detail]; transport
-    # errors count as failures.
+    # Applies an action to every dispatched cell concurrently, against one
+    # shared deadline. Sequential delivery would multiply an unreachable cell's
+    # timeout by the number of cells and hold a web worker for minutes.
+    #
+    # The block gets (dispatch) and returns [ok, detail]; transport errors and
+    # cells that miss the deadline count as failures.
     def fanout_to_dispatched(dispatches)
-      outcomes =
-        dispatches.select(&:dispatched?).map do |dispatch|
-          ok, detail =
-            begin
-              yield(dispatch)
-            rescue DataDrip::CellTransport::Error => e
-              [ false, e.message ]
-            end
-          [ dispatch.cell_id, ok, detail ]
+      by_cell = dispatches.select(&:dispatched?).index_by(&:cell_id)
+
+      results =
+        DataDrip::CellFanout.call(by_cell.keys) do |cell_id|
+          yield(by_cell.fetch(cell_id))
         end
 
-      failures = outcomes.reject { |_cell, ok, _detail| ok }
-      return nil if outcomes.empty?
+      outcomes =
+        by_cell.keys.map do |cell_id|
+          result = results[cell_id]
+          ok, detail =
+            if result.is_a?(Exception)
+              [ false, result.message ]
+            else
+              result
+            end
+          { cell_id: cell_id, ok: ok, detail: detail }
+        end
 
-      if failures.empty?
-        "All #{outcomes.size} remote #{outcomes.size == 1 ? "cell" : "cells"} acknowledged."
-      else
-        details =
-          failures.map { |cell, _ok, detail| "#{cell}: #{detail}" }.join("; ")
-        "Some cells did not acknowledge — #{details}."
-      end
+      Fanout.new(outcomes: outcomes)
     end
 
     def cell_api_error_detail(response)

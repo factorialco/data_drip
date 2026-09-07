@@ -46,9 +46,25 @@ module DataDrip
       DataDrip::CellDispatch.where(group_uuid: group_uuid).order(:cell_id)
     end
 
+    # This run together with its remote legs. Ask the group — not the run — for
+    # anything that spans cells (status, whether it is still active).
+    def group
+      @group ||= DataDrip::MultiCellGroup.new(run: self)
+    end
+
     # Whether this run is the coordinator of a fan-out to other cells.
     def multi_cell_group?
       local? && group_uuid.present? && dispatches.exists?
+    end
+
+    # Who may stop or delete this run. Ownership normally decides, but a
+    # `remote` run has no owner in the cell executing it: backfiller ids are
+    # cell-scoped, so the coordinator's id matches nobody here and the run would
+    # otherwise be unstoppable from the only cell that can actually stop it.
+    # Reaching this UI already requires whatever gate the host put in front of
+    # DataDrip, so any operator in this cell may act on a fanned-in run.
+    def manageable_by?(backfiller)
+      remote? || owned_by?(backfiller)
     end
 
     private
