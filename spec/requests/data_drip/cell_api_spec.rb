@@ -236,7 +236,7 @@ RSpec.describe "DataDrip Cell API", type: :request do
       snapshot = response.parsed_body["runs"].first
       expect(snapshot["output_truncated"]).to be(true)
       expect(snapshot["output_tail"].bytesize)
-        .to be <= DataDrip::RunSnapshot::OUTPUT_TAIL_BYTES
+        .to be <= DataDrip::RunSnapshot.output_tail_bytes
       expect(snapshot["output_tail"]).to end_with("line 5000")
       expect(snapshot["output_tail"]).not_to include("line 1\n")
     end

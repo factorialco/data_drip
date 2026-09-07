@@ -6,13 +6,15 @@ module DataDrip
   # consumes these snapshots parsed from JSON, so local and remote snapshots
   # must look identical.
   module RunSnapshot
-    # Script snapshots travel on every poll of the coordinator's show page, once
-    # per cell, so they carry only the tail of the log rather than the whole
-    # thing (which `ScriptRun::OUTPUT_LIMIT` caps at a megabyte). The card shows
-    # a short scrollback and links into the owning cell's own UI for the rest.
-    OUTPUT_TAIL_BYTES = 4_096
-
     module_function
+
+    # How much of a script's log a snapshot carries. Snapshots travel once per
+    # cell per refresh, so shipping the whole log (which `ScriptRun::OUTPUT_LIMIT`
+    # caps at a megabyte) would be a lot of traffic for a card that shows a short
+    # scrollback and links into the owning cell for the rest.
+    def output_tail_bytes
+      DataDrip.resolve_setting(DataDrip.script_output_tail_bytes).to_i
+    end
 
     def for(run)
       run.is_a?(DataDrip::ScriptRun) ? script(run) : backfill(run)
@@ -48,7 +50,7 @@ module DataDrip
         "status" => run.status,
         "terminal" => run.completed? || run.failed?,
         "output_tail" => output_tail(run.output),
-        "output_truncated" => run.output.to_s.bytesize > OUTPUT_TAIL_BYTES,
+        "output_truncated" => run.output.to_s.bytesize > output_tail_bytes,
         "error_message" => run.error_message,
         "error_backtrace" => run.error_backtrace,
         "backfiller_id" => run.backfiller_id,
@@ -63,11 +65,12 @@ module DataDrip
 
     def output_tail(output)
       text = output.to_s
-      return text if text.bytesize <= OUTPUT_TAIL_BYTES
+      limit = output_tail_bytes
+      return text if text.bytesize <= limit
 
       # Cut on a byte boundary, then drop the (possibly partial) first line so
       # the tail always starts mid-log at a readable place.
-      tail = text.byteslice(-OUTPUT_TAIL_BYTES, OUTPUT_TAIL_BYTES).to_s
+      tail = text.byteslice(-limit, limit).to_s
       tail = tail.scrub("")
       tail.split("\n", 2).last.to_s
     end

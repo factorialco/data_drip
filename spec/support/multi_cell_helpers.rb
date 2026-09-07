@@ -27,6 +27,10 @@ module MultiCellHelpers
     DataDrip.cell_transport = nil
     DataDrip.cell_api_tokens = []
     DataDrip.cell_ui_url = nil
+    DataDrip.cell_fanout_concurrency = 8
+    DataDrip.cell_fanout_deadline = 5
+    DataDrip.cell_status_refresh_interval = 3
+    DataDrip.script_output_tail_bytes = 4_096
   end
 
   def cell_api_url(cell_id, path)
