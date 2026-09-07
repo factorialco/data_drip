@@ -11,14 +11,6 @@ module DataDrip
   # coordinator's UI, and applying stop/delete/retry to the remote legs. Both
   # run inside a web request, so both need the same bound.
   module CellFanout
-    # Cross-cell control traffic is tiny; the ceiling exists to keep a wide
-    # fan-out from starving the host's thread budget, not to throttle work.
-    MAX_CONCURRENCY = 8
-
-    # Long enough for a healthy cell to answer, short enough that a request
-    # fanning out to a dead cell still returns within a browser's patience.
-    DEFAULT_DEADLINE_SECONDS = 5
-
     TimedOut = Class.new(DataDrip::Error)
 
     module_function
@@ -27,10 +19,11 @@ module DataDrip
     # A cell that raises gets the exception object; a cell that misses the
     # deadline gets a TimedOut instance. Callers decide what either means —
     # nothing here swallows a failure silently.
-    def call(cell_ids, deadline: DEFAULT_DEADLINE_SECONDS, &block)
+    def call(cell_ids, deadline: DataDrip.resolved_cell_fanout_deadline, &block)
       return {} if cell_ids.empty?
 
-      pool = Concurrent::FixedThreadPool.new([ cell_ids.size, MAX_CONCURRENCY ].min)
+      concurrency = [ DataDrip.resolve_setting(DataDrip.cell_fanout_concurrency).to_i, 1 ].max
+      pool = Concurrent::FixedThreadPool.new([ cell_ids.size, concurrency ].min)
 
       futures =
         cell_ids.to_h do |cell_id|

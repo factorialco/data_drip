@@ -80,34 +80,24 @@ RSpec.describe DataDrip::BackfillRunsController, type: :controller do
       )
     end
 
-    it "renders per-cell cards from the fetched snapshots" do
+    it "renders per-cell cards from the cached snapshots" do
       DataDrip::CellDispatch.create!(
         group_uuid: "g-1",
         cell_id: "cell-b",
         runnable_type: :backfill,
         status: :dispatched,
-        remote_run_id: 77
-      )
-      stub_request(
-        :get,
-        cell_api_url("cell-b", "/v1/groups/g-1?target_cell_id=cell-b")
-      ).to_return(
-        status: 200,
-        body: {
-          cell_id: "cell-b",
-          runs: [
-            {
-              "id" => 77,
-              "type" => "backfill",
-              "status" => "running",
-              "terminal" => false,
-              "progress_percent" => 40,
-              "processed_count" => 40,
-              "total_count" => 100,
-              "failed_batches_count" => 0
-            }
-          ]
-        }.to_json
+        remote_run_id: 77,
+        last_status: "running",
+        last_synced_at: Time.current,
+        last_snapshot: {
+          "id" => 77,
+          "type" => "backfill",
+          "status" => "running",
+          "progress_percent" => 40,
+          "processed_count" => 40,
+          "total_count" => 100,
+          "failed_batches_count" => 0
+        }
       )
 
       get :show, params: { id: run.id }
@@ -118,7 +108,9 @@ RSpec.describe DataDrip::BackfillRunsController, type: :controller do
       expect(response.body).to include("Running")
     end
 
-    it "renders an unreachable card when the cell cannot be reached" do
+    # Rendering a page must not wait on other cells, and must not write: hosts
+    # routinely route GETs to a read replica.
+    it "makes no cross-cell request, and asks a job to catch the group up" do
       DataDrip::CellDispatch.create!(
         group_uuid: "g-1",
         cell_id: "cell-b",
@@ -126,11 +118,96 @@ RSpec.describe DataDrip::BackfillRunsController, type: :controller do
         status: :dispatched,
         remote_run_id: 77
       )
-      stub_request(:get, %r{cell-b\.example\.com}).to_timeout
+
+      expect { get :show, params: { id: run.id } }.to have_enqueued_job(
+        DataDrip::CellStatusRefreshJob
+      ).with("g-1")
+
+      expect(a_request(:any, %r{cell-b\.example\.com})).not_to have_been_made
+    end
+
+    # Several people watching the same run must not each enqueue the same
+    # cross-cell fan-out on every poll.
+    it "asks for only one refresh per freshness window" do
+      allow(Rails).to receive(:cache).and_return(ActiveSupport::Cache::MemoryStore.new)
+      DataDrip::CellDispatch.create!(
+        group_uuid: "g-1",
+        cell_id: "cell-b",
+        runnable_type: :backfill,
+        status: :dispatched,
+        remote_run_id: 77
+      )
+
+      expect do
+        get :show, params: { id: run.id }
+        get :show, params: { id: run.id }
+      end.to have_enqueued_job(DataDrip::CellStatusRefreshJob).once
+    end
+
+    # Deduplication needs a shared cache; without one the page still works, it
+    # just asks every time (which is what the test app's null store does).
+    it "still renders and refreshes with no usable cache store" do
+      DataDrip::CellDispatch.create!(
+        group_uuid: "g-1",
+        cell_id: "cell-b",
+        runnable_type: :backfill,
+        status: :dispatched,
+        remote_run_id: 77
+      )
+
+      expect { get :show, params: { id: run.id } }.to have_enqueued_job(
+        DataDrip::CellStatusRefreshJob
+      )
+      expect(response).to have_http_status(:ok)
+    end
+
+    it "does not ask for a refresh when every leg is settled" do
+      DataDrip::CellDispatch.create!(
+        group_uuid: "g-1",
+        cell_id: "cell-b",
+        runnable_type: :backfill,
+        status: :dispatched,
+        remote_run_id: 77,
+        last_status: "completed",
+        last_synced_at: 1.hour.ago
+      )
+
+      expect { get :show, params: { id: run.id } }.not_to have_enqueued_job(
+        DataDrip::CellStatusRefreshJob
+      )
+    end
+
+    it "renders a delivered leg that has not reported yet" do
+      DataDrip::CellDispatch.create!(
+        group_uuid: "g-1",
+        cell_id: "cell-b",
+        runnable_type: :backfill,
+        status: :dispatched,
+        remote_run_id: 77
+      )
 
       get :show, params: { id: run.id }
 
-      expect(response.body).to include("Unreachable")
+      expect(response.body).to include("waiting for this cell")
+    end
+
+    it "renders an unreachable card, keeping the state that cell last reported" do
+      DataDrip::CellDispatch.create!(
+        group_uuid: "g-1",
+        cell_id: "cell-b",
+        runnable_type: :backfill,
+        status: :dispatched,
+        remote_run_id: 77,
+        last_status: "running",
+        last_synced_at: 10.minutes.ago,
+        last_snapshot: { "id" => 77, "type" => "backfill", "status" => "running" },
+        unreachable_since: 5.minutes.ago
+      )
+
+      get :show, params: { id: run.id }
+
+      expect(response.body).to include("Cell unreachable")
+      expect(response.body).to include("Running")
     end
 
     it "renders a failed dispatch with its error and a retry button" do
@@ -181,23 +258,21 @@ RSpec.describe DataDrip::BackfillRunsController, type: :controller do
       )
     end
 
-    def stub_leg(cell_id, status:, remote_run_id: 77)
-      stub_request(
-        :get,
-        cell_api_url(cell_id, "/v1/groups/g-1?target_cell_id=#{cell_id}")
-      ).to_return(
-        status: 200,
-        body: {
-          cell_id: cell_id,
-          runs: [ { "id" => remote_run_id, "type" => "backfill", "status" => status } ]
-        }.to_json
+    def leg_reported(cell_id, status:, remote_run_id: 77)
+      dispatch_to(cell_id, remote_run_id: remote_run_id).update!(
+        last_status: status,
+        last_synced_at: Time.current,
+        last_snapshot: {
+          "id" => remote_run_id,
+          "type" => "backfill",
+          "status" => status
+        }
       )
     end
 
     it "stays active while a remote leg is still running, even once this cell finished" do
       run.update_column(:status, DataDrip::BackfillRun.statuses[:completed])
-      dispatch_to("cell-b")
-      stub_leg("cell-b", status: "running")
+      leg_reported("cell-b", status: "running")
 
       get :updates, params: { id: run.id }
 
@@ -210,8 +285,7 @@ RSpec.describe DataDrip::BackfillRunsController, type: :controller do
     # not report the group as completed while another cell is working or broken.
     it "reports the worst status across the group, not this cell's" do
       run.update_column(:status, DataDrip::BackfillRun.statuses[:completed])
-      dispatch_to("cell-b")
-      stub_leg("cell-b", status: "failed")
+      leg_reported("cell-b", status: "failed")
 
       get :updates, params: { id: run.id }
 
@@ -222,8 +296,7 @@ RSpec.describe DataDrip::BackfillRunsController, type: :controller do
 
     it "goes inactive once every leg is terminal" do
       run.update_column(:status, DataDrip::BackfillRun.statuses[:completed])
-      dispatch_to("cell-b")
-      stub_leg("cell-b", status: "completed")
+      leg_reported("cell-b", status: "completed")
 
       get :updates, params: { id: run.id }
 
@@ -232,17 +305,15 @@ RSpec.describe DataDrip::BackfillRunsController, type: :controller do
       expect(body["status"]).to eq("completed")
     end
 
-    # A leg that reached a terminal status can never change, so its snapshot is
-    # cached on the dispatch row and the cell is never asked again.
-    it "serves a settled leg from cache instead of re-fetching it" do
+    # Polling must stay cheap: it reads the cached snapshots and lets a job do
+    # any fetching, so a poll never blocks on another cell.
+    it "makes no cross-cell request while polling" do
       run.update_column(:status, DataDrip::BackfillRun.statuses[:completed])
       dispatch_to("cell-b")
-      request_stub = stub_leg("cell-b", status: "completed")
 
       get :updates, params: { id: run.id }
-      get :updates, params: { id: run.id }
 
-      expect(request_stub).to have_been_requested.once
+      expect(a_request(:any, %r{cell-b\.example\.com})).not_to have_been_made
       expect(response.parsed_body["cells_html"]).to include("cell-b")
     end
 

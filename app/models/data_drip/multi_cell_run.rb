@@ -19,9 +19,12 @@ module DataDrip
       DataDrip.cross_rails_enum(self, :origin, %i[local remote])
 
       validates :backfiller_id, presence: true
-      # `remote` runs store the coordinator's backfiller_id verbatim: ids are
-      # assumed globally unique across cells, but the record itself only exists
-      # in the coordinator's cell. Only `local` runs require a resolvable one.
+      # `remote` runs store the coordinator's backfiller_id verbatim: the id is
+      # meaningful in the coordinator's cell, where the record lives, and is
+      # what that cell's Cell API compares its own runs against. Only `local`
+      # runs require an id that resolves here. See "Requirements" in the
+      # README's multi-cell section on why those ids must not be reused across
+      # cells.
       validate :backfiller_must_exist_locally, if: :local?
 
       before_validation :assign_current_cell, on: :create
@@ -57,14 +60,17 @@ module DataDrip
       local? && group_uuid.present? && dispatches.exists?
     end
 
-    # Who may stop or delete this run. Ownership normally decides, but a
-    # `remote` run has no owner in the cell executing it: backfiller ids are
-    # cell-scoped, so the coordinator's id matches nobody here and the run would
-    # otherwise be unstoppable from the only cell that can actually stop it.
-    # Reaching this UI already requires whatever gate the host put in front of
-    # DataDrip, so any operator in this cell may act on a fanned-in run.
+    # Who may stop or delete this run. Ownership decides whenever there is an
+    # owner to speak of. A run fanned in from another cell usually has none:
+    # backfiller ids identify a record in the coordinator's cell, so nothing
+    # here resolves, and requiring ownership would leave the run unstoppable
+    # from the only cell that can actually stop it. Reaching this UI already
+    # means passing whatever gate the host put in front of DataDrip, so an
+    # ownerless run is manageable by any operator who can see it.
     def manageable_by?(backfiller)
-      remote? || owned_by?(backfiller)
+      return true if remote? && self.backfiller.nil?
+
+      owned_by?(backfiller)
     end
 
     private
