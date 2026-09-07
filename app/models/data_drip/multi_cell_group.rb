@@ -22,8 +22,14 @@ module DataDrip
       "pending" => 2,
       "enqueued" => 3,
       "running" => 4,
-      "failed" => 5
+      "failed" => 6
     }.freeze
+
+    # Legs report their own status over the wire, so a cell running a newer
+    # DataDrip can name one this version has never heard of. Surfacing it beats
+    # guessing, and it must never be mistaken for "finished" — it ranks above
+    # everything except an outright failure.
+    UNKNOWN_SEVERITY = 5
 
     ACTIVE_STATUSES = %w[pending enqueued running].freeze
 
@@ -67,7 +73,7 @@ module DataDrip
     def status
       statuses = [ run.status.to_s ]
       statuses += dispatches.map { |dispatch| dispatch_status(dispatch) }
-      statuses.compact.max_by { |status| STATUS_SEVERITY.fetch(status, 0) }
+      statuses.compact.max_by { |status| STATUS_SEVERITY.fetch(status, UNKNOWN_SEVERITY) }
     end
 
     # Whether anything in the group may still change. Drives both the polling
@@ -86,12 +92,45 @@ module DataDrip
         dispatches.none?(&:unreachable?)
     end
 
-    # Refreshes every leg that can still change and caches what it reports.
-    # Settled legs are served from cache: their run reached a terminal state, so
-    # there is nothing left to ask, and the group's page stays readable even
-    # after those cells are decommissioned.
-    def refresh!(client: DataDrip::CellClient.new, deadline: DataDrip::CellFanout::DEFAULT_DEADLINE_SECONDS)
-      stale = dispatches.select { |dispatch| dispatch.dispatched? && !dispatch.settled? }
+    # Legs whose cached snapshot is worth replacing: still able to change, and
+    # not refreshed within the freshness window. A leg whose run reached a
+    # terminal state is never asked again — there is nothing left to tell us, and
+    # the group's page stays readable after that cell is decommissioned.
+    def stale_dispatches
+      window = DataDrip.resolved_cell_status_refresh_interval.seconds.ago
+
+      dispatches.select do |dispatch|
+        next false unless dispatch.dispatched?
+        next false if dispatch.settled?
+
+        dispatch.last_synced_at.nil? || dispatch.last_synced_at < window
+      end
+    end
+
+    # Asks for a refresh without performing one. Rendering the coordinator's page
+    # must not wait on other cells, and must not write (hosts send GETs to read
+    # replicas), so the page renders from cache and the job catches it up for the
+    # next poll.
+    #
+    # Several people watching the same run would otherwise each enqueue the same
+    # fan-out on every poll, so one request claims the refresh for the freshness
+    # window. The claim goes through Rails.cache rather than the database
+    # precisely because this runs on a read path; where the host has no shared
+    # cache it simply stops deduplicating.
+    def refresh_later
+      return self unless multi_cell?
+      return self if stale_dispatches.empty?
+      return self unless claim_refresh
+
+      DataDrip::CellStatusRefreshJob.perform_later(run.group_uuid)
+      self
+    end
+
+    # Fetches every stale leg concurrently under one shared deadline and caches
+    # what each reports. Writes, so it belongs off the request path — see
+    # CellStatusRefreshJob.
+    def refresh!(client: DataDrip::CellClient.new, deadline: DataDrip.resolved_cell_fanout_deadline)
+      stale = stale_dispatches
       return self if stale.empty?
 
       by_cell = stale.index_by(&:cell_id)
@@ -105,6 +144,16 @@ module DataDrip
     end
 
     private
+
+    def claim_refresh
+      interval = DataDrip.resolved_cell_status_refresh_interval
+      Rails.cache.write(
+        "data_drip/cell_status_refresh/#{run.group_uuid}",
+        true,
+        expires_in: [ interval, 1 ].max.seconds,
+        unless_exist: true
+      )
+    end
 
     def apply(dispatch, result)
       if result.is_a?(Exception) || !result.success?
