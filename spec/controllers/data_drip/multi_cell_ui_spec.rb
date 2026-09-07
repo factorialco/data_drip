@@ -171,54 +171,79 @@ RSpec.describe DataDrip::BackfillRunsController, type: :controller do
       )
     end
 
-    it "reports cells_active while a remote leg is still running" do
+    def dispatch_to(cell_id, remote_run_id: 77)
       DataDrip::CellDispatch.create!(
         group_uuid: "g-1",
-        cell_id: "cell-b",
+        cell_id: cell_id,
         runnable_type: :backfill,
         status: :dispatched,
-        remote_run_id: 77
+        remote_run_id: remote_run_id
       )
+    end
+
+    def stub_leg(cell_id, status:, remote_run_id: 77)
       stub_request(
         :get,
-        cell_api_url("cell-b", "/v1/groups/g-1?target_cell_id=cell-b")
+        cell_api_url(cell_id, "/v1/groups/g-1?target_cell_id=#{cell_id}")
       ).to_return(
         status: 200,
         body: {
-          cell_id: "cell-b",
-          runs: [ { "id" => 77, "type" => "backfill", "status" => "running", "terminal" => false } ]
+          cell_id: cell_id,
+          runs: [ { "id" => remote_run_id, "type" => "backfill", "status" => status } ]
         }.to_json
       )
+    end
+
+    it "stays active while a remote leg is still running, even once this cell finished" do
+      run.update_column(:status, DataDrip::BackfillRun.statuses[:completed])
+      dispatch_to("cell-b")
+      stub_leg("cell-b", status: "running")
 
       get :updates, params: { id: run.id }
 
       body = response.parsed_body
-      expect(body["cells_active"]).to be(true)
+      expect(body["active"]).to be(true)
       expect(body["cells_html"]).to include("cell-b")
     end
 
-    it "reports cells inactive once every leg is terminal" do
-      DataDrip::CellDispatch.create!(
-        group_uuid: "g-1",
-        cell_id: "cell-b",
-        runnable_type: :backfill,
-        status: :dispatched,
-        remote_run_id: 77
-      )
-      stub_request(
-        :get,
-        cell_api_url("cell-b", "/v1/groups/g-1?target_cell_id=cell-b")
-      ).to_return(
-        status: 200,
-        body: {
-          cell_id: "cell-b",
-          runs: [ { "id" => 77, "type" => "backfill", "status" => "completed", "terminal" => true } ]
-        }.to_json
-      )
+    # The whole point of a group status: a coordinator run that completed must
+    # not report the group as completed while another cell is working or broken.
+    it "reports the worst status across the group, not this cell's" do
+      run.update_column(:status, DataDrip::BackfillRun.statuses[:completed])
+      dispatch_to("cell-b")
+      stub_leg("cell-b", status: "failed")
 
       get :updates, params: { id: run.id }
 
-      expect(response.parsed_body["cells_active"]).to be(false)
+      body = response.parsed_body
+      expect(body["status"]).to eq("failed")
+      expect(body["status_html"]).to include("Failed")
+    end
+
+    it "goes inactive once every leg is terminal" do
+      run.update_column(:status, DataDrip::BackfillRun.statuses[:completed])
+      dispatch_to("cell-b")
+      stub_leg("cell-b", status: "completed")
+
+      get :updates, params: { id: run.id }
+
+      body = response.parsed_body
+      expect(body["active"]).to be(false)
+      expect(body["status"]).to eq("completed")
+    end
+
+    # A leg that reached a terminal status can never change, so its snapshot is
+    # cached on the dispatch row and the cell is never asked again.
+    it "serves a settled leg from cache instead of re-fetching it" do
+      run.update_column(:status, DataDrip::BackfillRun.statuses[:completed])
+      dispatch_to("cell-b")
+      request_stub = stub_leg("cell-b", status: "completed")
+
+      get :updates, params: { id: run.id }
+      get :updates, params: { id: run.id }
+
+      expect(request_stub).to have_been_requested.once
+      expect(response.parsed_body["cells_html"]).to include("cell-b")
     end
 
     it "sends no cells payload for single-cell runs" do
@@ -231,7 +256,7 @@ RSpec.describe DataDrip::BackfillRunsController, type: :controller do
       get :updates, params: { id: plain.id }
 
       body = response.parsed_body
-      expect(body["cells_active"]).to be(false)
+      expect(body["active"]).to be(true)
       expect(body["cells_html"]).to be_nil
     end
   end
@@ -371,6 +396,79 @@ RSpec.describe DataDrip::BackfillRunsController, type: :controller do
 
       expect(DataDrip::BackfillRun.exists?(run.id)).to be(false)
       expect(flash[:notice]).to match(/kept as history/)
+    end
+
+    # The remote leg is enqueued in its own cell and will run. Destroying the
+    # coordinator's run and its dispatch rows would erase the only place that
+    # leg is visible or stoppable from, so an unacknowledged delete is refused.
+    it "refuses to delete while a cell has not acknowledged" do
+      stub_request(:delete, cell_api_url("cell-b", "/v1/backfill_runs/77"))
+        .to_timeout
+
+      delete :destroy, params: { id: run.id }
+
+      expect(DataDrip::BackfillRun.exists?(run.id)).to be(true)
+      expect(DataDrip::CellDispatch.exists?(dispatch.id)).to be(true)
+      expect(flash[:alert]).to match(/not deleted/)
+      expect(response).to redirect_to(
+        DataDrip::Engine.routes.url_helpers.backfill_run_path(run)
+      )
+    end
+
+    it "refuses to delete when a cell rejects the delete" do
+      stub_request(:delete, cell_api_url("cell-b", "/v1/backfill_runs/77"))
+        .to_return(status: 500, body: "")
+
+      delete :destroy, params: { id: run.id }
+
+      expect(DataDrip::BackfillRun.exists?(run.id)).to be(true)
+      expect(flash[:alert]).to match(/not deleted/)
+    end
+  end
+
+  describe "fanned-in runs in the cell executing them" do
+    # backfiller ids are cell-scoped, so a run fanned in from another cell
+    # matches no local backfiller and would be unstoppable here on ownership
+    # grounds — from the only cell that can actually stop it.
+    let!(:remote_run) do
+      DataDrip::BackfillRun.create!(
+        valid_attributes.merge(
+          backfiller_id: 999_999,
+          backfiller_name: "Someone Else",
+          group_uuid: "g-remote",
+          origin: :remote,
+          origin_cell_id: "cell-b"
+        )
+      )
+    end
+
+    it "may be stopped by any operator in this cell" do
+      remote_run.update_column(:status, DataDrip::BackfillRun.statuses[:running])
+
+      post :stop, params: { id: remote_run.id }
+
+      expect(remote_run.reload).to be_stopped
+      expect(flash[:alert]).to be_nil
+    end
+
+    it "may be deleted by any operator in this cell" do
+      delete :destroy, params: { id: remote_run.id }
+
+      expect(DataDrip::BackfillRun.exists?(remote_run.id)).to be(false)
+    end
+
+    it "still refuses a local run the operator does not own" do
+      other = User.create!(name: "Someone")
+      mine =
+        DataDrip::BackfillRun.create!(
+          valid_attributes.merge(backfiller: other, amount_of_elements: 7)
+        )
+      mine.update_column(:status, DataDrip::BackfillRun.statuses[:running])
+
+      post :stop, params: { id: mine.id }
+
+      expect(mine.reload).to be_running
+      expect(flash[:alert]).to match(/only stop backfill runs you created/)
     end
   end
 end

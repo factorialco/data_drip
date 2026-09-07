@@ -116,4 +116,16 @@ RSpec.describe DataDrip::CellTransport::Http do
       transport.call(cell_id: "cell-b", method: :patch, path: "/v1/whatever")
     end.to raise_error(ArgumentError, /Unsupported HTTP method/)
   end
+  # Hosts resolve cell urls from their own registry, which may refuse a cell
+  # (unknown, or reachable only over plaintext). That has to reach the caller as
+  # this cell's failure, not as an exception nothing is prepared for.
+  it "reports a cell it cannot address as a transport error" do
+    transport =
+      described_class.new(
+        url: ->(cell_id) { raise "cell=#{cell_id} has no api_url configured" }
+      )
+
+    expect { transport.call(cell_id: "cell-b", method: :get, path: "/v1/ping") }
+      .to raise_error(DataDrip::CellTransport::Error, /Could not address cell cell-b/)
+  end
 end

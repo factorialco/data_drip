@@ -25,7 +25,9 @@ module DataDrip
       @transport.call(
         cell_id: cell_id,
         method: :get,
-        path: "/v1/groups/#{group_uuid}?target_cell_id=#{ERB::Util.url_encode(cell_id)}"
+        path:
+          "/v1/groups/#{ERB::Util.url_encode(group_uuid)}" \
+            "?target_cell_id=#{ERB::Util.url_encode(cell_id)}"
       )
     end
 

@@ -138,14 +138,23 @@ module DataDrip
       name.to_s.split.map { |part| part[0] }.first(2).join.upcase
     end
 
+    # The status to show for a run in the lists: for a coordinator run, the
+    # group's worst-of status, so a failed or still-working cell is never hidden
+    # behind a local run that happens to have completed. Reads only the
+    # preloaded groups — the lists must not fan out or query per row.
+    def group_status(run, groups = nil)
+      groups&.dig(run.id)&.status || run.status
+    end
+
     # Small pill flagging a run's multi-cell nature in the run lists: where a
     # remote run came from, or how many cells a coordinator run fans out to.
-    def cell_badge(run)
+    def cell_badge(run, groups = nil)
+      group = groups&.dig(run.id)
       label =
         if run.remote?
           "from #{run.origin_cell_id.presence || "another cell"}"
-        elsif run.multi_cell_group?
-          "#{run.dispatches.size + 1} cells"
+        elsif group&.multi_cell?
+          "#{group.cells_count} cells"
         end
       return if label.nil?
 

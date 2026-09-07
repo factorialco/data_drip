@@ -499,14 +499,14 @@ RSpec.describe DataDrip::BackfillRunsController, type: :controller do
       expect(response).to have_http_status(:ok)
       body = JSON.parse(response.body)
       expect(body["status"]).to eq("running")
-      expect(body["terminal"]).to be(false)
+      expect(body["active"]).to be(true)
       expect(body["status_html"]).to include("Running")
       expect(body["progress_html"]).to be_present
       expect(body["batches_meta_html"]).to be_present
       expect(body).to have_key("batches_html")
     end
 
-    it "reports terminal runs as terminal" do
+    it "reports a finished run as inactive, so the client stops polling" do
       backfill_run.update_column(
         :status,
         DataDrip::BackfillRun.statuses[:completed]
@@ -514,7 +514,7 @@ RSpec.describe DataDrip::BackfillRunsController, type: :controller do
 
       get :updates, params: { id: backfill_run.id }
 
-      expect(JSON.parse(response.body)["terminal"]).to be(true)
+      expect(JSON.parse(response.body)["active"]).to be(false)
     end
   end
 
