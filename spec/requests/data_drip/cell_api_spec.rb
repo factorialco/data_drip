@@ -196,7 +196,7 @@ RSpec.describe "DataDrip Cell API", type: :request do
       expect(response.parsed_body["runs"]).to eq([])
     end
 
-    it "includes the script output in script snapshots" do
+    it "includes the script output tail in script snapshots" do
       DataDrip::ScriptRun.create!(
         script_class_name: "GreetEmployees",
         inputs: { "greeting" => "Hi", "dry_run" => true },
@@ -212,7 +212,33 @@ RSpec.describe "DataDrip Cell API", type: :request do
 
       snapshot = response.parsed_body["runs"].first
       expect(snapshot["type"]).to eq("script")
-      expect(snapshot["output"]).to eq("line 1\nline 2")
+      expect(snapshot["output_tail"]).to eq("line 1\nline 2")
+      expect(snapshot["output_truncated"]).to be(false)
+    end
+
+    # Snapshots travel once per cell on every poll of the coordinator's page, so
+    # a large log is trimmed to a readable tail rather than shipped whole.
+    it "trims a large script log to its tail" do
+      log = (1..5_000).map { |i| "line #{i}" }.join("\n")
+      DataDrip::ScriptRun.create!(
+        script_class_name: "GreetEmployees",
+        inputs: { "greeting" => "Hi", "dry_run" => true },
+        backfiller: backfiller,
+        group_uuid: "group-big",
+        origin: :remote,
+        origin_cell_id: "cell-b"
+      ).update!(status: :completed, output: log)
+
+      get "/data_drip/cell_api/v1/groups/group-big",
+          params: { target_cell_id: "cell-a" },
+          headers: headers
+
+      snapshot = response.parsed_body["runs"].first
+      expect(snapshot["output_truncated"]).to be(true)
+      expect(snapshot["output_tail"].bytesize)
+        .to be <= DataDrip::RunSnapshot::OUTPUT_TAIL_BYTES
+      expect(snapshot["output_tail"]).to end_with("line 5000")
+      expect(snapshot["output_tail"]).not_to include("line 1\n")
     end
   end
 
@@ -265,6 +291,31 @@ RSpec.describe "DataDrip Cell API", type: :request do
            headers: headers
 
       expect(response).to have_http_status(:conflict)
+    end
+
+    # The Cell API exists to manage this cell's own leg of a fanned-out group. A
+    # run somebody created in this cell's UI is not another cell's business,
+    # even though the caller holds a valid token.
+    it "cannot touch a run created locally in this cell" do
+      local =
+        DataDrip::BackfillRun.create!(
+          backfill_class_name: "AddRoleToEmployee",
+          batch_size: 100,
+          amount_of_elements: 9,
+          start_at: Time.current,
+          backfiller: backfiller
+        )
+      local.running!
+
+      post "/data_drip/cell_api/v1/backfill_runs/#{local.id}/stop",
+           params: {
+             target_cell_id: "cell-a",
+             acting_backfiller_id: backfiller.id
+           }.to_json,
+           headers: headers
+
+      expect(response).to have_http_status(:not_found)
+      expect(local.reload).to be_running
     end
 
     it "404s for an unknown run" do

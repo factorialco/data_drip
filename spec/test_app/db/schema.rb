@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[7.0].define(version: 2026_07_31_000002) do
+ActiveRecord::Schema[8.1].define(version: 2026_07_31_000002) do
   create_table "data_drip_backfill_run_batches", force: :cascade do |t|
     t.bigint "backfill_run_id", null: false
     t.integer "batch_size", default: 100, null: false
@@ -53,10 +53,14 @@ ActiveRecord::Schema[7.0].define(version: 2026_07_31_000002) do
     t.datetime "created_at", null: false
     t.text "error_message"
     t.string "group_uuid", null: false
+    t.json "last_snapshot"
+    t.string "last_status"
+    t.datetime "last_synced_at"
     t.json "payload", default: {}, null: false
     t.bigint "remote_run_id"
     t.integer "runnable_type", default: 0, null: false
     t.integer "status", default: 0, null: false
+    t.datetime "unreachable_since"
     t.datetime "updated_at", null: false
     t.index ["group_uuid", "cell_id"], name: "idx_cell_dispatches_on_group_and_cell", unique: true
   end

@@ -149,3 +149,4 @@ end
 # These build on DataDrip::Error and the configuration accessors above.
 require "data_drip/cell_transport"
 require "data_drip/cell_client"
+require "data_drip/cell_fanout"

@@ -1,7 +1,8 @@
 <%# Per-cell breakdown of a multi-cell run group, rendered on the coordinator's
-    show page. Locals: run (the local coordinator run), dispatches
-    (CellDispatch records), cell_statuses ({ cell_id => snapshot hash } fetched
-    live from each dispatched cell — may be missing or unreachable). %>
+    show page. Locals: run (the local coordinator run) and dispatches
+    (CellDispatch records, each carrying the leg's last known snapshot in
+    `last_snapshot` — refreshed by MultiCellGroup#refresh! before rendering, and
+    served from cache once that leg reached a terminal status). %>
 <% script = run.is_a?(DataDrip::ScriptRun) %>
 <% card_classes = "rounded-xl p-4 outline-1 -outline-offset-1 outline-zinc-950/10 dark:outline-white/10" %>
 
@@ -29,8 +30,7 @@
   </div>
 
   <% dispatches.each do |dispatch| %>
-    <% snapshot = cell_statuses[dispatch.cell_id] %>
-    <% remote_run = snapshot && !snapshot["unreachable"] ? (snapshot["runs"] || []).first : nil %>
+    <% remote_run = dispatch.last_snapshot.presence %>
     <div class="<%= card_classes %>">
       <div class="flex items-center justify-between gap-x-3">
         <p class="truncate font-mono text-sm font-medium text-zinc-900 dark:text-white" title="<%= dispatch.cell_id %>"><%= dispatch.cell_id %></p>
@@ -69,6 +69,12 @@
           This cell could not be reached — it keeps running on its own; status will refresh when it is reachable again.
         </p>
       <% else %>
+        <% if dispatch.unreachable? %>
+          <p class="mt-3 text-xs text-amber-700 dark:text-amber-400">
+            Cell unreachable — showing its state as of <%= relative_time(dispatch.last_synced_at, @user_timezone) %>.
+          </p>
+        <% end %>
+
         <% if remote_run["type"] == "backfill" %>
           <div class="mt-3 flex items-center gap-x-2">
             <%= progress_bar(remote_run["progress_percent"].to_i, status: remote_run["status"], classes: "h-1.5 flex-1") %>
@@ -83,10 +89,13 @@
           <p class="mt-2 max-h-24 overflow-y-auto text-xs wrap-anywhere text-red-700 dark:text-red-400"><%= remote_run["error_message"] %></p>
         <% end %>
 
-        <% if remote_run["type"] == "script" && remote_run["output"].present? %>
+        <% if remote_run["type"] == "script" && remote_run["output_tail"].present? %>
           <details class="mt-2">
             <summary class="cursor-pointer text-xs font-medium text-zinc-500 select-none dark:text-zinc-400">Output</summary>
-            <pre class="mt-2 max-h-48 overflow-auto rounded-lg bg-zinc-50 p-3 font-mono text-xs leading-5 whitespace-pre-wrap text-zinc-700 dark:bg-white/5 dark:text-zinc-300"><%= remote_run["output"] %></pre>
+            <% if remote_run["output_truncated"] %>
+              <p class="mt-2 text-xs text-zinc-400 dark:text-zinc-500">Last <%= number_to_human_size(DataDrip::RunSnapshot::OUTPUT_TAIL_BYTES) %> — open the cell for the full log.</p>
+            <% end %>
+            <pre class="mt-2 max-h-48 overflow-auto rounded-lg bg-zinc-50 p-3 font-mono text-xs leading-5 whitespace-pre-wrap text-zinc-700 dark:bg-white/5 dark:text-zinc-300"><%= remote_run["output_tail"] %></pre>
           </details>
         <% end %>
 

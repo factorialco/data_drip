@@ -52,7 +52,13 @@ module DataDrip
         OpenSSL::SSL::SSLError
       ].freeze
 
-      def initialize(url:, headers: nil, query: nil, open_timeout: 5, read_timeout: 20)
+      # Timeouts are deliberately close to CellFanout::DEFAULT_DEADLINE_SECONDS.
+      # Work the fan-out has already given up on keeps running until its socket
+      # times out, so a read timeout far above the deadline would leave threads
+      # parked on dead cells long after the request they belonged to returned.
+      # Cross-cell control calls are small; raise these only if a cell is known
+      # to answer slowly.
+      def initialize(url:, headers: nil, query: nil, open_timeout: 2, read_timeout: 8)
         @url = url
         @headers = headers
         @query = query
@@ -61,8 +67,7 @@ module DataDrip
       end
 
       def call(cell_id:, method:, path:, body: nil)
-        uri = build_uri(cell_id, path)
-        request = build_request(method, uri, body, cell_id)
+        uri, request = build(cell_id, method, path, body)
 
         response =
           Net::HTTP.start(
@@ -79,6 +84,20 @@ module DataDrip
       end
 
       private
+
+      # A cell we cannot even address — absent from the host's registry, or
+      # reachable only over a transport the host refuses — is that cell's
+      # failure, not a crash. Callers already know what to do with a
+      # CellTransport::Error: mark the dispatch failed, offer a retry.
+      def build(cell_id, method, path, body)
+        uri = build_uri(cell_id, path)
+        [ uri, build_request(method, uri, body, cell_id) ]
+      rescue DataDrip::Error, ArgumentError
+        # A bad method is this gem's bug, not the cell's — let it surface.
+        raise
+      rescue StandardError => e
+        raise Error, "Could not address cell #{cell_id}: #{e.message}"
+      end
 
       def build_uri(cell_id, path)
         base = resolve(@url, cell_id).to_s.chomp("/")

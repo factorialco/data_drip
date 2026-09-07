@@ -84,6 +84,25 @@ RSpec.describe DataDrip::CellDispatcherJob do
     expect(dispatch.reload).to be_failed
   end
 
+  # The operator deciding whether to press "Retry dispatch" needs the latest
+  # reason, not the one from an attempt several backoffs ago.
+  it "refreshes the error message on a later attempt" do
+    stub_request(:post, create_url).to_return(status: 500, body: "")
+    expect { described_class.perform_now(dispatch) }.to raise_error(
+      DataDrip::CellTransport::Error
+    )
+    expect(dispatch.reload.error_message).to match(/HTTP 500/)
+
+    stub_request(:post, create_url).to_return(
+      status: 422,
+      body: { errors: [ "Backfill class name must be a valid DataDrip backfill class" ] }.to_json
+    )
+    described_class.perform_now(dispatch)
+
+    expect(dispatch.reload).to be_failed
+    expect(dispatch.error_message).to match(/valid DataDrip backfill class/)
+  end
+
   it "does nothing when the dispatch was already delivered" do
     dispatch.update!(status: :dispatched, remote_run_id: 1)
 

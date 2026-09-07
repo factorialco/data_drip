@@ -45,7 +45,7 @@ module DataDrip
           )
         else
           migration_file =
-            "db/migrate/#{Time.now.utc.strftime("%Y%m%d%H%M%S").to_i + 1}_create_data_drip_cell_dispatches.rb"
+            "db/migrate/#{1.second.from_now.utc.strftime("%Y%m%d%H%M%S")}_create_data_drip_cell_dispatches.rb"
           template "cell_dispatch_migration.rb.erb",
                    migration_file,
                    migration_version: migration_version

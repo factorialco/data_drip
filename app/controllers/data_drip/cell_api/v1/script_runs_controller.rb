@@ -22,10 +22,12 @@ module DataDrip
           run.origin = :remote
 
           if run.save
+            audit("created", run_id: run.id)
             render_snapshot(run, status: :created)
           elsif (existing = find_existing)
             render_snapshot(existing)
           else
+            audit("rejected", errors: run.errors.full_messages)
             render json: { errors: run.errors.full_messages },
                    status: :unprocessable_entity
           end
@@ -34,10 +36,11 @@ module DataDrip
         end
 
         def destroy
-          run = DataDrip::ScriptRun.find_by(id: params[:id])
+          run = find_remote_run(DataDrip::ScriptRun)
           return render json: { error: "not_found" }, status: :not_found unless run
 
           unless run.backfiller_id == acting_backfiller_id
+            audit("forbidden", run_id: run.id)
             return render json: { error: "not_owner" }, status: :forbidden
           end
           unless run.not_yet_run?
@@ -45,6 +48,7 @@ module DataDrip
           end
 
           run.destroy!
+          audit("destroyed", run_id: run.id)
           head :no_content
         end
 

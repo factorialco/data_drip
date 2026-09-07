@@ -8,6 +8,14 @@ class CreateDataDripCellDispatches < ActiveRecord::Migration<%= migration_versio
       t.bigint :remote_run_id
       t.text :error_message
       t.json :payload, null: false, default: {}
+      # Last known state of this leg, refreshed whenever the coordinator polls
+      # the cell. Cached so the run lists can report a group's real status
+      # without fanning out, and so a finished group stays readable after its
+      # cells are gone.
+      t.string :last_status
+      t.json :last_snapshot
+      t.datetime :last_synced_at
+      t.datetime :unreachable_since
       t.timestamps null: false
 
       t.index [ :group_uuid, :cell_id ],

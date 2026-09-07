@@ -22,6 +22,14 @@ module DataDrip
             end
         return if authorized
 
+        # The Cell API is a shared-secret surface reachable from outside the
+        # cell, so rejections are logged: a run of them is the signal that a
+        # token was rotated in one cell but not another, or is being guessed.
+        audit(
+          "unauthorized",
+          reason: tokens.empty? ? "no_tokens_configured" : "token_mismatch",
+          token_provided: provided.present?
+        )
         render json: { error: "unauthorized" }, status: :unauthorized
       end
 
@@ -32,6 +40,7 @@ module DataDrip
         target = params[:target_cell_id].to_s
         return if target.present? && target == current_cell_id
 
+        audit("misdirected", target_cell_id: target)
         render json: {
                  error: "misdirected",
                  target_cell_id: target,
@@ -50,6 +59,33 @@ module DataDrip
 
       def render_snapshot(run, status: :ok)
         render json: DataDrip::RunSnapshot.for(run), status: status
+      end
+
+      # Cell-to-cell calls mutate runs on behalf of an operator in another cell,
+      # so each one leaves a structured trace naming the actor, the target and
+      # the outcome. Without it a stopped or deleted run in this cell has no
+      # local explanation at all.
+      def audit(outcome, **details)
+        Rails.logger.info(
+          {
+            event: "data_drip.cell_api",
+            action: "#{controller_name}##{action_name}",
+            outcome: outcome,
+            cell_id: DataDrip.resolved_current_cell_id,
+            acting_backfiller_id: params[:acting_backfiller_id].presence,
+            group_uuid: params[:group_uuid].presence,
+            run_id: params[:id].presence,
+            remote_ip: request.remote_ip
+          }.merge(details).compact.to_json
+        )
+      end
+
+      # Fanned-out mutations may only ever touch this cell's own leg of a group:
+      # a run created here through the Cell API. A run an operator created in
+      # this cell's own UI is none of another cell's business, even though the
+      # caller holds a valid token.
+      def find_remote_run(scope)
+        scope.remote.find_by(id: params[:id], cell_id: current_cell_id)
       end
     end
   end
