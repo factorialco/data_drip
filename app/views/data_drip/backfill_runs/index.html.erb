@@ -96,10 +96,10 @@
                         backfill_run_path(backfill_run),
                         class: "font-medium text-zinc-900 group-hover:text-drip-700 dark:text-white dark:group-hover:text-drip-400",
                         data: { turbo_frame: "_top" } %>
-                    <%= cell_badge(backfill_run) %>
+                    <%= cell_badge(backfill_run, @groups) %>
                   </div>
                 </td>
-                <td class="py-3 pr-4"><%= status_tag(backfill_run.status) %></td>
+                <td class="py-3 pr-4"><%= status_tag(group_status(backfill_run, @groups)) %></td>
                 <td class="py-3 pr-4">
                   <div class="flex items-center gap-x-2">
                     <%= progress_bar(backfill_run.progress_percent, status: backfill_run.status, classes: "h-1.5 w-24") %>

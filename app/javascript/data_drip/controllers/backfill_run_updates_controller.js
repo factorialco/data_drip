@@ -7,7 +7,7 @@ export default class extends Controller {
   static values = {
     url: String,
     status: String,
-    cellsActive: { type: Boolean, default: false },
+    active: { type: Boolean, default: false },
     interval: { type: Number, default: 3000 }
   }
 
@@ -17,17 +17,13 @@ export default class extends Controller {
     const params = new URLSearchParams(window.location.search)
     this.skipBatches = Boolean(params.get("batch_page") || params.get("batch_status"))
 
-    // Keep polling while the local run is active OR any remote cell of the
-    // group may still change.
-    if (this.#active() || this.cellsActiveValue) this.#schedule()
+    // The server decides: `active` is true while the local run or any remote
+    // leg of the group may still change.
+    if (this.activeValue) this.#schedule()
   }
 
   disconnect() {
     clearTimeout(this.timer)
-  }
-
-  #active() {
-    return ["pending", "enqueued", "running"].includes(this.statusValue)
   }
 
   #schedule() {
@@ -45,7 +41,7 @@ export default class extends Controller {
       const data = await response.json()
       this.#render(data)
       this.statusValue = data.status
-      if (!data.terminal || data.cells_active) this.#schedule()
+      if (data.active) this.#schedule()
     } catch {
       this.#schedule()
     }

@@ -59,7 +59,7 @@ module DataDrip
 
       def create_backfill_run_batch_migration
         migration_file =
-          "db/migrate/#{Time.now.utc.strftime("%Y%m%d%H%M%S").to_i + 1}_create_data_drip_backfill_run_batches.rb"
+          "db/migrate/#{1.second.from_now.utc.strftime("%Y%m%d%H%M%S")}_create_data_drip_backfill_run_batches.rb"
         if File.exist?(migration_file)
           say_status(
             "skipped",
@@ -90,7 +90,7 @@ module DataDrip
           )
         else
           migration_file =
-            "db/migrate/#{Time.now.utc.strftime("%Y%m%d%H%M%S").to_i + 2}_create_data_drip_script_runs.rb"
+            "db/migrate/#{2.seconds.from_now.utc.strftime("%Y%m%d%H%M%S")}_create_data_drip_script_runs.rb"
           template "script_run_migration.rb.erb",
                    migration_file,
                    migration_version: migration_version
@@ -114,7 +114,7 @@ module DataDrip
           )
         else
           migration_file =
-            "db/migrate/#{Time.now.utc.strftime("%Y%m%d%H%M%S").to_i + 3}_create_data_drip_cell_dispatches.rb"
+            "db/migrate/#{3.seconds.from_now.utc.strftime("%Y%m%d%H%M%S")}_create_data_drip_cell_dispatches.rb"
           template "cell_dispatch_migration.rb.erb",
                    migration_file,
                    migration_version: migration_version

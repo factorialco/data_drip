@@ -94,6 +94,36 @@ RSpec.describe DataDrip::GroupCreator do
       expect(DataDrip::CellDispatch.count).to eq(0)
     end
 
+    # The run and the record of where else it must run are one fact: a run
+    # executing here with no trace that other cells were meant to run it is
+    # worse than no run at all.
+    it "rolls the run back when a dispatch cannot be recorded" do
+      run = build_run
+      allow(DataDrip::CellDispatch).to receive(:create!).and_call_original
+      allow(DataDrip::CellDispatch)
+        .to receive(:create!)
+        .with(hash_including(cell_id: "cell-c"))
+        .and_raise(ActiveRecord::StatementInvalid, "connection lost")
+
+      expect do
+        described_class.call(run: run, remote_cell_ids: %w[cell-b cell-c])
+      end.to raise_error(ActiveRecord::StatementInvalid)
+
+      expect(DataDrip::BackfillRun.count).to eq(0)
+      expect(DataDrip::CellDispatch.count).to eq(0)
+    end
+
+    it "enqueues dispatch jobs only after the rows are committed" do
+      run = build_run
+      committed = nil
+      allow(DataDrip::CellDispatcherJob)
+        .to receive(:perform_later) { committed = DataDrip::CellDispatch.count }
+
+      described_class.call(run: run, remote_cell_ids: %w[cell-b])
+
+      expect(committed).to eq(1)
+    end
+
     it "builds a script payload for script runs" do
       run =
         DataDrip::ScriptRun.new(

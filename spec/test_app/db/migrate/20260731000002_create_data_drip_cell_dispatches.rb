@@ -8,6 +8,10 @@ class CreateDataDripCellDispatches < ActiveRecord::Migration[7.0]
       t.bigint :remote_run_id
       t.text :error_message
       t.json :payload, default: {}, null: false
+      t.string :last_status
+      t.json :last_snapshot
+      t.datetime :last_synced_at
+      t.datetime :unreachable_since
 
       t.timestamps
     end

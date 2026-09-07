@@ -33,7 +33,10 @@ module DataDrip
     rescue DataDrip::CellTransport::Error => e
       # Mark the failure before re-raising so the UI shows it even while the
       # queue keeps retrying (a later success flips it back to dispatched).
-      dispatch.update!(status: :failed, error_message: e.message) if dispatch.pending?
+      # Recorded on every attempt, not just the first: the operator deciding
+      # whether to press "Retry dispatch" needs the latest reason, not the one
+      # from an attempt several backoffs ago.
+      dispatch.update!(status: :failed, error_message: e.message) unless dispatch.dispatched?
       raise
     end
 
