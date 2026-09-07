@@ -1,0 +1,125 @@
+<%# Per-cell breakdown of a multi-cell run group, rendered on the coordinator's
+    show page. Locals: run (the local coordinator run) and dispatches
+    (CellDispatch records, each carrying the leg's last known snapshot in
+    `last_snapshot` — refreshed by MultiCellGroup#refresh! before rendering, and
+    served from cache once that leg reached a terminal status). %>
+<% script = run.is_a?(DataDrip::ScriptRun) %>
+<% card_classes = "rounded-xl p-4 outline-1 -outline-offset-1 outline-zinc-950/10 dark:outline-white/10" %>
+
+<h2 class="text-base font-semibold text-zinc-900 dark:text-white">Cells</h2>
+<p class="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
+  Each cell executes independently against its own data — statuses and results can differ between cells.
+</p>
+
+<div class="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+  <div class="<%= card_classes %>">
+    <div class="flex items-center justify-between gap-x-3">
+      <p class="truncate font-mono text-sm font-medium text-zinc-900 dark:text-white" title="<%= run.cell_id %>">
+        <%= run.cell_id.presence || "this cell" %>
+        <span class="font-sans text-xs font-normal text-zinc-400 dark:text-zinc-500">· this cell</span>
+      </p>
+      <%= status_tag(run.status) %>
+    </div>
+    <% unless script %>
+      <div class="mt-3 flex items-center gap-x-2">
+        <%= progress_bar(run.progress_percent, status: run.status, classes: "h-1.5 flex-1") %>
+        <span class="text-xs text-zinc-500 tabular-nums dark:text-zinc-400"><%= run.total_count ? "#{run.progress_percent}%" : "—" %></span>
+      </div>
+    <% end %>
+    <p class="mt-2 text-xs text-zinc-500 dark:text-zinc-400">Full detail below.</p>
+  </div>
+
+  <% dispatches.each do |dispatch| %>
+    <% remote_run = dispatch.last_snapshot.presence %>
+    <div class="<%= card_classes %>">
+      <div class="flex items-center justify-between gap-x-3">
+        <p class="truncate font-mono text-sm font-medium text-zinc-900 dark:text-white" title="<%= dispatch.cell_id %>"><%= dispatch.cell_id %></p>
+
+        <% if dispatch.pending? %>
+          <%= status_tag("enqueued") %>
+        <% elsif dispatch.failed? %>
+          <span class="inline-flex items-center gap-x-1.5 rounded-full bg-red-50 px-2 py-0.5 text-xs font-medium text-red-700 inset-ring inset-ring-red-600/20 dark:bg-red-400/10 dark:text-red-400 dark:inset-ring-red-400/30">
+            <span class="size-1.5 rounded-full bg-red-500" aria-hidden="true"></span>
+            Dispatch failed
+          </span>
+        <% elsif remote_run %>
+          <%= status_tag(remote_run["status"]) %>
+        <% else %>
+          <span class="inline-flex items-center gap-x-1.5 rounded-full bg-zinc-50 px-2 py-0.5 text-xs font-medium text-zinc-600 inset-ring inset-ring-zinc-500/20 dark:bg-white/5 dark:text-zinc-400 dark:inset-ring-white/10">
+            <span class="size-1.5 rounded-full bg-zinc-400" aria-hidden="true"></span>
+            <%= dispatch.unreachable? ? "Unreachable" : "Fetching…" %>
+          </span>
+        <% end %>
+      </div>
+
+      <% if dispatch.pending? %>
+        <p class="mt-3 text-sm text-zinc-500 dark:text-zinc-400">Dispatching to this cell…</p>
+      <% elsif dispatch.failed? %>
+        <p class="mt-3 text-sm wrap-anywhere text-red-700 dark:text-red-400"><%= dispatch.error_message %></p>
+        <div class="mt-3">
+          <%= button_to "Retry dispatch",
+              script ?
+                retry_dispatch_script_run_path(run, cell_id: dispatch.cell_id) :
+                retry_dispatch_backfill_run_path(run, cell_id: dispatch.cell_id),
+              method: :post,
+              class: secondary_button_classes(size: :small) %>
+        </div>
+      <% elsif remote_run.nil? %>
+        <p class="mt-3 text-sm text-zinc-500 dark:text-zinc-400">
+          <% if dispatch.unreachable? %>
+            This cell could not be reached — it keeps running on its own; status will refresh when it is reachable again.
+          <% else %>
+            Delivered — waiting for this cell's first status report.
+          <% end %>
+        </p>
+      <% else %>
+        <% if dispatch.unreachable? %>
+          <p class="mt-3 text-xs text-amber-700 dark:text-amber-400">
+            Cell unreachable — showing its state as of <%= relative_time(dispatch.last_synced_at, @user_timezone) %>.
+          </p>
+        <% end %>
+
+        <% if remote_run["type"] == "backfill" %>
+          <div class="mt-3 flex items-center gap-x-2">
+            <%= progress_bar(remote_run["progress_percent"].to_i, status: remote_run["status"], classes: "h-1.5 flex-1") %>
+            <span class="text-xs text-zinc-500 tabular-nums dark:text-zinc-400"><%= remote_run["total_count"] ? "#{remote_run["progress_percent"]}%" : "—" %></span>
+          </div>
+          <p class="mt-2 text-xs text-zinc-500 tabular-nums dark:text-zinc-400">
+            <%= number_with_delimiter(remote_run["processed_count"].to_i) %><% if remote_run["total_count"] %> / <%= number_with_delimiter(remote_run["total_count"]) %><% end %> records
+          </p>
+        <% end %>
+
+        <% if remote_run["error_message"].present? %>
+          <p class="mt-2 max-h-24 overflow-y-auto text-xs wrap-anywhere text-red-700 dark:text-red-400"><%= remote_run["error_message"] %></p>
+        <% end %>
+
+        <% if remote_run["type"] == "script" && remote_run["output_tail"].present? %>
+          <details class="mt-2">
+            <summary class="cursor-pointer text-xs font-medium text-zinc-500 select-none dark:text-zinc-400">Output</summary>
+            <% if remote_run["output_truncated"] %>
+              <p class="mt-2 text-xs text-zinc-400 dark:text-zinc-500">Last <%= number_to_human_size(DataDrip::RunSnapshot.output_tail_bytes) %> — open the cell for the full log.</p>
+            <% end %>
+            <pre class="mt-2 max-h-48 overflow-auto rounded-lg bg-zinc-50 p-3 font-mono text-xs leading-5 whitespace-pre-wrap text-zinc-700 dark:bg-white/5 dark:text-zinc-300"><%= remote_run["output_tail"] %></pre>
+          </details>
+        <% end %>
+
+        <div class="mt-3 flex flex-wrap items-center gap-2">
+          <% if remote_run["type"] == "backfill" && remote_run["status"] == "running" %>
+            <%= button_to "Stop",
+                stop_backfill_run_path(run, cell_id: dispatch.cell_id),
+                method: :post,
+                form: { data: { turbo_confirm: "Stop this run in #{dispatch.cell_id}?" } },
+                class: secondary_button_classes(size: :small) %>
+          <% end %>
+          <% if remote_run["type"] == "backfill" && remote_run["failed_batches_count"].to_i.positive? %>
+            <%= button_to "Retry #{remote_run["failed_batches_count"]} failed #{remote_run["failed_batches_count"].to_i == 1 ? "batch" : "batches"}",
+                retry_failed_batches_backfill_run_path(run, cell_id: dispatch.cell_id),
+                method: :post,
+                class: secondary_button_classes(size: :small) %>
+          <% end %>
+          <%= cell_ui_link(dispatch.cell_id, script ? "/script_runs/#{remote_run["id"]}" : "/backfill_runs/#{remote_run["id"]}") %>
+        </div>
+      <% end %>
+    </div>
+  <% end %>
+</div>

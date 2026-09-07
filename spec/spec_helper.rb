@@ -46,6 +46,9 @@ ActiveRecord::Migrator.migrations_paths << File.expand_path(
 )
 
 require "rspec/rails"
+require "webmock/rspec"
+
+require_relative "support/multi_cell_helpers"
 
 ActiveRecord::Migration.maintain_test_schema!
 
@@ -64,20 +67,29 @@ RSpec.configure do |config|
     c.syntax = :expect
   end
 
+  config.include MultiCellHelpers
+
   config.before :each do
     if defined?(DataDrip::BackfillRunBatch)
       DataDrip::BackfillRunBatch.delete_all
     end
     DataDrip::BackfillRun.delete_all if defined?(DataDrip::BackfillRun)
     DataDrip::ScriptRun.delete_all if defined?(DataDrip::ScriptRun)
+    DataDrip::CellDispatch.delete_all if defined?(DataDrip::CellDispatch)
     Employee.delete_all if defined?(Employee)
     User.delete_all if defined?(User)
     HookNotifier.instance.clear
 
     if ActiveRecord::Base.connection.adapter_name == "SQLite"
       ActiveRecord::Base.connection.execute(
-        "DELETE FROM sqlite_sequence WHERE name IN ('users', 'employees', 'data_drip_backfill_runs', 'data_drip_backfill_run_batches', 'data_drip_script_runs')"
+        "DELETE FROM sqlite_sequence WHERE name IN ('users', 'employees', 'data_drip_backfill_runs', 'data_drip_backfill_run_batches', 'data_drip_script_runs', 'data_drip_cell_dispatches')"
       )
     end
+  end
+
+  # Multi-cell settings are global module state: put them back to the
+  # single-cell defaults after every example.
+  config.after :each do
+    reset_multi_cell_config!
   end
 end

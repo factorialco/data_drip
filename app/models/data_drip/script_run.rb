@@ -4,7 +4,7 @@ module DataDrip
   class ScriptRun < ApplicationRecord
     self.table_name = "data_drip_script_runs"
 
-    belongs_to :backfiller, class_name: DataDrip.backfiller_class
+    include DataDrip::MultiCellRun
 
     validates :script_class_name, presence: true
     validate :script_class_exists
@@ -30,11 +30,6 @@ module DataDrip
     # OUTPUT_LIMIT bytes and replace the rest with a single notice.
     OUTPUT_LIMIT = 1.megabyte
     TRUNCATION_NOTICE = "[output truncated: reached the #{OUTPUT_LIMIT} byte limit]\n"
-
-    def backfiller_name
-      @backfiller_name ||=
-        backfiller.send(DataDrip.backfiller_name_attribute.to_sym)
-    end
 
     # Still safe to delete: the run has not started executing yet. Once it is
     # running or terminal we keep it as history and no longer allow deletion.

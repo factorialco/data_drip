@@ -500,6 +500,123 @@ Scripts fire lifecycle hooks with the same precedence rules as backfills (script
 - Datetime inputs are interpreted without timezone conversion (only the run's top-level "start at" field is converted from your browser timezone).
 - If your `base_job_class` retries on errors, a failed script will re-run from scratch. Make scripts idempotent, or configure `discard_on` in your base job class.
 
+## Multi-cell deployments
+
+If your application runs as several independent copies ("cells") — each with its own database, job queue, and workers — DataDrip can coordinate the same backfill or script across all of them: a developer triggers it **once**, from any cell's UI, and DataDrip creates and executes an independent copy of the run in every cell.
+
+Execution stays strictly cell-local (each cell's own workers process each cell's own data); only control traffic crosses cells over HTTPS. Everything is opt-in — without the configuration below, nothing changes.
+
+### How it works
+
+- The cell whose UI created the run is the **coordinator**: it holds the `local` run plus one *dispatch* record per target cell, and delivers each one through a background job (`POST` to that cell's **Cell API**).
+- Runs are correlated by a `group_uuid`, and creation is idempotent per `(group_uuid, cell_id)` — duplicate deliveries and retries are safe.
+- The coordinator's show page renders one card per cell with that cell's own status, progress, errors, and (for scripts) the tail of its log. Cells that may still change are polled concurrently against one shared deadline; a cell whose run reached a terminal state is served from the snapshot cached on its dispatch record, so a finished group costs nothing to view and stays readable after those cells are gone.
+- A run's status in the lists and page headers is the **group's** status — the worst of the coordinator's own run and every leg. A run that completed here is not reported as completed while another cell is still working, or failed.
+- A cell that can't be reached shows as "unreachable" without blocking anything; a dispatch the target cell rejected (e.g. the class isn't deployed there yet) shows the error with a **Retry dispatch** button.
+- Stopping or deleting a coordinator run fans the action out to the other cells, which re-apply the usual rules (owner-only, runs that already executed are kept as history). A delete is refused unless every cell acknowledges: the coordinator's dispatch records are the only place a remote leg can be seen or stopped from, so they are never discarded while a leg is still scheduled somewhere.
+- In the cell *executing* a fanned-in run, any operator may stop or delete it. Backfiller ids are cell-scoped, so the coordinator's author matches nobody there and an ownership check would leave the run unstoppable from the one cell that can actually stop it.
+
+### Requirements
+
+Multi-cell mode makes two assumptions about your deployment. Both hold in most cell
+architectures, but they are worth checking before you turn it on:
+
+1. **Backfiller ids are not reused between cells.** A fanned-out run stores the creator's id
+   verbatim in every cell, and that id is what a cell's Cell API compares its own runs against.
+   If two cells can both have a user `42`, a run created by cell A's user 42 will appear under
+   cell B's user 42's "My runs". Deployments that shard the id space per cell (per-cell
+   `AUTO_INCREMENT` offsets, UUIDs, snowflake ids) satisfy this automatically. The creator's
+   record itself only has to exist in the coordinator's cell — other cells display the name
+   snapshot taken at creation.
+2. **A cell can reach the other cells' Cell API, and runs a background queue.** Dispatch and
+   status refreshes are jobs on `DataDrip.queue_name`; the UI itself never makes a cross-cell
+   call (see [How statuses are refreshed](#how-statuses-are-refreshed)).
+
+### Configuration
+
+```ruby
+# config/initializers/data_drip.rb
+
+# This deployment's own cell id. nil (the default) => single-cell mode.
+DataDrip.current_cell_id = -> { ENV["CELL_ID"] }
+
+# All cell ids, including this one.
+DataDrip.cell_ids = -> { ENV.fetch("CELL_IDS", "").split(",") }
+
+# Token(s) this cell accepts on its own Cell API (array supports rotation).
+DataDrip.cell_api_tokens = -> { [ENV["DATA_DRIP_CELL_SECRET"]].compact }
+
+# How to reach the other cells' Cell API. The built-in HTTP transport sends
+# JSON over HTTPS; `url`, `query` and `headers` accept values or callables.
+DataDrip.cell_transport = DataDrip::CellTransport::Http.new(
+  url: ->(cell_id) { "https://api.#{cell_id}.example.com/data_drip/cell_api" },
+  headers: -> { { "Authorization" => "Bearer #{ENV["DATA_DRIP_CELL_SECRET"]}" } }
+)
+
+# Optional: lets the UI deep-link into other cells' DataDrip UIs.
+DataDrip.cell_ui_url = ->(cell_id, path) {
+  "https://api.#{cell_id}.example.com/data_drip#{path}"
+}
+```
+
+Any transport object responding to `call(cell_id:, method:, path:, body: nil)` and returning a `DataDrip::CellTransport::Response`-like object works — swap in your own if your infrastructure routes between cells differently (e.g. a routing query parameter on a single shared hostname). A transport should raise `DataDrip::CellTransport::Error` for anything that makes a cell unusable — unreachable, but also "not in my registry" or "I refuse to send a secret over plaintext" — and the built-in HTTP transport converts errors raised by your `url` callable into exactly that. DataDrip then treats it as *that cell* failing: a retriable dispatch failure, not a crash.
+
+Optional tuning (defaults shown). Each accepts a value or a callable:
+
+```ruby
+DataDrip.cell_fanout_concurrency = 8       # cells talked to at once
+DataDrip.cell_fanout_deadline = 5          # seconds for a whole fan-out, however many cells
+DataDrip.cell_status_refresh_interval = 3  # seconds a cached per-cell status stays fresh
+DataDrip.script_output_tail_bytes = 4_096  # log tail carried in a cross-cell snapshot
+```
+
+Keep your transport's timeouts near `cell_fanout_deadline`: work the fan-out has given up on
+keeps running until its socket times out.
+
+### How statuses are refreshed
+
+The coordinator does not query the other cells while rendering a page. Each dispatch record
+caches the last status its cell reported, the page renders from that cache, and a
+`CellStatusRefreshJob` catches up any leg that has gone stale — so the page returns immediately,
+never blocks on another cell, and never writes during a `GET` (hosts commonly route reads to a
+replica where writing is forbidden). A status is therefore at most
+`cell_status_refresh_interval` old.
+
+A leg whose run reached a terminal state is never polled again: there is nothing left to learn,
+and a finished group stays readable long after those cells are gone. A cell that stops answering
+keeps rendering what it last reported, flagged as stale, rather than blanking out.
+
+When several people watch the same run, one request claims the refresh per interval through
+`Rails.cache`. With no shared cache store configured this simply stops deduplicating.
+
+### Mounting the Cell API
+
+The Cell API is a separate engine so it can live outside whatever staff/admin gate protects the human UI (machine-to-machine calls carry only the bearer token, no user session):
+
+```ruby
+# config/routes.rb
+mount DataDrip::Engine => "/data_drip"                    # human UI (behind your admin auth)
+mount DataDrip::CellApi::Engine => "/data_drip/cell_api"  # cell-to-cell API (token auth only)
+```
+
+With no `cell_api_tokens` configured the Cell API rejects every request, so mounting it in a single-cell app is harmless.
+
+### Upgrading an existing install
+
+```bash
+rails generate data_drip:add_multi_cell
+```
+
+This adds the multi-cell columns (`group_uuid`, `cell_id`, `origin`, `origin_cell_id`, and `backfiller_name` on script runs) and the `data_drip_cell_dispatches` table. Fresh installs get everything from `data_drip:install`.
+
+### Notes
+
+- The "no identical active run" guard stays local to each cell; cross-cell duplicates of the same trigger are prevented by the `(group_uuid, cell_id)` unique index instead.
+- Deleting a coordinator run is refused unless every cell acknowledges. Its dispatch records are the only place a remote leg can be seen or stopped from, so they are never discarded while a leg is still scheduled somewhere.
+- In the cell *executing* a fanned-in run, any operator who can reach the UI may stop or delete it. Such a run has no owner there — the id it carries belongs to a record in the coordinator's cell — and requiring ownership would leave it unstoppable from the one cell that can stop it.
+- A status a cell reports that this version of DataDrip does not recognise (a cell on a newer release) is shown as-is and never counted as finished.
+- Scheduled runs are dispatched immediately with their `start_at`; each cell honors the schedule on its own, so a coordinator outage doesn't delay the other cells.
+
 ## Contributing
 
 Bug reports and pull requests are welcome on GitHub at https://github.com/factorialco/data_drip.

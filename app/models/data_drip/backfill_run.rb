@@ -7,10 +7,11 @@ module DataDrip
     # Statuses in which a run (or batch) still has work outstanding.
     ACTIVE_STATUSES = %i[pending enqueued running].freeze
 
+    include DataDrip::MultiCellRun
+
     has_many :batches,
              class_name: "DataDrip::BackfillRunBatch",
              dependent: :destroy
-    belongs_to :backfiller, class_name: DataDrip.backfiller_class
 
     validates :backfill_class_name, presence: true
     validate :backfill_class_exists
@@ -27,7 +28,6 @@ module DataDrip
               },
               allow_nil: true
 
-    before_create :capture_backfiller_name
     after_commit :enqueue
     after_commit :run_hooks
 
@@ -36,17 +36,6 @@ module DataDrip
       :status,
       %i[pending enqueued running completed failed stopped]
     )
-
-    DELETED_BACKFILLER_LABEL = "Deleted user"
-
-    # backfiller_name is snapshotted onto the row at creation so it survives the
-    # backfiller being deleted. Use this for display: it falls back to the live
-    # association (for rows created before the column existed), then a placeholder.
-    def backfiller_display_name
-      backfiller_name.presence ||
-        backfiller&.send(DataDrip.backfiller_name_attribute.to_sym) ||
-        DELETED_BACKFILLER_LABEL
-    end
 
     def terminal?
       completed? || failed? || stopped?
@@ -139,11 +128,6 @@ module DataDrip
     end
 
     private
-
-    # Snapshot the backfiller's display name so it survives the record's deletion.
-    def capture_backfiller_name
-      self.backfiller_name = backfiller&.send(DataDrip.backfiller_name_attribute.to_sym)
-    end
 
     def run_hooks
       return unless status_previously_changed?

@@ -4,6 +4,7 @@ module DataDrip
   class ScriptRunsController < DataDrip.base_controller_class.constantize
     include DataDrip::Paginatable
     include DataDrip::BackfillerContext
+    include DataDrip::MultiCellContext
 
     layout "data_drip/layouts/application"
     helper_method :script_class_names
@@ -33,6 +34,7 @@ module DataDrip
 
       @script_runs = pagination_data[:collection]
       @pagination = pagination_data
+      @groups = DataDrip::MultiCellGroup.preload_for(@script_runs)
     end
 
     def new
@@ -57,7 +59,10 @@ module DataDrip
           script_run_params.merge(backfiller: find_current_backfiller)
         )
 
-      if @script_run.save
+      if DataDrip::GroupCreator.call(
+        run: @script_run,
+        remote_cell_ids: selected_remote_cell_ids
+      )
         local_time = @script_run.start_at.in_time_zone(@user_timezone)
         notice =
           if @script_run.start_at <= 1.minute.from_now
@@ -75,32 +80,79 @@ module DataDrip
 
     def show
       @script_run = DataDrip::ScriptRun.find(params[:id])
+      load_cell_fanout(@script_run)
     end
 
     def destroy
       @script_run = DataDrip::ScriptRun.find(params[:id])
       # Only the run's author may delete it, and only before it has started
       # running — once it has run we keep it as history.
-      if !@script_run.owned_by?(find_current_backfiller)
+      if !@script_run.manageable_by?(find_current_backfiller)
         flash[:alert] = "You can only delete script runs you created."
-      elsif !@script_run.not_yet_run?
-        flash[
-          :alert
-        ] = "Script run can only be deleted before it has run."
-      else
-        @script_run.destroy!
-        flash[:notice] = "Script run has been deleted."
+        return redirect_to script_runs_path(tab: params[:tab] || "my_runs")
       end
+      if !@script_run.not_yet_run?
+        flash[:alert] = "Script run can only be deleted before it has run."
+        return redirect_to script_runs_path(tab: params[:tab] || "my_runs")
+      end
+
+      fanout = delete_remote_legs(@script_run)
+
+      # A leg we could not reach is still scheduled to run in its own cell.
+      # Destroying the coordinator's run and its dispatch records would erase
+      # the only place that leg is visible or stoppable from, so the deletion is
+      # refused until every cell has answered.
+      unless fanout.all_ok?
+        flash[:alert] =
+          "Script run not deleted — its remote legs are still scheduled. #{fanout.message}"
+        return redirect_to script_run_path(@script_run)
+      end
+
+      @script_run.dispatches.destroy_all
+      @script_run.destroy!
+      flash[:notice] = [ "Script run has been deleted.", fanout.message ].compact.join(" ")
       redirect_to script_runs_path(tab: params[:tab] || "my_runs")
+    end
+
+    # Re-delivers a failed dispatch to its cell (e.g. after the target cell
+    # caught up on a deploy).
+    def retry_dispatch
+      @script_run = DataDrip::ScriptRun.find(params[:id])
+      dispatch = @script_run.dispatches.failed.find_by(cell_id: params[:cell_id])
+
+      if !@script_run.manageable_by?(find_current_backfiller)
+        flash[:alert] = "You can only retry dispatches of runs you created."
+      elsif dispatch.nil?
+        flash[:alert] = "No failed dispatch for that cell."
+      else
+        dispatch.retry!
+        flash[:notice] = "Dispatch to #{dispatch.cell_id} re-enqueued."
+      end
+
+      redirect_to script_run_path(@script_run)
     end
 
     def updates
       @script_run = DataDrip::ScriptRun.find(params[:id])
+      load_cell_fanout(@script_run)
+
+      cells_html =
+        if @dispatches.any?
+          render_to_string(
+            partial: "data_drip/shared/cells",
+            locals: {
+              run: @script_run,
+              dispatches: @dispatches
+            },
+            formats: [ :html ]
+          )
+        end
 
       render json: {
-               status: @script_run.status,
-               terminal: @script_run.completed? || @script_run.failed?,
-               status_html: helpers.status_tag(@script_run.status),
+               status: @group.status,
+               active: @cells_active,
+               cells_html: cells_html,
+               status_html: helpers.status_tag(@group.status),
                output: @script_run.output.to_s,
                error_message: @script_run.error_message.to_s,
                error_backtrace: @script_run.error_backtrace.to_s,
@@ -143,6 +195,32 @@ module DataDrip
     end
 
     private
+
+    # Deleting the coordinator's run also asks each dispatched cell to delete
+    # its leg. A leg that already ran (409) is refused there and stays in that
+    # cell's own history, which counts as answered: it will not run again.
+    def delete_remote_legs(run)
+      fanout_to_dispatched(run.dispatches) do |dispatch|
+        response =
+          cell_client.delete_script_run(
+            cell_id: dispatch.cell_id,
+            run_id: dispatch.remote_run_id,
+            acting_backfiller_id: run.backfiller_id
+          )
+        ok = response.success? || response.status == 404 || response.status == 409
+        [ ok, delete_detail(response) ]
+      end
+    end
+
+    # What to relay about a delete a cell acknowledged. A leg that had already
+    # run is refused there and stays in that cell's history — worth saying, but
+    # not a failure: it will not run again either way.
+    def delete_detail(response)
+      return "already ran — kept as history in that cell" if response.status == 409
+      return nil if response.success? || response.status == 404
+
+      cell_api_error_detail(response)
+    end
 
     def script_run_params
       params.require(:script_run).permit(

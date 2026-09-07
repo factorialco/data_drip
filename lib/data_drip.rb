@@ -5,6 +5,7 @@ require "digest"
 require "rails"
 require "active_model"
 require "data_drip/engine"
+require "data_drip/cell_api"
 require "data_drip/types/enum"
 require "data_drip/concerns/schematized_options"
 require "data_drip/backfill"
@@ -23,7 +24,91 @@ module DataDrip
   mattr_accessor :sleep_time, default: 5
   mattr_accessor :hooks_handler_class_name, default: nil
 
+  # -- Multi-cell configuration -----------------------------------------------
+  #
+  # DataDrip can coordinate the same backfill/script across several independent
+  # deployments ("cells"): the run is created once in the cell whose UI was
+  # used (the coordinator) and dispatched over HTTP to every other cell, where
+  # it executes locally against that cell's data. All of it is opt-in: with the
+  # defaults below `DataDrip.multi_cell?` is false and nothing changes.
+  #
+  # Every setting accepts either a plain value or a callable, so hosts can
+  # resolve them lazily (from ENV, a registry, etc.).
+
+  # This deployment's own cell id (e.g. ENV["CELL_ID"]). nil => single-cell.
+  mattr_accessor :current_cell_id, default: nil
+
+  # All cell ids, including the current one.
+  mattr_accessor :cell_ids, default: []
+
+  # How to reach other cells' DataDrip Cell API. Must respond to
+  # call(cell_id:, method:, path:, body: nil) and return an object like
+  # DataDrip::CellTransport::Response. DataDrip::CellTransport::Http is a
+  # ready-made implementation.
+  mattr_accessor :cell_transport, default: nil
+
+  # Token(s) this cell accepts on its own Cell API (an array supports
+  # rotation). Empty => the Cell API rejects every request.
+  mattr_accessor :cell_api_tokens, default: []
+
+  # Optional: browsable UI URL for a cell, used for "open in cell X" links.
+  # ->(cell_id, path) { "https://api.example.com/data_drip#{path}" } or nil.
+  mattr_accessor :cell_ui_url, default: nil
+
+  # How many cells a single fan-out may talk to at once. The ceiling exists to
+  # keep a wide fan-out from starving the host's thread budget.
+  mattr_accessor :cell_fanout_concurrency, default: 8
+
+  # Seconds one fan-out may take in total, however many cells it spans. Raise it
+  # for cells that are far away or known to answer slowly; the cell transport's
+  # own timeouts should stay near this value.
+  mattr_accessor :cell_fanout_deadline, default: 5
+
+  # How long a cached per-cell snapshot is considered fresh. The coordinator's
+  # show page renders from cache and refreshes in the background, so this is the
+  # oldest status a viewer can see, not a request delay.
+  mattr_accessor :cell_status_refresh_interval, default: 3
+
+  # How much of a script's log a cross-cell snapshot carries. Snapshots travel
+  # once per cell per refresh, so the whole log would be a lot of traffic; the
+  # coordinator shows this much and links into the owning cell for the rest.
+  mattr_accessor :script_output_tail_bytes, default: 4_096
+
   class Error < StandardError
+  end
+
+  def self.resolve_setting(value)
+    value.respond_to?(:call) ? value.call : value
+  end
+
+  def self.resolved_current_cell_id
+    resolve_setting(current_cell_id).presence&.to_s
+  end
+
+  def self.resolved_cell_ids
+    Array(resolve_setting(cell_ids)).map(&:to_s).reject(&:empty?).uniq
+  end
+
+  def self.resolved_cell_api_tokens
+    Array(resolve_setting(cell_api_tokens)).map(&:to_s).reject(&:empty?)
+  end
+
+  def self.resolved_cell_fanout_deadline
+    resolve_setting(cell_fanout_deadline).to_f
+  end
+
+  def self.resolved_cell_status_refresh_interval
+    resolve_setting(cell_status_refresh_interval).to_f
+  end
+
+  def self.multi_cell?
+    resolved_current_cell_id.present? &&
+      cell_transport.present? &&
+      resolved_cell_ids.size > 1
+  end
+
+  def self.remote_cell_ids
+    resolved_cell_ids - [ resolved_current_cell_id ]
   end
 
   def self.hooks_handler_class
@@ -87,3 +172,8 @@ module DataDrip
     end
   end
 end
+
+# These build on DataDrip::Error and the configuration accessors above.
+require "data_drip/cell_transport"
+require "data_drip/cell_client"
+require "data_drip/cell_fanout"

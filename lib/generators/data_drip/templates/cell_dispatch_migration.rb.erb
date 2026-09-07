@@ -1,0 +1,26 @@
+class CreateDataDripCellDispatches < ActiveRecord::Migration<%= migration_version %>
+  def change
+    create_table :data_drip_cell_dispatches, id: :bigint do |t|
+      t.string :group_uuid, null: false
+      t.string :cell_id, null: false
+      t.integer :runnable_type, null: false, default: 0
+      t.integer :status, null: false, default: 0
+      t.bigint :remote_run_id
+      t.text :error_message
+      t.json :payload, null: false, default: {}
+      # Last known state of this leg, refreshed whenever the coordinator polls
+      # the cell. Cached so the run lists can report a group's real status
+      # without fanning out, and so a finished group stays readable after its
+      # cells are gone.
+      t.string :last_status
+      t.json :last_snapshot
+      t.datetime :last_synced_at
+      t.datetime :unreachable_since
+      t.timestamps null: false
+
+      t.index [ :group_uuid, :cell_id ],
+              unique: true,
+              name: "idx_cell_dispatches_on_group_and_cell"
+    end
+  end
+end

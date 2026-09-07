@@ -3,10 +3,11 @@ import { Controller } from "@hotwired/stimulus"
 // Polls the run's `updates` endpoint while it is active and swaps in the
 // server-rendered fragments (status badge, progress hero, batches table).
 export default class extends Controller {
-  static targets = ["status", "progress", "batchesTable", "batchesMeta"]
+  static targets = ["status", "progress", "batchesTable", "batchesMeta", "cells"]
   static values = {
     url: String,
     status: String,
+    active: { type: Boolean, default: false },
     interval: { type: Number, default: 3000 }
   }
 
@@ -16,15 +17,13 @@ export default class extends Controller {
     const params = new URLSearchParams(window.location.search)
     this.skipBatches = Boolean(params.get("batch_page") || params.get("batch_status"))
 
-    if (this.#active()) this.#schedule()
+    // The server decides: `active` is true while the local run or any remote
+    // leg of the group may still change.
+    if (this.activeValue) this.#schedule()
   }
 
   disconnect() {
     clearTimeout(this.timer)
-  }
-
-  #active() {
-    return ["pending", "enqueued", "running"].includes(this.statusValue)
   }
 
   #schedule() {
@@ -42,7 +41,7 @@ export default class extends Controller {
       const data = await response.json()
       this.#render(data)
       this.statusValue = data.status
-      if (!data.terminal) this.#schedule()
+      if (data.active) this.#schedule()
     } catch {
       this.#schedule()
     }
@@ -51,6 +50,7 @@ export default class extends Controller {
   #render(data) {
     if (this.hasStatusTarget) this.statusTarget.innerHTML = data.status_html
     if (this.hasProgressTarget) this.progressTarget.innerHTML = data.progress_html
+    if (this.hasCellsTarget && data.cells_html) this.cellsTarget.innerHTML = data.cells_html
 
     if (this.skipBatches) return
 
