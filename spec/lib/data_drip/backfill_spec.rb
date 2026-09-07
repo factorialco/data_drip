@@ -45,6 +45,21 @@ RSpec.describe DataDrip::Backfill, type: :model do
       expect(attr_type.available_values).to eq(%w[a b c])
     end
 
+    it "supports single and dependent enum selectors" do
+      klass = Class.new(DataDrip::Backfill) do
+        attribute :entity, :enum, values: %w[employees contracts], multiple: false
+        attribute :columns,
+                  :enum,
+                  values: [ [ "Attendable", "employees:attendable", "employees" ] ],
+                  depends_on: :entity
+      end
+
+      entity_type = klass.backfill_options_class.attribute_types["entity"]
+      columns_type = klass.backfill_options_class.attribute_types["columns"]
+      expect(entity_type).not_to be_multiple
+      expect(columns_type.depends_on).to eq(:entity)
+    end
+
     it "casts :enum values as strings" do
       klass = Class.new(DataDrip::Backfill) do
         attribute :color, :enum, values: %w[red green blue]

@@ -79,6 +79,32 @@ RSpec.describe DataDrip::BackfillRunsHelper, type: :helper do
     end
   end
 
+  describe "#backfill_option_inputs with dependent enums" do
+    let(:backfill_run) do
+      DataDrip::BackfillRun.new(
+        backfill_class_name: "BackfillRunsHelperSpec::DependentEnumBackfill",
+        options: { "entity" => "employees" }
+      )
+    end
+
+    let(:html) { helper.backfill_option_inputs(backfill_run) }
+
+    it "renders the parent as a single select" do
+      expect(html).to match(
+        %r{<select[^>]*name="backfill_run\[options\]\[entity\]"[^>]*data-controller="enum-select"}
+      )
+      expect(html).not_to include(%(id="enum_entity_select_all"))
+    end
+
+    it "renders dependency metadata and preselects only the current entity columns" do
+      expect(html).to include(%(data-enum-select-depends-on-value="entity"))
+      expect(html).to include(%(data-dependency="employees"))
+      expect(html).to match(
+        %r{name="backfill_run\[options\]\[columns\]"[^>]*value="employees:attendable"}
+      )
+    end
+  end
+
   describe "#backfill_option_inputs with a required attribute" do
     let(:backfill_run) do
       DataDrip::BackfillRun.new(
@@ -338,6 +364,23 @@ module BackfillRunsHelperSpec
 
   class TieredBackfill < DataDrip::Backfill
     attribute :tiers, :enum, values: %w[starter growth]
+
+    def scope
+      Employee.all
+    end
+
+    def process_element(_element); end
+  end
+
+  class DependentEnumBackfill < DataDrip::Backfill
+    attribute :entity, :enum, values: %w[employees contracts], multiple: false
+    attribute :columns,
+              :enum,
+              values: [
+                [ "Attendable", "employees:attendable", "employees" ],
+                [ "Job title", "contracts:job_title", "contracts" ]
+              ],
+              depends_on: :entity
 
     def scope
       Employee.all

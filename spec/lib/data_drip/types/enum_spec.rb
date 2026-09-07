@@ -25,6 +25,13 @@ RSpec.describe DataDrip::Types::Enum do
     end
   end
 
+  it "exposes selector cardinality and dependency metadata" do
+    type = described_class.new(values: %w[a b], multiple: false, depends_on: :entity)
+
+    expect(type).not_to be_multiple
+    expect(type.depends_on).to eq(:entity)
+  end
+
   describe "casting" do
     it "casts values to strings, like its String parent" do
       type = described_class.new(values: %w[a b])

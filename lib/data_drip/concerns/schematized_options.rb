@@ -28,7 +28,11 @@ module DataDrip
       raise "Method #{name} already defined in #{self.class.name}" if instance_methods.include?(name.to_sym)
 
       if type == :enum
-        enum_type = DataDrip::Types::Enum.new(values: options.delete(:values) || [])
+        enum_type = DataDrip::Types::Enum.new(
+          values: options.delete(:values) || [],
+          multiple: options.delete(:multiple) { true },
+          depends_on: options.delete(:depends_on)
+        )
         schema_options_class.attribute(name, enum_type, default: default, **options)
 
         # Reject submitted values (a comma-separated list) that aren't part of
@@ -38,7 +42,7 @@ module DataDrip
           raw = public_send(attribute_name)
           if raw.present?
             allowed =
-              enum_type.available_values.map { |value| (value.is_a?(Array) ? value.last : value).to_s }
+              enum_type.available_values.map { |value| (value.is_a?(Array) ? value[1] : value).to_s }
             unless (raw.to_s.split(",") - allowed).empty?
               errors.add(attribute_name, "is not included in the list")
             end

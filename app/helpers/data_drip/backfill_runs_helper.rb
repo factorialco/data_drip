@@ -365,16 +365,42 @@ module DataDrip
 
     def build_enum_input(name, type, values, field_prefix)
       raw_choices = type.available_values
-      # Normalize to [label, value] pairs — supports both ["a","b"] and [["Label","val"],...]
-      pairs = raw_choices.map { |choice| choice.is_a?(Array) ? choice : [ choice, choice ] }
+      choices = raw_choices.map { |choice| choice.is_a?(Array) ? choice : [ choice, choice ] }
 
       field_name = "#{field_prefix}[#{name}]"
       field_id = "enum_#{name}"
       current_value = values[name].to_s
-      selected_values =
-        current_value.present? ? current_value.split(",") : pairs.map(&:last).map(&:to_s)
+      unless type.multiple?
+        options = choices.map { |label, value, _dependency| [ label, value ] }
+        return select_tag(
+          field_name,
+          options_for_select(options, current_value),
+          id: field_id,
+          class: INPUT_CLASSES,
+          data: {
+            controller: "enum-select",
+            enum_select_name_value: name,
+            action: "change->enum-select#singleChanged"
+          }
+        )
+      end
 
-      content_tag :div, data: { controller: "enum-select" } do
+      dependency_value = (values[type.depends_on] || values[type.depends_on.to_s]).to_s if type.depends_on
+      eligible_choices =
+        if type.depends_on && dependency_value.present?
+          choices.select { |_label, _value, dependency| dependency.to_s == dependency_value }
+        else
+          choices
+        end
+      selected_values =
+        current_value.present? ? current_value.split(",") : eligible_choices.map { |choice| choice[1].to_s }
+
+      content_tag :div,
+                  data: {
+                    controller: "enum-select",
+                    enum_select_depends_on_value: type.depends_on,
+                    action: "data-drip:enum-change@window->enum-select#dependencyChanged"
+                  } do
         hidden =
           hidden_field_tag field_name,
                            selected_values.join(","),
@@ -406,7 +432,7 @@ module DataDrip
               check_box_tag(
                 "#{field_id}_select_all",
                 "1",
-                selected_values.length == pairs.length,
+                selected_values.length == eligible_choices.length,
                 class: "size-4 accent-drip-700 dark:accent-drip-400",
                 data: {
                   enum_select_target: "selectAll",
@@ -424,7 +450,7 @@ module DataDrip
 
             counter =
               content_tag :span,
-                          "#{selected_values.length}/#{pairs.length} selected",
+                          "#{selected_values.length}/#{eligible_choices.length} selected",
                           class: "text-xs text-zinc-500 tabular-nums dark:text-zinc-400",
                           data: {
                             enum_select_target: "counter"
@@ -446,7 +472,7 @@ module DataDrip
 
         checkboxes =
           safe_join(
-            pairs.map do |label, value|
+            choices.map do |label, value, dependency|
               value_string = value.to_s
               checkbox_id = "#{field_id}_#{value_string.parameterize(separator: "_")}"
 
@@ -456,7 +482,8 @@ module DataDrip
                             "hover:bg-zinc-950/5 dark:hover:bg-white/5",
                           data: {
                             enum_select_target: "row",
-                            search: label.to_s.downcase
+                            search: label.to_s.downcase,
+                            dependency: dependency
                           } do
                 check_box_tag(
                   checkbox_id,

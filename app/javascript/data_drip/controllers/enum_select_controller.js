@@ -5,8 +5,10 @@ import { Controller } from "@hotwired/stimulus"
 // in sync with the individual checkboxes.
 export default class extends Controller {
   static targets = ["hidden", "search", "selectAll", "counter", "row", "checkbox", "noResults"]
+  static values = { name: String, dependsOn: String }
 
   connect() {
+    if (this.hasDependsOnValue) this.#applyDependency(this.#dependencyFieldValue())
     this.sync()
   }
 
@@ -17,6 +19,21 @@ export default class extends Controller {
   filter() {
     clearTimeout(this.timer)
     this.timer = setTimeout(() => this.#applyFilter(), 150)
+  }
+
+  singleChanged(event) {
+    window.dispatchEvent(
+      new CustomEvent("data-drip:enum-change", {
+        detail: { name: this.nameValue, value: event.target.value }
+      })
+    )
+  }
+
+  dependencyChanged(event) {
+    if (!this.hasDependsOnValue || event.detail.name !== this.dependsOnValue) return
+
+    this.#applyDependency(event.detail.value)
+    this.sync()
   }
 
   toggleAll() {
@@ -40,15 +57,19 @@ export default class extends Controller {
   }
 
   sync() {
+    if (!this.hasHiddenTarget) return
+
     const values = this.checkboxTargets
       .filter((checkbox) => checkbox.checked)
       .map((checkbox) => checkbox.value)
 
     this.hiddenTarget.value = values.join(",")
-    this.counterTarget.textContent = `${values.length}/${this.checkboxTargets.length} selected`
-    this.selectAllTarget.checked = values.length === this.checkboxTargets.length
-    this.selectAllTarget.indeterminate =
-      values.length > 0 && values.length < this.checkboxTargets.length
+    const visible = this.checkboxTargets.filter(
+      (checkbox) => !checkbox.closest("[data-search]").classList.contains("hidden")
+    )
+    this.counterTarget.textContent = `${values.length}/${visible.length} selected`
+    this.selectAllTarget.checked = visible.length > 0 && values.length === visible.length
+    this.selectAllTarget.indeterminate = values.length > 0 && values.length < visible.length
   }
 
   #applyFilter() {
@@ -56,11 +77,30 @@ export default class extends Controller {
     let visible = 0
 
     this.rowTargets.forEach((row) => {
-      const match = !query || row.dataset.search.includes(query)
+      const dependencyMatch = !this.hasDependsOnValue || row.dataset.dependency === this.currentDependency
+      const match = dependencyMatch && (!query || row.dataset.search.includes(query))
       row.classList.toggle("hidden", !match)
       if (match) visible++
     })
 
     this.noResultsTarget.classList.toggle("hidden", visible > 0)
+  }
+
+  #dependencyFieldValue() {
+    const field = this.element
+      .closest("form")
+      ?.querySelector(`[name$="[${this.dependsOnValue}]"]`)
+    return field?.value || ""
+  }
+
+  #applyDependency(value) {
+    this.currentDependency = value
+    this.checkboxTargets.forEach((checkbox) => {
+      const row = checkbox.closest("[data-search]")
+      const matches = row.dataset.dependency === value
+      row.classList.toggle("hidden", !matches)
+      checkbox.checked = matches
+    })
+    this.#applyFilter()
   }
 }
