@@ -16,7 +16,9 @@ module DataDrip
       %i[pending enqueued running completed failed stopped]
     )
 
-    after_commit :enqueue, on: :create
+    after_commit :enqueue,
+                 on: :create,
+                 unless: :parallel_workers_managed_by_run?
     after_commit :run_hooks
 
     def enqueue
@@ -31,7 +33,8 @@ module DataDrip
     end
 
     def run!
-      running!
+      return false unless claim_for_execution!
+
       migration =
         backfill_run.backfill_class.new(
           batch_size: batch_size,
@@ -50,9 +53,43 @@ module DataDrip
           # (defaults to the migration's sleep_time).
           sleep migration.sleep_time
         end
+
+      true
+    end
+
+    def complete_execution!
+      backfill_run.with_lock do
+        with_lock do
+          next false unless running?
+
+          backfill_run.increment!(:processed_count, batch_size)
+          completed!
+          true
+        end
+      end
     end
 
     private
+
+    def claim_for_execution!
+      backfill_run.with_lock do
+        with_lock do
+          next false unless pending? || enqueued?
+
+          if backfill_run.stopped?
+            stopped!
+            next false
+          end
+
+          running!
+          true
+        end
+      end
+    end
+
+    def parallel_workers_managed_by_run?
+      backfill_run.parallel_workers_limited?
+    end
 
     def run_hooks
       return unless status_previously_changed?

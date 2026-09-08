@@ -21,6 +21,7 @@ RSpec.describe DataDrip::BackfillRunsController, type: :controller do
       expect(response).to have_http_status(:ok)
       expect(response.body).to include("backfill_class_listbox")
       expect(response.body).to include('data-value="AddRoleToEmployee"')
+      expect(response.body).to include("Maximum parallel workers")
     end
 
     it "surfaces the current user's recently run classes in a Recent section" do
@@ -73,6 +74,16 @@ RSpec.describe DataDrip::BackfillRunsController, type: :controller do
 
       expect(response).to redirect_to(backfill_runs_path(tab: "my_runs"))
       expect(flash[:notice]).to match(/Backfill job for/)
+    end
+
+    it "stores max_parallel_workers when provided" do
+      post :create,
+           params: {
+             backfill_run: valid_attributes.merge(max_parallel_workers: 3)
+           }
+
+      expect(DataDrip::BackfillRun.last!.max_parallel_workers).to eq(3)
+      expect(response).to redirect_to(backfill_runs_path(tab: "my_runs"))
     end
 
     it "renders new template on failure" do
@@ -465,6 +476,15 @@ RSpec.describe DataDrip::BackfillRunsController, type: :controller do
       # Both batches show up in the batches table.
       expect(response.body).to include("boom")
       expect(response.body).to include("Completed")
+    end
+
+    it "shows the configured worker limit" do
+      backfill_run.update!(max_parallel_workers: 3)
+
+      get :show, params: { id: backfill_run.id }
+
+      expect(response.body).to include("Maximum parallel workers")
+      expect(response.body).to match(/Maximum parallel workers.*3/m)
     end
 
     it "narrows to failed batches when batch_status=failed" do

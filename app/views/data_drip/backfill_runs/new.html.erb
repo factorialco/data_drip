@@ -80,6 +80,14 @@
     <p class="mt-1.5 text-sm text-pretty text-zinc-500 dark:text-zinc-400">Stop after this many records — useful for a trial run on production data.</p>
   </div>
 
+  <div class="mb-5">
+    <%= f.label :max_parallel_workers, class: DataDrip::BackfillRunsHelper::LABEL_CLASSES do %>
+      Maximum parallel workers <span class="font-normal text-zinc-400 dark:text-zinc-500">· optional</span>
+    <% end %>
+    <%= f.number_field :max_parallel_workers, min: 1, class: "#{DataDrip::BackfillRunsHelper::INPUT_CLASSES} mt-1.5 max-w-40" %>
+    <p class="mt-1.5 text-sm text-pretty text-zinc-500 dark:text-zinc-400">Maximum number of batch jobs that can be queued or running at the same time. Leave blank to enqueue all batches.</p>
+  </div>
+
   <div data-backfill-options-target="container">
     <%= backfill_option_inputs(@run) if @run.backfill_class_name.present? %>
   </div>

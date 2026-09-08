@@ -166,6 +166,27 @@ RSpec.describe DataDrip::BackfillRun, type: :model do
         )
       end
 
+      it "allows max_parallel_workers to be omitted" do
+        backfill_run =
+          DataDrip::BackfillRun.new(
+            valid_attributes.merge(max_parallel_workers: nil)
+          )
+
+        expect(backfill_run).to be_valid
+      end
+
+      it "requires max_parallel_workers to be a positive integer" do
+        [ 0, -1, 1.5 ].each do |value|
+          backfill_run =
+            DataDrip::BackfillRun.new(
+              valid_attributes.merge(max_parallel_workers: value)
+            )
+
+          expect(backfill_run).not_to be_valid
+          expect(backfill_run.errors[:max_parallel_workers]).not_to be_empty
+        end
+      end
+
       it "validates backfill_class exists" do
         backfill_run =
           DataDrip::BackfillRun.new(
