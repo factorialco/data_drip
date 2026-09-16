@@ -130,6 +130,21 @@ end
 
 This configuration is particularly useful when your application uses custom authentication systems, non-standard naming conventions, or when you need DataDrip to integrate with existing API controllers or admin interfaces.
 
+## Limiting parallelism
+
+Every batch of a run is enqueued as soon as the dripper creates it, so a run with 200 batches occupies up to 200 worker threads at once. When batches serialize on one shared resource anyway (a global lock, a single external system), declare how many may be in flight:
+
+```ruby
+class RebuildSearchIndex < DataDrip::Backfill
+  # Children run one at a time; the finishing child enqueues the next pending batch.
+  def self.max_parallel_batches
+    1
+  end
+end
+```
+
+The default (`nil`) keeps the unlimited behaviour. "Retry failed batches" respects the limit too.
+
 ## Hooks
 
 DataDrip provides a powerful hooks system that allows you to respond to lifecycle events during backfill execution. Hooks are triggered when backfill runs or batches change status, enabling you to integrate with external systems, send notifications, track metrics, or perform any custom logic.

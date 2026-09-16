@@ -21,6 +21,7 @@ module DataDrip
 
     def enqueue
       return unless pending?
+      return unless slot_available?
 
       # The transition MUST commit before the job is enqueued. A worker can pick
       # the job up the instant it is visible; if it runs the batch to completion
@@ -28,6 +29,16 @@ module DataDrip
       # parent run, seeing a forever-active batch, would never settle.
       enqueued!
       DataDrip::DripperChild.perform_later(self)
+    end
+
+    # With a parallelism limit, a batch is only enqueued while fewer than that
+    # many siblings are enqueued or running; DripperChild enqueues the next
+    # pending batch when one finishes.
+    def slot_available?
+      limit = backfill_run.backfill_class&.max_parallel_batches
+      return true if limit.nil?
+
+      backfill_run.batches.where(status: %i[enqueued running]).count < limit
     end
 
     def run!
