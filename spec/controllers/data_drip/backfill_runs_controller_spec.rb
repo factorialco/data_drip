@@ -564,6 +564,18 @@ RSpec.describe DataDrip::BackfillRunsController, type: :controller do
       expect(html).to include("backfill_run[options][age]")
       expect(html).to include("backfill_run[options][name]")
     end
+
+    it "renders the backfill's instructions (as Markdown) above the options" do
+      get :backfill_options,
+          params: { backfill_class_name: "AddRoleToEmployee" }
+
+      html = JSON.parse(response.body)["html"]
+      expect(html).to include("Instructions")
+      expect(html).to include("<strong") # **bold** from the Markdown source
+      expect(html.index("Instructions")).to be < html.index(
+        "backfill_run[options][age]"
+      )
+    end
   end
 
   describe "#find_current_backfiller" do

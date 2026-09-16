@@ -224,7 +224,9 @@ module DataDrip
           options: {}
         )
 
-      html = helpers.backfill_option_inputs(temp_run)
+      # Instructions + option inputs, so both refresh together when the class
+      # changes (the backfill-options Stimulus controller swaps this container).
+      html = helpers.backfill_form_details(temp_run)
 
       render json: { html: html }
     end

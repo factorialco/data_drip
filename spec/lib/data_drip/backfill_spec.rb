@@ -90,6 +90,37 @@ RSpec.describe DataDrip::Backfill, type: :model do
     end
   end
 
+  describe ".description" do
+    it "acts as both setter and getter" do
+      klass = Class.new(DataDrip::Backfill) { description "Backfills the thing." }
+
+      expect(klass.description).to eq("Backfills the thing.")
+    end
+
+    it "defaults to nil when unset" do
+      expect(Class.new(DataDrip::Backfill).description).to be_nil
+    end
+
+    it "is per-class, not shared between sibling backfills" do
+      Class.new(DataDrip::Backfill) { description "A" }
+
+      expect(Class.new(DataDrip::Backfill).description).to be_nil
+    end
+  end
+
+  describe ".instructions" do
+    it "acts as both setter and getter" do
+      klass =
+        Class.new(DataDrip::Backfill) { instructions "Fill in the options, then run." }
+
+      expect(klass.instructions).to eq("Fill in the options, then run.")
+    end
+
+    it "defaults to nil when unset" do
+      expect(Class.new(DataDrip::Backfill).instructions).to be_nil
+    end
+  end
+
   describe ".backfill_options_class" do
     it "creates a class that includes ActiveModel::Attributes" do
       options_class = test_backfill_class.backfill_options_class

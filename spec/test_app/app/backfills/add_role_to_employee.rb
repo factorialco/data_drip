@@ -1,4 +1,19 @@
 class AddRoleToEmployee < DataDrip::Backfill
+  description "Assigns the default 'intern' role to employees that don't have one yet."
+
+  instructions <<~MARKDOWN
+    # Assign default role
+    Sets the **intern** role on all employees that don't have one yet.
+
+    ## Options
+    - `age`: Filter employees by age (optional)
+    - `name`: Filter employees by exact name match (optional)
+
+    ## Important
+    - This backfill is **idempotent** — safe to re-run
+    - Triggers `on_run_completed` and `on_batch_completed` hooks
+  MARKDOWN
+
   attribute :age, :integer
   attribute :name, :string
 

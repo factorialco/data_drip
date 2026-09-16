@@ -12,6 +12,21 @@ module DataDrip
     LABEL_CLASSES =
       "block text-sm font-semibold text-zinc-900 dark:text-white"
 
+    # Tailwind classes for the tiny Markdown renderer used by backfill
+    # instructions. They live in a helper so Tailwind's
+    # `@source "../../../helpers"` scan compiles them into the shipped build,
+    # even though the instructions HTML is injected into the page dynamically.
+    MARKDOWN_STYLES = {
+      h1: "mt-4 mb-1 text-sm font-semibold text-zinc-900 first:mt-0 dark:text-white",
+      h2: "mt-4 mb-1 text-xs font-semibold tracking-wide text-drip-700 uppercase first:mt-0 dark:text-drip-300",
+      h3: "mt-4 mb-1 text-xs font-medium text-zinc-700 first:mt-0 dark:text-zinc-300",
+      p: "mb-2 text-sm text-pretty text-zinc-600 last:mb-0 dark:text-zinc-300",
+      ul: "mb-2 list-disc space-y-0.5 pl-5 text-sm text-zinc-600 last:mb-0 dark:text-zinc-300",
+      pre: "mb-2 overflow-x-auto rounded-lg bg-zinc-900 p-3 font-mono text-xs leading-relaxed text-zinc-100 last:mb-0 dark:bg-black/40",
+      strong: "font-semibold text-zinc-900 dark:text-white",
+      code: "rounded bg-zinc-950/5 px-1 py-0.5 font-mono text-[0.8125rem] text-zinc-800 dark:bg-white/10 dark:text-zinc-200"
+    }.freeze
+
     STATUS_BADGES = {
       "pending" => {
         badge: "bg-zinc-50 text-zinc-600 inset-ring-zinc-500/20 " \
@@ -235,6 +250,41 @@ module DataDrip
       )
     end
 
+    # The dynamic body of the New Backfill Run form for a given run: the
+    # backfill's instructions (if any) followed by its typed option inputs.
+    # Rendered server-side both on initial page load and by the
+    # `backfill-options` controller when the class changes, so both refresh
+    # together.
+    def backfill_form_details(backfill_run)
+      safe_join(
+        [
+          backfill_instructions_block(backfill_run),
+          backfill_option_inputs(backfill_run)
+        ]
+      )
+    end
+
+    # Renders a backfill's `instructions` (authored in Markdown) as a styled
+    # callout shown above the options. Returns "" when the backfill sets none.
+    def backfill_instructions_block(backfill_run)
+      backfill_class = backfill_run.backfill_class
+      return "" unless backfill_class.respond_to?(:instructions)
+
+      instructions = backfill_class.instructions
+      return "" if instructions.blank?
+
+      content_tag :div,
+                  class: "mb-5 rounded-lg bg-drip-50 p-4 dark:bg-drip-400/10" do
+        header =
+          content_tag :h2,
+                      "Instructions",
+                      class:
+                        "mb-3 text-xs font-semibold tracking-wide text-drip-700 " \
+                        "uppercase dark:text-drip-300"
+        header + content_tag(:div, render_markdown(instructions))
+      end
+    end
+
     # Renders the typed input fields for an options/inputs schema. Shared by
     # backfills (prefix `backfill_run[options]`) and scripts (prefix
     # `script_run[inputs]`) through the `field_prefix` argument.
@@ -322,6 +372,84 @@ module DataDrip
     end
 
     private
+
+    # A deliberately tiny Markdown-subset renderer for backfill instructions:
+    # `#`/`##`/`###` headings, `**bold**`, `` `inline code` ``, `- `/`* ` bullet
+    # lists, and triple-backtick fenced code blocks. Kept dependency-free (this
+    # is an importmap project with no npm/bundler at runtime); if richer Markdown
+    # is ever needed, swap in a gem here. All dynamic text is escaped before any
+    # tag is emitted, so the html_safe result never carries unescaped input.
+    def render_markdown(text)
+      html = +""
+      in_list = false
+      in_code = false
+      code_lines = []
+
+      text.to_s.split("\n").each do |line|
+        if line.strip.start_with?("```")
+          if in_code
+            html << content_tag(:pre, code_lines.join("\n"), class: MARKDOWN_STYLES[:pre])
+            code_lines = []
+            in_code = false
+          else
+            html << "</ul>" if in_list
+            in_list = false
+            in_code = true
+          end
+          next
+        end
+
+        if in_code
+          code_lines << line
+          next
+        end
+
+        if line.strip.empty?
+          html << "</ul>" if in_list
+          in_list = false
+          next
+        end
+
+        if (heading = line.match(/\A(\#+)\s+(.+)\z/))
+          html << "</ul>" if in_list
+          in_list = false
+          level = [ heading[1].length, 3 ].min
+          html << content_tag(
+            "h#{level + 2}",
+            render_markdown_inline(heading[2]),
+            class: MARKDOWN_STYLES[:"h#{level}"]
+          )
+          next
+        end
+
+        if (bullet = line.match(/\A[-*]\s+(.+)\z/))
+          unless in_list
+            html << %(<ul class="#{MARKDOWN_STYLES[:ul]}">)
+            in_list = true
+          end
+          html << content_tag(:li, render_markdown_inline(bullet[1]))
+          next
+        end
+
+        html << "</ul>" if in_list
+        in_list = false
+        html << content_tag(:p, render_markdown_inline(line), class: MARKDOWN_STYLES[:p])
+      end
+
+      html << content_tag(:pre, code_lines.join("\n"), class: MARKDOWN_STYLES[:pre]) if in_code
+      html << "</ul>" if in_list
+      html.html_safe
+    end
+
+    # Applies inline `**bold**` and `` `code` `` formatting. The text is escaped
+    # first, so the backreferenced capture is already safe when re-inserted.
+    def render_markdown_inline(text)
+      ERB::Util
+        .html_escape(text)
+        .gsub(/\*\*(.+?)\*\*/, %(<strong class="#{MARKDOWN_STYLES[:strong]}">\\1</strong>))
+        .gsub(/`(.+?)`/, %(<code class="#{MARKDOWN_STYLES[:code]}">\\1</code>))
+        .html_safe
+    end
 
     def build_standard_input(name, type, value, field_prefix, required: false)
       field_name = "#{field_prefix}[#{name}]"

@@ -17,6 +17,10 @@ DataDrip::Engine.routes.draw do
        to: "backfill_runs#set_timezone",
        as: :set_timezone_backfill_runs
 
+  # Catalog of the backfill *definitions* available in the host app (as opposed
+  # to backfill_runs, which lists persisted runs).
+  resources :backfills, only: %i[index]
+
   resources :script_runs, only: %i[index show new create destroy] do
     get :updates, on: :member
     get :script_inputs, on: :collection
