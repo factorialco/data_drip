@@ -187,24 +187,12 @@ module DataDrip
         return redirect_to backfill_run_path(@backfill_run)
       end
 
-      failed_batches = @backfill_run.batches.failed
       resume_planning = @backfill_run.planning_failed?
+      count = @backfill_run.retry_failed_batches!
 
-      if failed_batches.none? && !resume_planning
+      if count.zero? && !resume_planning
         flash[:alert] = "This run has no failed batches to retry."
       else
-        count = 0
-        failed_batches.find_each do |batch|
-          batch.update!(status: :pending, error_message: nil)
-          batch.enqueue
-          count += 1
-        end
-        # The planning error is what is being retried, as a batch's is.
-        @backfill_run.update!(error_message: nil) if resume_planning
-        @backfill_run.running! unless @backfill_run.running?
-        # A run that failed while planning has only part of its batches;
-        # resume planning so the rest are created and the run can settle.
-        DataDrip::Dripper.perform_later(@backfill_run) if @backfill_run.planning?
         flash[:notice] = [
           ("Re-enqueued #{count} failed #{count == 1 ? "batch" : "batches"}." if count.positive?),
           ("Resumed planning the rest of the run." if resume_planning)
