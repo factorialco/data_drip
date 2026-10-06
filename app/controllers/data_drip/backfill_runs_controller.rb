@@ -146,10 +146,16 @@ module DataDrip
         flash[:alert] = "You can only stop backfill runs you created."
       elsif params[:cell_id].present?
         stop_remote_leg(@backfill_run, params[:cell_id])
-      elsif @backfill_run.running?
-        @backfill_run.stopped!
+      elsif @backfill_run.running? || @backfill_run.group.remote_legs_running?
+        # The group is stopped as a whole: this cell's run may already have
+        # finished, or not started yet, while other cells are still working.
+        local_note =
+          if @backfill_run.running?
+            @backfill_run.stopped!
+            "Backfill run has been stopped."
+          end
         flash[:notice] =
-          [ "Backfill run has been stopped.", stop_remote_legs(@backfill_run).message ].compact.join(" ")
+          [ local_note, stop_remote_legs(@backfill_run).message ].compact.join(" ")
       else
         flash[:alert] = "Backfill run is not currently running."
       end

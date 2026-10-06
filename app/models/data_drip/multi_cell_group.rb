@@ -84,6 +84,13 @@ module DataDrip
       dispatches.any?(&:active?)
     end
 
+    # Whether another cell last reported its leg as running. Lets the group be
+    # stopped from the coordinator after its own run has finished (or before it
+    # started) while other cells are still working.
+    def remote_legs_running?
+      dispatches.any? { |dispatch| dispatch.dispatched? && dispatch.last_run_status == "running" }
+    end
+
     # True when every leg's state is known — i.e. no cell is merely unreachable.
     # An unreachable leg is not a failure, but it does mean the group's reported
     # status is provisional.
