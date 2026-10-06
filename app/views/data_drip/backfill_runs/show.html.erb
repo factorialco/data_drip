@@ -19,7 +19,7 @@
           new_backfill_run_path(source_run_id: @backfill_run.id),
           class: secondary_button_classes %>
       <% if @backfill_run.owned_by?(find_current_backfiller) %>
-        <% if @backfill_run.running? %>
+        <% if @backfill_run.running? || @group.remote_legs_running? %>
           <%= button_to "Stop run",
               stop_backfill_run_path(@backfill_run),
               method: :post,
