@@ -529,6 +529,56 @@ RSpec.describe DataDrip::BackfillRun, type: :model do
     end
   end
 
+  describe "#retry_failed_batches!" do
+    let(:backfiller) { User.create!(name: "Retry User") }
+
+    def build_failed_run(backfill_class_name, failed_batches:)
+      run =
+        DataDrip::BackfillRun.new(
+          backfill_class_name: backfill_class_name,
+          batch_size: 10,
+          start_at: 1.hour.from_now,
+          backfiller: backfiller,
+          options: {}
+        )
+      run.save!(validate: false)
+      run.update_column(:status, DataDrip::BackfillRun.statuses[:failed])
+      failed_batches.times do
+        batch = run.batches.new(batch_size: 10, start_id: 1, finish_id: 2)
+        batch.save!(validate: false)
+        batch.update_columns(
+          status: DataDrip::BackfillRunBatch.statuses[:failed],
+          error_message: "boom"
+        )
+      end
+      run
+    end
+
+    it "requeues every failed batch and puts the run back to running" do
+      run = build_failed_run("BackfillRunSpec::RetryableBackfill", failed_batches: 2)
+
+      expect { expect(run.retry_failed_batches!).to eq(2) }.to have_enqueued_job(
+        DataDrip::DripperChild
+      ).exactly(:twice)
+      expect(run.reload).to be_running
+      expect(run.batches.pluck(:error_message).compact).to be_empty
+    end
+
+    it "keeps to the backfill's parallelism limit" do
+      run = build_failed_run("BackfillRunSpec::SequentialRetryableBackfill", failed_batches: 3)
+
+      expect { run.retry_failed_batches! }.to have_enqueued_job(DataDrip::DripperChild).exactly(:once)
+      expect(run.batches.pluck(:status).tally).to eq("enqueued" => 1, "pending" => 2)
+    end
+
+    it "changes nothing when no batch failed" do
+      run = build_failed_run("BackfillRunSpec::RetryableBackfill", failed_batches: 0)
+
+      expect(run.retry_failed_batches!).to eq(0)
+      expect(run.reload).to be_failed
+    end
+  end
+
   describe "status enum" do
     it "has the correct status values" do
       backfill_run = DataDrip::BackfillRun.allocate
@@ -679,5 +729,19 @@ module BackfillRunSpec
     end
 
     def process_element(_element); end
+  end
+
+  class RetryableBackfill < DataDrip::Backfill
+    def scope
+      Employee.none
+    end
+
+    def process_element(_element); end
+  end
+
+  class SequentialRetryableBackfill < RetryableBackfill
+    def self.max_parallel_batches
+      1
+    end
   end
 end

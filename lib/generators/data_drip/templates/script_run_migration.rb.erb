@@ -11,10 +11,20 @@ class CreateDataDripScriptRuns < ActiveRecord::Migration<%= migration_version %>
       t.text :error_backtrace
       t.integer :status, null: false, default: 0, index: true
       t.bigint :backfiller_id, null: false, index: true
+      t.string :backfiller_name
       t.datetime :start_at, null: false
       t.datetime :started_at
       t.datetime :finished_at
+      t.string :group_uuid
+      t.string :cell_id
+      t.integer :origin, null: false, default: 0
+      t.string :origin_cell_id
       t.timestamps null: false
+
+      # Multi-cell dispatch is idempotent per (group, cell).
+      t.index [ :group_uuid, :cell_id ],
+              unique: true,
+              name: "idx_script_runs_on_group_and_cell"
     end
   end
 end
