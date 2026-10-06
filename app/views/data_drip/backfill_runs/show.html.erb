@@ -15,7 +15,7 @@
     <span data-backfill-run-updates-target="status"><%= status_tag(@group.status) %></span>
 
     <div class="flex flex-1 justify-end gap-x-2">
-      <% if @backfill_run.owned_by?(find_current_backfiller) %>
+      <% if @backfill_run.manageable_by?(find_current_backfiller) %>
         <% if @backfill_run.running? || @group.remote_legs_running? %>
           <%= button_to "Stop run",
               stop_backfill_run_path(@backfill_run),

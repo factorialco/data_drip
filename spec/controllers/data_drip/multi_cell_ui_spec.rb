@@ -647,6 +647,24 @@ RSpec.describe DataDrip::BackfillRunsController, type: :controller do
       expect(DataDrip::BackfillRun.exists?(remote_run.id)).to be(false)
     end
 
+    context "on its page" do
+      render_views
+
+      it "offers the stop the controller allows" do
+        remote_run.update_column(:status, DataDrip::BackfillRun.statuses[:running])
+
+        get :show, params: { id: remote_run.id }
+
+        expect(response.body).to include("Stop run")
+      end
+
+      it "offers the delete the controller allows" do
+        get :show, params: { id: remote_run.id }
+
+        expect(response.body).to include("Delete run")
+      end
+    end
+
     it "still refuses a local run the operator does not own" do
       other = User.create!(name: "Someone")
       mine =

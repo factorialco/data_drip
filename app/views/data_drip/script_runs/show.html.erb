@@ -15,7 +15,7 @@
     <span data-script-run-updates-target="status"><%= status_tag(@group.status) %></span>
 
     <div class="flex flex-1 justify-end gap-x-2">
-      <% if @script_run.owned_by?(find_current_backfiller) && @script_run.not_yet_run? %>
+      <% if @script_run.manageable_by?(find_current_backfiller) && @script_run.not_yet_run? %>
         <%= button_to "Delete run",
             script_run_path(@script_run),
             method: :delete,
