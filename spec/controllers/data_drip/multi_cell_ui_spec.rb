@@ -108,6 +108,24 @@ RSpec.describe DataDrip::BackfillRunsController, type: :controller do
       expect(response.body).to include("Running")
     end
 
+    it "offers to stop the group while another cell is still running it" do
+      run.update_column(:status, DataDrip::BackfillRun.statuses[:completed])
+      DataDrip::CellDispatch.create!(
+        group_uuid: "g-1",
+        cell_id: "cell-b",
+        runnable_type: :backfill,
+        status: :dispatched,
+        remote_run_id: 77,
+        last_status: "running",
+        last_synced_at: Time.current,
+        last_snapshot: { "id" => 77, "type" => "backfill", "status" => "running" }
+      )
+
+      get :show, params: { id: run.id }
+
+      expect(response.body).to include("Stop run")
+    end
+
     it "tells a leg deleted in its own cell apart from one still running" do
       DataDrip::CellDispatch.create!(
         group_uuid: "g-1",
@@ -423,6 +441,33 @@ RSpec.describe DataDrip::BackfillRunsController, type: :controller do
       expect(run.reload).to be_stopped
       expect(stop_stub).to have_been_requested
       expect(flash[:notice]).to match(/stopped/)
+    end
+
+    # The local run finished first; another cell is still working. The header's
+    # stop must still reach it.
+    it "stops the remote legs once this cell's own run has finished" do
+      run.update_column(:status, DataDrip::BackfillRun.statuses[:completed])
+      dispatch.update!(last_status: "running", last_synced_at: Time.current)
+      stop_stub =
+        stub_request(:post, cell_api_url("cell-b", "/v1/backfill_runs/77/stop"))
+          .to_return(status: 200, body: { id: 77, status: "stopped" }.to_json)
+
+      post :stop, params: { id: run.id }
+
+      expect(stop_stub).to have_been_requested
+      expect(run.reload).to be_completed
+      expect(flash[:alert]).to be_nil
+      expect(flash[:notice]).to match(/acknowledged/)
+    end
+
+    it "refuses when neither this cell nor any other is running the group" do
+      run.update_column(:status, DataDrip::BackfillRun.statuses[:completed])
+      dispatch.update!(last_status: "completed", last_synced_at: Time.current)
+
+      post :stop, params: { id: run.id }
+
+      expect(flash[:alert]).to match(/not currently running/)
+      expect(a_request(:post, %r{cell-b\.example\.com})).not_to have_been_made
     end
 
     it "stops a single remote leg when a cell_id is given" do
