@@ -15,6 +15,11 @@ module DataDrip
       response = deliver(dispatch)
 
       if response.success?
+        # The coordinator's run was deleted while this delivery was in flight:
+        # the delete could not see a leg that did not exist yet, so the leg
+        # just created is withdrawn here instead of being left to run alone.
+        return withdraw(dispatch, response.body["id"]) unless DataDrip::CellDispatch.exists?(dispatch.id)
+
         dispatch.update!(
           status: :dispatched,
           remote_run_id: response.body["id"],
@@ -50,6 +55,39 @@ module DataDrip
       else
         client.create_backfill_run(cell_id: dispatch.cell_id, payload: dispatch.payload)
       end
+    end
+
+    def withdraw(dispatch, remote_run_id)
+      return if remote_run_id.nil?
+
+      client = DataDrip::CellClient.new
+      delete = dispatch.script? ? :delete_script_run : :delete_backfill_run
+      response =
+        client.public_send(
+          delete,
+          cell_id: dispatch.cell_id,
+          run_id: remote_run_id,
+          acting_backfiller_id: dispatch.payload["backfiller_id"]
+        )
+      return if response.success? || response.status == 404
+
+      log_orphan(dispatch, remote_run_id, "HTTP #{response.status}")
+    rescue DataDrip::CellTransport::Error => e
+      # The dispatch row is gone, so a queue retry could not even load this
+      # job again. Say loudly where the leg is instead.
+      log_orphan(dispatch, remote_run_id, e.message)
+    end
+
+    def log_orphan(dispatch, remote_run_id, reason)
+      Rails.logger.error(
+        {
+          event: "data_drip.cell_dispatch.orphaned_leg",
+          group_uuid: dispatch.group_uuid,
+          cell_id: dispatch.cell_id,
+          remote_run_id: remote_run_id,
+          reason: reason
+        }.to_json
+      )
     end
 
     def failure_message(response)

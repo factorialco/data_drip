@@ -196,32 +196,6 @@ module DataDrip
 
     private
 
-    # Deleting the coordinator's run also asks each dispatched cell to delete
-    # its leg. A leg that already ran (409) is refused there and stays in that
-    # cell's own history, which counts as answered: it will not run again.
-    def delete_remote_legs(run)
-      fanout_to_dispatched(run.dispatches) do |dispatch|
-        response =
-          cell_client.delete_script_run(
-            cell_id: dispatch.cell_id,
-            run_id: dispatch.remote_run_id,
-            acting_backfiller_id: run.backfiller_id
-          )
-        ok = response.success? || response.status == 404 || response.status == 409
-        [ ok, delete_detail(response) ]
-      end
-    end
-
-    # What to relay about a delete a cell acknowledged. A leg that had already
-    # run is refused there and stays in that cell's history — worth saying, but
-    # not a failure: it will not run again either way.
-    def delete_detail(response)
-      return "already ran — kept as history in that cell" if response.status == 409
-      return nil if response.success? || response.status == 404
-
-      cell_api_error_detail(response)
-    end
-
     def script_run_params
       params.require(:script_run).permit(
         :script_class_name,
