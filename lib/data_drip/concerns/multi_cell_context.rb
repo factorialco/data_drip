@@ -94,8 +94,65 @@ module DataDrip
     #
     # The block gets (dispatch) and returns [ok, detail]; transport errors and
     # cells that miss the deadline count as failures.
-    def fanout_to_dispatched(dispatches)
-      by_cell = dispatches.select(&:dispatched?).index_by(&:cell_id)
+    def fanout_to_dispatched(dispatches, &)
+      fanout_to(dispatches.select(&:dispatched?), &)
+    end
+
+    # Deleting the coordinator's run also asks every target cell to delete its
+    # leg. A leg that already ran (409) is refused there and stays in that
+    # cell's own history, which counts as answered: it will not run again.
+    #
+    # Not only confirmed deliveries: a dispatch marked failed may still have
+    # landed (a read timeout after the cell committed the run), and a pending
+    # one may be landing right now. Neither knows the remote run's id, so the
+    # cell is asked what it holds for the group, and its answer is what gets
+    # deleted. Assuming "nothing there" would leave a leg scheduled in that
+    # cell with nothing left to see or stop it from.
+    def delete_remote_legs(run)
+      fanout_to(run.dispatches.to_a) do |dispatch|
+        remote_run_id = dispatch.remote_run_id.presence || landed_run_id(run, dispatch)
+        next [ true, nil ] if remote_run_id.nil?
+
+        response = delete_remote_run(dispatch, remote_run_id, run.backfiller_id)
+        ok = response.success? || response.status == 404 || response.status == 409
+        [ ok, delete_detail(response) ]
+      end
+    end
+
+    # The id of the run a cell holds for this group, or nil when it holds none.
+    # Raises when the cell cannot answer: "could not ask" is not "nothing there".
+    def landed_run_id(run, dispatch)
+      response = cell_client.fetch_group(cell_id: dispatch.cell_id, group_uuid: run.group_uuid)
+      unless response.success?
+        raise DataDrip::CellTransport::Error,
+              "could not confirm it holds no copy (#{cell_api_error_detail(response)})"
+      end
+
+      Array(response.body["runs"]).first&.dig("id")
+    end
+
+    def delete_remote_run(dispatch, remote_run_id, acting_backfiller_id)
+      delete = dispatch.script? ? :delete_script_run : :delete_backfill_run
+      cell_client.public_send(
+        delete,
+        cell_id: dispatch.cell_id,
+        run_id: remote_run_id,
+        acting_backfiller_id: acting_backfiller_id
+      )
+    end
+
+    # What to relay about a delete a cell acknowledged. A leg that had already
+    # run is refused there and stays in that cell's history — worth saying, but
+    # not a failure: it will not run again either way.
+    def delete_detail(response)
+      return "already ran — kept as history in that cell" if response.status == 409
+      return nil if response.success? || response.status == 404
+
+      cell_api_error_detail(response)
+    end
+
+    def fanout_to(dispatches)
+      by_cell = dispatches.index_by(&:cell_id)
 
       results =
         DataDrip::CellFanout.call(by_cell.keys) do |cell_id|

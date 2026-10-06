@@ -40,6 +40,37 @@ RSpec.describe DataDrip::CellDispatcherJob do
     expect(dispatch.error_message).to be_nil
   end
 
+  # The coordinator's run was deleted while this delivery was in flight. Its
+  # delete could not see a leg that did not exist yet, so the job withdraws the
+  # leg it just created rather than leaving it to run with no coordinator.
+  context "when the dispatch is deleted while its delivery is in flight" do
+    before do
+      stub_request(:post, create_url).to_return do
+        DataDrip::CellDispatch.where(id: dispatch.id).delete_all
+        { status: 201, body: { id: 4242, status: "enqueued" }.to_json }
+      end
+    end
+
+    it "withdraws the leg it just created" do
+      withdraw =
+        stub_request(:delete, cell_api_url("cell-b", "/v1/backfill_runs/4242"))
+          .with { |request| JSON.parse(request.body)["acting_backfiller_id"] == 1 }
+          .to_return(status: 204, body: "")
+
+      described_class.perform_now(dispatch)
+
+      expect(withdraw).to have_been_requested
+    end
+
+    it "logs the orphaned leg when it cannot withdraw it" do
+      stub_request(:delete, cell_api_url("cell-b", "/v1/backfill_runs/4242")).to_timeout
+      allow(Rails.logger).to receive(:error)
+
+      expect { described_class.perform_now(dispatch) }.not_to raise_error
+      expect(Rails.logger).to have_received(:error).with(/orphaned_leg.*4242/)
+    end
+  end
+
   it "treats a 200 (idempotent redelivery) as dispatched" do
     stub_request(:post, create_url).to_return(
       status: 200,
