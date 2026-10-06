@@ -176,18 +176,11 @@ module DataDrip
         return redirect_to backfill_run_path(@backfill_run)
       end
 
-      failed_batches = @backfill_run.batches.failed
+      count = @backfill_run.retry_failed_batches!
 
-      if failed_batches.none?
+      if count.zero?
         flash[:alert] = "This run has no failed batches to retry."
       else
-        count = 0
-        failed_batches.find_each do |batch|
-          batch.update!(status: :pending, error_message: nil)
-          batch.enqueue
-          count += 1
-        end
-        @backfill_run.running! unless @backfill_run.running?
         flash[
           :notice
         ] = "Re-enqueued #{count} failed #{count == 1 ? "batch" : "batches"}."
