@@ -305,12 +305,13 @@ module DataDrip
     private
 
     def stop_remote_legs(run)
+      actor_id = acting_backfiller_id
       fanout_to_dispatched(run.dispatches) do |dispatch|
         response =
           cell_client.stop_backfill_run(
             cell_id: dispatch.cell_id,
             run_id: dispatch.remote_run_id,
-            acting_backfiller_id: run.backfiller_id
+            acting_backfiller_id: actor_id
           )
         # A cell whose leg already finished (409) has nothing left to stop.
         ok = response.success? || response.status == 409
@@ -329,7 +330,7 @@ module DataDrip
         cell_client.stop_backfill_run(
           cell_id: dispatch.cell_id,
           run_id: dispatch.remote_run_id,
-          acting_backfiller_id: run.backfiller_id
+          acting_backfiller_id: acting_backfiller_id
         )
       if response.success?
         flash[:notice] = "Run stopped in #{cell_id}."
@@ -352,7 +353,7 @@ module DataDrip
         cell_client.retry_failed_batches(
           cell_id: dispatch.cell_id,
           run_id: dispatch.remote_run_id,
-          acting_backfiller_id: run.backfiller_id
+          acting_backfiller_id: acting_backfiller_id
         )
       if response.success?
         flash[:notice] = "Re-enqueued failed batches in #{cell_id}."

@@ -470,6 +470,19 @@ RSpec.describe DataDrip::BackfillRunsController, type: :controller do
       expect(a_request(:post, %r{cell-b\.example\.com})).not_to have_been_made
     end
 
+    # The remote cell's audit trail must name who stopped its leg.
+    it "tells each cell who is acting" do
+      run.running!
+      stop_stub =
+        stub_request(:post, cell_api_url("cell-b", "/v1/backfill_runs/77/stop"))
+          .with { |request| JSON.parse(request.body)["acting_backfiller_id"] == backfiller.id }
+          .to_return(status: 200, body: { id: 77, status: "stopped" }.to_json)
+
+      post :stop, params: { id: run.id }
+
+      expect(stop_stub).to have_been_requested
+    end
+
     it "stops a single remote leg when a cell_id is given" do
       stop_stub =
         stub_request(:post, cell_api_url("cell-b", "/v1/backfill_runs/77/stop"))

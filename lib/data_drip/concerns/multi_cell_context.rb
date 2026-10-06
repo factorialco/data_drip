@@ -84,6 +84,13 @@ module DataDrip
       @cell_client ||= DataDrip::CellClient.new
     end
 
+    # Who is acting, as the remote cell's Cell API records and authorizes it.
+    # Resolve it before a fan-out: its blocks run on pool threads, away from
+    # this request's state.
+    def acting_backfiller_id
+      find_current_backfiller&.id
+    end
+
     def find_dispatched_dispatch(run, cell_id)
       run.dispatches.dispatched.find_by(cell_id: cell_id)
     end
@@ -109,11 +116,12 @@ module DataDrip
     # deleted. Assuming "nothing there" would leave a leg scheduled in that
     # cell with nothing left to see or stop it from.
     def delete_remote_legs(run)
+      actor_id = acting_backfiller_id
       fanout_to(run.dispatches.to_a) do |dispatch|
         remote_run_id = dispatch.remote_run_id.presence || landed_run_id(run, dispatch)
         next [ true, nil ] if remote_run_id.nil?
 
-        response = delete_remote_run(dispatch, remote_run_id, run.backfiller_id)
+        response = delete_remote_run(dispatch, remote_run_id, actor_id)
         ok = response.success? || response.status == 404 || response.status == 409
         [ ok, delete_detail(response) ]
       end
