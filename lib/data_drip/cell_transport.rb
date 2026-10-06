@@ -39,17 +39,24 @@ module DataDrip
     # to #call are relative to it. `url`, `query` and `headers` each accept a
     # plain value or a callable (called with the cell id when it takes one).
     class Http
+      # Everything that means "this cell did not give us an HTTP answer". An
+      # error missing here escapes as itself, so callers that only expect a
+      # CellTransport::Error crash instead of reporting the cell unreachable.
       NETWORK_ERRORS = [
         Timeout::Error,
         Errno::ECONNREFUSED,
         Errno::ECONNRESET,
+        Errno::ECONNABORTED,
+        Errno::ETIMEDOUT,
         Errno::EHOSTUNREACH,
         Errno::ENETUNREACH,
         Errno::EPIPE,
         SocketError,
         EOFError,
         IOError,
-        OpenSSL::SSL::SSLError
+        OpenSSL::SSL::SSLError,
+        Net::HTTPBadResponse,
+        Net::ProtocolError
       ].freeze
 
       # Timeouts are deliberately close to DataDrip.cell_fanout_deadline.

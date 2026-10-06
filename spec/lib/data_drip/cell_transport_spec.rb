@@ -111,6 +111,21 @@ RSpec.describe DataDrip::CellTransport::Http do
     end.to raise_error(DataDrip::CellTransport::Error)
   end
 
+  [
+    Errno::ETIMEDOUT,
+    Errno::ECONNABORTED,
+    Net::HTTPBadResponse,
+    Net::ProtocolError
+  ].each do |error|
+    it "wraps #{error} in CellTransport::Error" do
+      stub_request(:get, %r{cell-b\.example\.com}).to_raise(error)
+
+      expect do
+        transport.call(cell_id: "cell-b", method: :get, path: "/v1/groups/g")
+      end.to raise_error(DataDrip::CellTransport::Error)
+    end
+  end
+
   it "rejects unsupported HTTP methods" do
     expect do
       transport.call(cell_id: "cell-b", method: :patch, path: "/v1/whatever")
