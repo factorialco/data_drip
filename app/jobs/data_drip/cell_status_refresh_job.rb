@@ -10,7 +10,7 @@ module DataDrip
   # routinely send GETs to a read replica where writing is forbidden, so the
   # caching a refresh does cannot happen there.
   class CellStatusRefreshJob < DataDrip.base_job_class.safe_constantize
-    queue_as { DataDrip.queue_name }
+    queue_as { DataDrip.resolved_cell_queue_name }
 
     discard_on ActiveJob::DeserializationError
 

@@ -51,4 +51,19 @@ RSpec.describe "DataDrip multi-cell configuration" do
 
     expect(DataDrip.resolved_cell_ids).to eq(%w[cell-a cell-b])
   end
+
+  describe "the cross-cell jobs' queue" do
+    it "defaults to DataDrip.queue_name" do
+      expect(DataDrip::CellDispatcherJob.new.queue_name).to eq(DataDrip.queue_name.to_s)
+      expect(DataDrip::CellStatusRefreshJob.new.queue_name).to eq(DataDrip.queue_name.to_s)
+    end
+
+    it "uses DataDrip.cell_queue_name when set" do
+      DataDrip.cell_queue_name = -> { :data_drip_cells }
+
+      expect(DataDrip::CellDispatcherJob.new.queue_name).to eq("data_drip_cells")
+      expect(DataDrip::CellStatusRefreshJob.new.queue_name).to eq("data_drip_cells")
+      expect(DataDrip::Dripper.new.queue_name).to eq(DataDrip.queue_name.to_s)
+    end
+  end
 end

@@ -31,6 +31,7 @@ module MultiCellHelpers
     DataDrip.cell_fanout_deadline = 5
     DataDrip.cell_status_refresh_interval = 3
     DataDrip.script_output_tail_bytes = 4_096
+    DataDrip.cell_queue_name = nil
   end
 
   def cell_api_url(cell_id, path)

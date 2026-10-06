@@ -5,7 +5,7 @@ module DataDrip
   # copy of the run. Delivery is idempotent — the receiving cell keys runs by
   # (group_uuid, cell_id) — so duplicate deliveries and retries are safe.
   class CellDispatcherJob < DataDrip.base_job_class.safe_constantize
-    queue_as { DataDrip.queue_name }
+    queue_as { DataDrip.resolved_cell_queue_name }
 
     discard_on ActiveJob::DeserializationError
 

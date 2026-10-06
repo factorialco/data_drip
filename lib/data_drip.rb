@@ -74,6 +74,12 @@ module DataDrip
   # coordinator shows this much and links into the owning cell for the rest.
   mattr_accessor :script_output_tail_bytes, default: 4_096
 
+  # The Active Job queue for the cross-cell jobs (dispatching a run to another
+  # cell, refreshing the per-cell statuses). nil => DataDrip.queue_name. These
+  # jobs are short and the UI's freshness depends on them, so a host whose
+  # `queue_name` also runs long scripts may want them on a queue of their own.
+  mattr_accessor :cell_queue_name, default: nil
+
   class Error < StandardError
   end
 
@@ -99,6 +105,10 @@ module DataDrip
 
   def self.resolved_cell_status_refresh_interval
     resolve_setting(cell_status_refresh_interval).to_f
+  end
+
+  def self.resolved_cell_queue_name
+    resolve_setting(cell_queue_name).presence || queue_name
   end
 
   def self.multi_cell?

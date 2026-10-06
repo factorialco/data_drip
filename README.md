@@ -544,7 +544,7 @@ architectures, but they are worth checking before you turn it on:
    record itself only has to exist in the coordinator's cell — other cells display the name
    snapshot taken at creation.
 2. **A cell can reach the other cells' Cell API, and runs a background queue.** Dispatch and
-   status refreshes are jobs on `DataDrip.queue_name`; the UI itself never makes a cross-cell
+   status refreshes are jobs on `DataDrip.cell_queue_name` (default: `DataDrip.queue_name`); the UI itself never makes a cross-cell
    call (see [How statuses are refreshed](#how-statuses-are-refreshed)).
 
 ### Configuration
@@ -583,7 +583,12 @@ DataDrip.cell_fanout_concurrency = 8       # cells talked to at once
 DataDrip.cell_fanout_deadline = 5          # seconds for a whole fan-out, however many cells
 DataDrip.cell_status_refresh_interval = 3  # seconds a cached per-cell status stays fresh
 DataDrip.script_output_tail_bytes = 4_096  # log tail carried in a cross-cell snapshot
+DataDrip.cell_queue_name = nil             # queue for dispatch/refresh jobs; nil => queue_name
 ```
+
+Dispatch and status-refresh jobs share `queue_name` with `Dripper` and `ScriptRunner` unless
+`cell_queue_name` says otherwise. A long script holding that queue's workers delays them, and
+with them how fresh the per-cell cards are; give them their own queue if that matters to you.
 
 Keep your transport's timeouts near `cell_fanout_deadline`: work the fan-out has given up on
 keeps running until its socket times out.
