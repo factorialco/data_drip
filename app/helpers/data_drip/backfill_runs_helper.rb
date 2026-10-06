@@ -42,6 +42,11 @@ module DataDrip
         badge: "bg-zinc-50 text-zinc-600 inset-ring-zinc-500/20 " \
           "dark:bg-white/5 dark:text-zinc-400 dark:inset-ring-white/10",
         dot: "bg-zinc-400"
+      },
+      "deleted" => {
+        badge: "bg-zinc-50 text-zinc-600 inset-ring-zinc-500/20 " \
+          "dark:bg-white/5 dark:text-zinc-400 dark:inset-ring-white/10",
+        dot: "bg-zinc-400"
       }
     }.freeze
 
