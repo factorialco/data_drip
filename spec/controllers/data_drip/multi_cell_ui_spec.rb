@@ -505,6 +505,61 @@ RSpec.describe DataDrip::BackfillRunsController, type: :controller do
       )
     end
 
+    # A failed dispatch may still have landed: the cell can commit the run and
+    # then time out answering. Deleting must find and remove that copy.
+    context "with a dispatch that never confirmed delivery" do
+      let!(:unconfirmed) do
+        DataDrip::CellDispatch.create!(
+          group_uuid: "g-1",
+          cell_id: "cell-c",
+          runnable_type: :backfill,
+          status: :failed,
+          error_message: "Net::ReadTimeout"
+        )
+      end
+
+      before do
+        stub_request(:delete, cell_api_url("cell-b", "/v1/backfill_runs/77"))
+          .to_return(status: 204, body: "")
+      end
+
+      def stub_cell_c_group(runs)
+        stub_request(:get, cell_api_url("cell-c", "/v1/groups/g-1?target_cell_id=cell-c"))
+          .to_return(status: 200, body: { cell_id: "cell-c", runs: runs }.to_json)
+      end
+
+      it "deletes the copy the cell turns out to hold" do
+        stub_cell_c_group([ { "id" => 88, "status" => "enqueued" } ])
+        delete_stub =
+          stub_request(:delete, cell_api_url("cell-c", "/v1/backfill_runs/88"))
+            .to_return(status: 204, body: "")
+
+        delete :destroy, params: { id: run.id }
+
+        expect(delete_stub).to have_been_requested
+        expect(DataDrip::BackfillRun.exists?(run.id)).to be(false)
+      end
+
+      it "deletes the run when the cell holds no copy" do
+        stub_cell_c_group([])
+
+        delete :destroy, params: { id: run.id }
+
+        expect(DataDrip::BackfillRun.exists?(run.id)).to be(false)
+        expect(DataDrip::CellDispatch.count).to eq(0)
+      end
+
+      it "refuses to delete when the cell cannot say whether it holds a copy" do
+        stub_request(:get, %r{cell-c\.example\.com}).to_timeout
+
+        delete :destroy, params: { id: run.id }
+
+        expect(DataDrip::BackfillRun.exists?(run.id)).to be(true)
+        expect(DataDrip::CellDispatch.exists?(unconfirmed.id)).to be(true)
+        expect(flash[:alert]).to match(/not deleted.*cell-c/)
+      end
+    end
+
     it "refuses to delete when a cell rejects the delete" do
       stub_request(:delete, cell_api_url("cell-b", "/v1/backfill_runs/77"))
         .to_return(status: 500, body: "")
