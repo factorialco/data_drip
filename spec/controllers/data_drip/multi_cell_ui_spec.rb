@@ -108,6 +108,25 @@ RSpec.describe DataDrip::BackfillRunsController, type: :controller do
       expect(response.body).to include("Running")
     end
 
+    it "tells a leg deleted in its own cell apart from one still running" do
+      DataDrip::CellDispatch.create!(
+        group_uuid: "g-1",
+        cell_id: "cell-b",
+        runnable_type: :backfill,
+        status: :dispatched,
+        remote_run_id: 77,
+        last_status: "deleted",
+        last_synced_at: Time.current,
+        last_snapshot: { "id" => 77, "type" => "backfill", "status" => "pending" }
+      )
+
+      get :show, params: { id: run.id }
+
+      expect(response.body).to include("Deleted")
+      expect(response.body).to include("deleted there before it ran")
+      expect(response.body).not_to include("Stop this run in cell-b")
+    end
+
     # Rendering a page must not wait on other cells, and must not write: hosts
     # routinely route GETs to a read replica.
     it "makes no cross-cell request, and asks a job to catch the group up" do

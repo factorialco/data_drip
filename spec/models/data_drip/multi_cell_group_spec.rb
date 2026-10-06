@@ -172,6 +172,26 @@ RSpec.describe DataDrip::MultiCellGroup do
       expect(leg.last_snapshot["status"]).to eq("running")
     end
 
+    # Any operator in that cell may delete a fanned-in run before it runs. The
+    # cell then answers with no run, which must settle the leg rather than
+    # leave it looking unsynced and polled forever.
+    it "settles a leg the cell no longer holds as deleted" do
+      run = build_run(status: :completed)
+      leg = dispatch(cell_id: "cell-b", last_status: "pending",
+                     last_snapshot: { "id" => 77, "status" => "pending" })
+      stub_request(:get, %r{cell-b\.example\.com})
+        .to_return(status: 200, body: { cell_id: "cell-b", runs: [] }.to_json)
+
+      group = described_class.new(run: run).refresh!
+
+      leg.reload
+      expect(leg).to be_deleted_remotely
+      expect(leg).to be_settled
+      expect(described_class.new(run: run.reload)).not_to be_active
+      expect(described_class.new(run: run).status).to eq("stopped")
+      expect(group.stale_dispatches).to be_empty
+    end
+
     it "clears the unreachable flag once the cell answers again" do
       run = build_run(status: :completed)
       leg = dispatch(cell_id: "cell-b", last_status: "running", unreachable_since: 1.hour.ago)

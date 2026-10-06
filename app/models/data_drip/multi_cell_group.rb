@@ -165,10 +165,12 @@ module DataDrip
 
     # What a leg contributes to the group status. A leg we have never reached
     # contributes nothing (it cannot lower the group's status, and `active?`
-    # already keeps the group unfinished).
+    # already keeps the group unfinished). A leg deleted in its own cell was
+    # called off before it ran, which for the group reads as stopped.
     def dispatch_status(dispatch)
       return "failed" if dispatch.failed?
       return "pending" if dispatch.pending?
+      return "stopped" if dispatch.deleted_remotely?
 
       dispatch.last_run_status
     end
