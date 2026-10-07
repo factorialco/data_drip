@@ -130,6 +130,14 @@ end
 
 This configuration is particularly useful when your application uses custom authentication systems, non-standard naming conventions, or when you need DataDrip to integrate with existing API controllers or admin interfaces.
 
+## How a run is planned
+
+The `Dripper` job turns a run into batches by paging through the scope's primary keys, 10,000 ids per query (`SELECT id … WHERE id > <last planned id> ORDER BY id LIMIT 10000`), and cutting each page into batches of `batch_size`. Each page is committed on its own, so its children are enqueued while the rest of the scope is still being planned.
+
+- **Exact batches.** Each batch covers the ids of `batch_size` records that matched the scope, so sparse scopes (one company out of a large table) never produce empty batches, and `total_count` is the exact number of planned records.
+- **Restart-safe.** If the worker dies mid-planning (a deploy restarting the queue), the retried job resumes after the last planned batch instead of leaving the run in `running` with no batches. A run is still planning while it is `running` without a `total_count`; it does not settle until planning has finished, even if every batch created so far is done.
+- **`amount_of_elements`** caps the number of planned records, i.e. the first N matching ids.
+
 ## Limiting parallelism
 
 Every batch of a run is enqueued as soon as the dripper creates it, so a run with 200 batches occupies up to 200 worker threads at once. When batches serialize on one shared resource anyway (a global lock, a single external system), declare how many may be in flight:
