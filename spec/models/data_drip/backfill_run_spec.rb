@@ -343,6 +343,56 @@ RSpec.describe DataDrip::BackfillRun, type: :model do
     end
   end
 
+  describe "#planning?" do
+    def run_with(status, total_count: nil)
+      run =
+        DataDrip::BackfillRun.new(
+          backfill_class_name: "AddRoleToEmployee",
+          batch_size: 100,
+          start_at: 1.hour.from_now,
+          backfiller: backfiller,
+          options: { age: 25 }
+        )
+      run.save!(validate: false)
+      run.update_columns(
+        status: DataDrip::BackfillRun.statuses[status],
+        total_count: total_count
+      )
+      run.reload
+    end
+
+    it "is true for a running run whose batches are not all planned yet" do
+      expect(run_with(:running)).to be_planning
+    end
+
+    it "is false once planning wrote the total_count" do
+      expect(run_with(:running, total_count: 0)).not_to be_planning
+    end
+
+    it "is false for runs that are not running" do
+      expect(run_with(:enqueued)).not_to be_planning
+      expect(run_with(:stopped)).not_to be_planning
+    end
+
+    it "keeps finalize_if_batches_finished! from settling the run" do
+      run = run_with(:running)
+      DataDrip::BackfillRunBatch.create!(
+        backfill_run: run,
+        status: :completed,
+        batch_size: 1,
+        start_id: 1,
+        finish_id: 1
+      )
+
+      run.finalize_if_batches_finished!
+      expect(run.reload.status).to eq("running")
+
+      run.update!(total_count: 1)
+      run.finalize_if_batches_finished!
+      expect(run.reload.status).to eq("completed")
+    end
+  end
+
   describe "progress and timing metrics" do
     let(:run) do
       run =
