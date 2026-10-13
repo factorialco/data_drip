@@ -147,6 +147,9 @@ module DataDrip
           count += 1
         end
         @backfill_run.running! unless @backfill_run.running?
+        # A run that failed while planning has only part of its batches;
+        # resume planning so the rest are created and the run can settle.
+        DataDrip::Dripper.perform_later(@backfill_run) if @backfill_run.planning?
         flash[
           :notice
         ] = "Re-enqueued #{count} failed #{count == 1 ? "batch" : "batches"}."

@@ -19,7 +19,11 @@ RSpec.describe DataDrip::DripperChild, type: :job do
         options: {}
       )
     run.save!(validate: false)
-    run.update_column(:status, DataDrip::BackfillRun.statuses[:running])
+    # A fully planned run: total_count is written once planning finishes.
+    run.update_columns(
+      status: DataDrip::BackfillRun.statuses[:running],
+      total_count: 4
+    )
     run
   end
 

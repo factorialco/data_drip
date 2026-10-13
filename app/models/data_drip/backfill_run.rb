@@ -52,6 +52,13 @@ module DataDrip
       completed? || failed? || stopped?
     end
 
+    # The dripper writes total_count once it has planned every batch, so a
+    # running run without one is still being planned: more batches may follow
+    # even when every batch created so far has finished.
+    def planning?
+      running? && total_count.nil?
+    end
+
     # Still safe to delete: the run has not started executing yet. Once it is
     # running or terminal we keep it as history and no longer allow deletion.
     def not_yet_run?
@@ -136,10 +143,11 @@ module DataDrip
 
     # Called after each batch reaches a terminal state. Once no batch is still
     # active, the run settles on its own terminal state: failed if any batch
-    # failed, otherwise completed. A run that was stopped is left untouched.
+    # failed, otherwise completed. A run that was stopped is left untouched,
+    # and so is one still being planned: the dripper finalizes it at the end.
     def finalize_if_batches_finished!
       reload
-      return if terminal?
+      return if terminal? || planning?
       return if batches.where(status: ACTIVE_STATUSES).exists?
 
       batches.failed.exists? ? failed! : completed!

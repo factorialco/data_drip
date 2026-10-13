@@ -10,6 +10,7 @@
 - `rake data_drip:css` compiles the engine's Tailwind CSS; CI verifies the checked-in `tailwind.css` is up to date.
 
 ### Changed
+- The dripper plans a run in pages of 10,000 ids instead of two queries per batch, and commits each page so its children start while the rest is planned. A 16M-row scope with `batch_size: 100` went from ~320k planning queries in a single transaction (hours, nothing running until the end) to ~1,600 queries with the first batches enqueued within seconds. Batches and `total_count` stay exact. See "How a run is planned" in the README.
 - Status badges, buttons, and option inputs are now styled with Tailwind utilities (no inline styles) and meet WCAG contrast.
 - All inline `<script>` blocks were replaced with Stimulus controllers (timezone sync, class combobox, dynamic options, enum multi-select, live updates via polling).
 - Failure responses from `POST /backfill_runs` now return HTTP 422 instead of 200.
@@ -18,6 +19,7 @@
 - The unused SSE `GET :stream` endpoint (live updates now poll the existing `updates` endpoint).
 
 ### Fixed
+- A run whose dripper was killed while planning (e.g. by a deploy restarting the workers) no longer sits in `running` with no batches forever. The dripper marked the run `running` before planning and returned early on any run that was not `enqueued`, so the retried job did nothing. It now resumes from the last planned batch, without duplicating batches, and the run does not settle until planning has finished. "Retry failed batches" also resumes planning for a run that failed before it was fully planned.
 - Deleting a `pending` run no longer raises `FrozenError`: the run's `after_commit :enqueue` fired on every commit, including the destroy, and tried to mark the frozen record `enqueued!`. It now runs only on create.
 - A run due now is enqueued with a plain `perform_later` instead of `set(wait_until:)`, so the inline ActiveJob adapter (development, tests) can execute it; only runs scheduled for the future are delayed.
 - Scripts that log a lot no longer die mid-run with `Mysql2::Error: Data too long for column 'output'`. The `data_drip_script_runs.output` column is created as `MEDIUMTEXT` on MySQL (`limit: 1.megabyte`; ignored by PostgreSQL and SQLite), and `rails generate data_drip:widen_script_run_output` migrates existing installs. `ScriptRun#append_output` also caps a run's log at 1MB — every line rewrites the whole blob, so a log that big is slow long before the database complains — and ends it with a truncation notice instead of raising.

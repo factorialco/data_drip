@@ -195,6 +195,28 @@ RSpec.describe DataDrip::BackfillRunsController, type: :controller do
         expect(response).to redirect_to(backfill_run_path(backfill_run))
         expect(flash[:notice]).to eq("Re-enqueued 1 failed batch.")
       end
+
+      it "resumes planning when the run failed before planning finished" do
+        backfill_run.update_columns(
+          status: DataDrip::BackfillRun.statuses[:failed],
+          total_count: nil
+        )
+
+        expect do
+          post :retry_failed_batches, params: { id: backfill_run.id }
+        end.to have_enqueued_job(DataDrip::Dripper).with(backfill_run)
+      end
+
+      it "does not re-plan a fully planned run" do
+        backfill_run.update_columns(
+          status: DataDrip::BackfillRun.statuses[:failed],
+          total_count: 200
+        )
+
+        expect do
+          post :retry_failed_batches, params: { id: backfill_run.id }
+        end.not_to have_enqueued_job(DataDrip::Dripper)
+      end
     end
 
     context "without failed batches" do
