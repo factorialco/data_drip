@@ -1,6 +1,8 @@
 # Example backfill demonstrating a mandatory option (role) next to an
 # optional one (max_age). The run cannot be created until role is filled in.
 class SetEmployeeRole < DataDrip::Backfill
+  description "Sets a role on every employee, optionally capped to an age."
+
   attribute :role, :string, required: true
   attribute :max_age, :integer
 
