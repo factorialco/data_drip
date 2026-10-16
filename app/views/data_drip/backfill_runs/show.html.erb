@@ -14,6 +14,9 @@
     <span data-backfill-run-updates-target="status"><%= status_tag(@backfill_run.status) %></span>
 
     <div class="flex flex-1 justify-end gap-x-2">
+      <%= link_to "Run again",
+          new_backfill_run_path(source_run_id: @backfill_run.id),
+          class: secondary_button_classes %>
       <% if @backfill_run.owned_by?(find_current_backfiller) %>
         <% if @backfill_run.running? %>
           <%= button_to "Stop run",

@@ -14,6 +14,9 @@
     <span data-script-run-updates-target="status"><%= status_tag(@script_run.status) %></span>
 
     <div class="flex flex-1 justify-end gap-x-2">
+      <%= link_to "Run again",
+          new_script_run_path(source_run_id: @script_run.id),
+          class: secondary_button_classes %>
       <% if @script_run.owned_by?(find_current_backfiller) && @script_run.not_yet_run? %>
         <%= button_to "Delete run",
             script_run_path(@script_run),
