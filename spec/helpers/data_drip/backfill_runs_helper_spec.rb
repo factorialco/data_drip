@@ -45,6 +45,37 @@ RSpec.describe DataDrip::BackfillRunsHelper, type: :helper do
       # exactly two inputs share the name: the hidden 0 and the checkbox 1
       expect(occurrences).to eq(2)
     end
+
+    context "pre-filled with a persisted value" do
+      let(:backfill_run) do
+        DataDrip::BackfillRun.new(
+          backfill_class_name: "DryRunnableBackfill",
+          options: {
+            "dry_run" => stored_value
+          }
+        )
+      end
+
+      context "when the stored value is the string \"0\"" do
+        let(:stored_value) { "0" }
+
+        it "renders the checkbox unchecked, not truthy-string-checked" do
+          expect(html).not_to match(
+            %r{<input[^>]*type="checkbox"[^>]*name="backfill_run\[options\]\[dry_run\]"[^>]*checked}
+          )
+        end
+      end
+
+      context "when the stored value is the string \"1\"" do
+        let(:stored_value) { "1" }
+
+        it "renders the checkbox checked" do
+          expect(html).to match(
+            %r{<input[^>]*type="checkbox"[^>]*name="backfill_run\[options\]\[dry_run\]"[^>]*checked}
+          )
+        end
+      end
+    end
   end
 
   describe "#backfill_option_inputs with an enum attribute" do

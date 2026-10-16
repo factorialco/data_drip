@@ -36,7 +36,16 @@ module DataDrip
     end
 
     def new
-      @script_run = DataDrip::ScriptRun.new
+      @source_run = DataDrip::ScriptRun.find_by(id: params[:source_run_id])
+      @script_run =
+        if @source_run
+          DataDrip::ScriptRun.new(
+            script_class_name: @source_run.script_class_name,
+            inputs: copied_inputs(@source_run)
+          )
+        else
+          DataDrip::ScriptRun.new
+        end
       @recent_script_class_names = recent_script_class_names
     end
 
@@ -168,6 +177,19 @@ module DataDrip
         .map(&:first)
         .select { |name| available.include?(name) }
         .first(limit)
+    end
+
+    # Slices the source run's inputs down to the attributes the script class
+    # currently declares, so a script whose inputs changed since the source
+    # run doesn't resurrect a now-unknown attribute (ScriptRun#validate_inputs
+    # would reject it on save).
+    def copied_inputs(source_run)
+      inputs_class = source_run.script_class&.inputs_class
+      return {} unless inputs_class
+
+      (source_run.inputs || {}).stringify_keys.slice(
+        *inputs_class.attribute_types.keys
+      )
     end
   end
 end

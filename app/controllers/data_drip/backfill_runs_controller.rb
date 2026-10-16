@@ -46,7 +46,18 @@ module DataDrip
     end
 
     def new
-      @run = DataDrip::BackfillRun.new
+      @source_run = DataDrip::BackfillRun.find_by(id: params[:source_run_id])
+      @run =
+        if @source_run
+          DataDrip::BackfillRun.new(
+            backfill_class_name: @source_run.backfill_class_name,
+            batch_size: @source_run.batch_size,
+            amount_of_elements: @source_run.amount_of_elements,
+            options: copied_options(@source_run)
+          )
+        else
+          DataDrip::BackfillRun.new
+        end
       @recent_backfill_class_names = recent_backfill_class_names
     end
 
@@ -262,6 +273,19 @@ module DataDrip
         .map(&:first)
         .select { |name| available.include?(name) }
         .first(limit)
+    end
+
+    # Slices the source run's options down to the attributes the backfill
+    # class currently declares, so a class whose options changed since the
+    # source run doesn't resurrect a now-unknown attribute
+    # (BackfillRun#validate_options_are_known would reject it on save).
+    def copied_options(source_run)
+      options_class = source_run.backfill_class&.backfill_options_class
+      return {} unless options_class
+
+      (source_run.options || {}).stringify_keys.slice(
+        *options_class.attribute_types.keys
+      )
     end
   end
 end
