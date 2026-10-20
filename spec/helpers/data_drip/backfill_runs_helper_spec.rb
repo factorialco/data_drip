@@ -150,6 +150,25 @@ RSpec.describe DataDrip::BackfillRunsHelper, type: :helper do
       expect(html).not_to include(%(<option value=""))
       expect(html).to include(%(<option selected="selected" value="growth">growth</option>))
     end
+
+    it "offers a blank choice when a required option's default is not one of its values" do
+      expect(single_choice_html("BackfillRunsHelperSpec::RequiredMistypedDefaultSingleTierBackfill")).to include(
+        %(<option value="" label=" "></option>)
+      )
+    end
+
+    it "offers a blank choice when a run again brings a value that is no longer a choice" do
+      stale_run =
+        DataDrip::BackfillRun.new(
+          backfill_class_name: "BackfillRunsHelperSpec::RequiredDefaultSingleTierBackfill",
+          options: { "tier" => "enterprise" }
+        )
+
+      html = helper.backfill_option_inputs(stale_run)
+
+      expect(html).to include(%(<option value="" label=" "></option>))
+      expect(html).not_to include(%(selected="selected"))
+    end
   end
 
   describe "#backfill_option_inputs with a required attribute" do
@@ -441,6 +460,16 @@ module BackfillRunsHelperSpec
 
   class RequiredDefaultSingleTierBackfill < DataDrip::Backfill
     attribute :tier, :enum, values: %w[starter growth], multiple: false, required: true, default: "growth"
+
+    def scope
+      Employee.all
+    end
+
+    def process_element(_element); end
+  end
+
+  class RequiredMistypedDefaultSingleTierBackfill < DataDrip::Backfill
+    attribute :tier, :enum, values: %w[starter growth], multiple: false, required: true, default: "grwoth"
 
     def scope
       Employee.all
