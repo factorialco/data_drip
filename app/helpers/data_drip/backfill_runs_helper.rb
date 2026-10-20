@@ -346,7 +346,10 @@ module DataDrip
             check_box_tag(
               field_name,
               "1",
-              value,
+              # A persisted value is the raw string ("0"/"1"); casting it
+              # avoids check_box_tag treating "0" as truthy and always
+              # rendering the box checked.
+              ActiveModel::Type::Boolean.new.cast(value),
               class: "size-4 accent-drip-700 dark:accent-drip-400"
             ) +
             label_tag(

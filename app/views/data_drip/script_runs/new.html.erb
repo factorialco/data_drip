@@ -5,7 +5,13 @@
 </nav>
 
 <h1 class="mt-4 text-xl font-semibold tracking-tight text-zinc-900 dark:text-white">New script run</h1>
-<p class="mt-1 text-sm text-pretty text-zinc-500 dark:text-zinc-400">Pick a script, fill in its inputs, and run it now or schedule it for later.</p>
+<p class="mt-1 text-sm text-pretty text-zinc-500 dark:text-zinc-400">
+  <% if @source_run %>
+    Copied from <%= link_to "run ##{@source_run.id}", script_run_path(@source_run), class: "underline" %>. Review the inputs and run it now or schedule it for later.
+  <% else %>
+    Pick a script, fill in its inputs, and run it now or schedule it for later.
+  <% end %>
+</p>
 
 <%= form_with model: @script_run, url: script_runs_path,
     data: {
