@@ -41,14 +41,12 @@ module DataDrip
         schema_options_class.validate do
           raw = public_send(attribute_name)
           if raw.present?
-            submitted = raw.to_s.split(",")
+            # A single-choice value is taken whole, so a value with a comma in it stays valid.
+            submitted = enum_type.multiple? ? raw.to_s.split(",") : [ raw.to_s ]
             allowed =
               enum_type.available_values.map { |value| (value.is_a?(Array) ? value.last : value).to_s }
             unless (submitted - allowed).empty?
               errors.add(attribute_name, "is not included in the list")
-            end
-            if !enum_type.multiple? && submitted.size > 1
-              errors.add(attribute_name, "accepts a single value")
             end
           end
         end
