@@ -375,9 +375,15 @@ module DataDrip
     end
 
     def build_single_enum_input(name, type, value, field_prefix, required: false)
+      pairs = enum_pairs(type)
+      # Without a blank first choice the browser preselects the first value when the current one is
+      # missing or not a choice (a stale "Run again" value, a mistyped default), and `required` only
+      # makes it pick when that first choice is empty.
+      unmatched = pairs.none? { |_label, choice| choice.to_s == value.to_s }
+
       select_tag "#{field_prefix}[#{name}]",
-                 options_for_select(enum_pairs(type), value.to_s),
-                 include_blank: !required,
+                 options_for_select(pairs, value.to_s),
+                 include_blank: !required || unmatched,
                  class: INPUT_CLASSES,
                  required: required
     end

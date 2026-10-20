@@ -390,8 +390,10 @@ DataDrip supports various attribute types that automatically generate appropriat
 
 ```ruby
 attribute :regions, :enum, values: %w[eu us apac]
-attribute :mode, :enum, values: %w[dry_run apply], multiple: false, default: "dry_run"
+attribute :mode, :enum, values: %w[dry_run apply], multiple: false, required: true, default: "dry_run"
 ```
+
+A single-choice option offers a blank choice when it is optional, or when it is required and its current value is not one of the choices (no `default:`, a mistyped one, or a stale value brought by **Run again**), so nobody runs the first value without picking it. An optional one left blank arrives as `""`, and its `default:` does not re-apply.
 
 ### Backfill Structure
 
