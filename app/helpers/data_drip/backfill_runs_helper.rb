@@ -297,12 +297,15 @@ module DataDrip
                     end
                   end
 
+                current = values[name]
+                value = current.nil? ? defaults.public_send(name) : current
+
                 input =
-                  if type.is_a?(DataDrip::Types::Enum)
+                  if type.is_a?(DataDrip::Types::Enum) && type.multiple?
                     build_enum_input(name, type, values, field_prefix)
+                  elsif type.is_a?(DataDrip::Types::Enum)
+                    build_single_enum_input(name, type, value, field_prefix, required: required)
                   else
-                    current = values[name]
-                    value = current.nil? ? defaults.public_send(name) : current
                     build_standard_input(
                       name,
                       type,
@@ -366,10 +369,21 @@ module DataDrip
       end
     end
 
+    # Normalize to [label, value] pairs — supports both ["a","b"] and [["Label","val"],...]
+    def enum_pairs(type)
+      type.available_values.map { |choice| choice.is_a?(Array) ? choice : [ choice, choice ] }
+    end
+
+    def build_single_enum_input(name, type, value, field_prefix, required: false)
+      select_tag "#{field_prefix}[#{name}]",
+                 options_for_select(enum_pairs(type), value.to_s),
+                 include_blank: !required,
+                 class: INPUT_CLASSES,
+                 required: required
+    end
+
     def build_enum_input(name, type, values, field_prefix)
-      raw_choices = type.available_values
-      # Normalize to [label, value] pairs — supports both ["a","b"] and [["Label","val"],...]
-      pairs = raw_choices.map { |choice| choice.is_a?(Array) ? choice : [ choice, choice ] }
+      pairs = enum_pairs(type)
 
       field_name = "#{field_prefix}[#{name}]"
       field_id = "enum_#{name}"

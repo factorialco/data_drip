@@ -110,6 +110,39 @@ RSpec.describe DataDrip::BackfillRunsHelper, type: :helper do
     end
   end
 
+  describe "#backfill_option_inputs with a single-choice enum attribute" do
+    let(:backfill_run) do
+      DataDrip::BackfillRun.new(
+        backfill_class_name: "BackfillRunsHelperSpec::SingleTierBackfill",
+        options: {}
+      )
+    end
+
+    let(:html) { helper.backfill_option_inputs(backfill_run) }
+
+    it "renders a select with one option per value and the default selected" do
+      expect(html).to match(%r{<select[^>]*name="backfill_run\[options\]\[tier\]"})
+      expect(html).to include(%(<option value="starter">starter</option>))
+      expect(html).to include(%(<option selected="selected" value="growth">growth</option>))
+    end
+
+    it "does not render the multi-select checkboxes" do
+      expect(html).not_to include(%(data-controller="enum-select"))
+    end
+
+    it "offers a blank choice only when the option is not required" do
+      expect(html).to include(%(<option value="" label=" "></option>))
+
+      required_run =
+        DataDrip::BackfillRun.new(
+          backfill_class_name: "BackfillRunsHelperSpec::RequiredSingleTierBackfill",
+          options: {}
+        )
+
+      expect(helper.backfill_option_inputs(required_run)).not_to include(%(<option value=""))
+    end
+  end
+
   describe "#backfill_option_inputs with a required attribute" do
     let(:backfill_run) do
       DataDrip::BackfillRun.new(
@@ -369,6 +402,26 @@ module BackfillRunsHelperSpec
 
   class TieredBackfill < DataDrip::Backfill
     attribute :tiers, :enum, values: %w[starter growth]
+
+    def scope
+      Employee.all
+    end
+
+    def process_element(_element); end
+  end
+
+  class SingleTierBackfill < DataDrip::Backfill
+    attribute :tier, :enum, values: %w[starter growth], multiple: false, default: "growth"
+
+    def scope
+      Employee.all
+    end
+
+    def process_element(_element); end
+  end
+
+  class RequiredSingleTierBackfill < DataDrip::Backfill
+    attribute :tier, :enum, values: %w[starter growth], multiple: false, required: true
 
     def scope
       Employee.all
