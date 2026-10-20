@@ -88,6 +88,25 @@ RSpec.describe DataDrip::Backfill, type: :model do
       expect(options).not_to be_valid
       expect(options.errors[:tier]).to include("is not included in the list")
     end
+
+    context "with multiple: false" do
+      let(:options_class) do
+        Class.new(DataDrip::Backfill) do
+          attribute :tier, :enum, values: %w[starter growth], multiple: false
+        end.backfill_options_class
+      end
+
+      it "accepts a single value" do
+        expect(options_class.new(tier: "growth")).to be_valid
+      end
+
+      it "rejects several values" do
+        options = options_class.new(tier: "starter,growth")
+
+        expect(options).not_to be_valid
+        expect(options.errors[:tier]).to include("accepts a single value")
+      end
+    end
   end
 
   describe ".backfill_options_class" do

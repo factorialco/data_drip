@@ -28,7 +28,11 @@ module DataDrip
       raise "Method #{name} already defined in #{self.class.name}" if instance_methods.include?(name.to_sym)
 
       if type == :enum
-        enum_type = DataDrip::Types::Enum.new(values: options.delete(:values) || [])
+        enum_type =
+          DataDrip::Types::Enum.new(
+            values: options.delete(:values) || [],
+            multiple: options.delete(:multiple) != false
+          )
         schema_options_class.attribute(name, enum_type, default: default, **options)
 
         # Reject submitted values (a comma-separated list) that aren't part of
@@ -37,10 +41,14 @@ module DataDrip
         schema_options_class.validate do
           raw = public_send(attribute_name)
           if raw.present?
+            submitted = raw.to_s.split(",")
             allowed =
               enum_type.available_values.map { |value| (value.is_a?(Array) ? value.last : value).to_s }
-            unless (raw.to_s.split(",") - allowed).empty?
+            unless (submitted - allowed).empty?
               errors.add(attribute_name, "is not included in the list")
+            end
+            if !enum_type.multiple? && submitted.size > 1
+              errors.add(attribute_name, "accepts a single value")
             end
           end
         end
