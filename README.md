@@ -137,6 +137,7 @@ The `Dripper` job turns a run into batches by paging through the scope's primary
 - **Exact batches.** Each batch covers the ids of `batch_size` records that matched the scope, so sparse scopes (one company out of a large table) never produce empty batches, and `total_count` is the exact number of planned records.
 - **Restart-safe.** If the worker dies mid-planning (a deploy restarting the queue), the retried job resumes after the last planned batch instead of leaving the run in `running` with no batches. A run is still planning while it is `running` without a `total_count`; it does not settle until planning has finished, even if every batch created so far is done.
 - **`amount_of_elements`** caps the number of planned records, i.e. the first N matching ids.
+- **A limit in the scope** (`Company.limit(1)`) caps the planned records too. With both, the lower one applies.
 
 ## Limiting parallelism
 
