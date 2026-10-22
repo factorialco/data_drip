@@ -203,6 +203,7 @@ RSpec.describe "DataDrip Cell API", type: :request do
         backfiller: backfiller,
         group_uuid: "group-s",
         origin: :remote,
+        cell_id: "cell-a",
         origin_cell_id: "cell-b"
       ).update!(status: :completed, output: "line 1\nline 2")
 
@@ -226,6 +227,7 @@ RSpec.describe "DataDrip Cell API", type: :request do
         backfiller: backfiller,
         group_uuid: "group-big",
         origin: :remote,
+        cell_id: "cell-a",
         origin_cell_id: "cell-b"
       ).update!(status: :completed, output: log)
 
@@ -250,7 +252,8 @@ RSpec.describe "DataDrip Cell API", type: :request do
         start_at: Time.current,
         backfiller: backfiller,
         group_uuid: "group-1",
-        origin: :remote
+        origin: :remote,
+        cell_id: "cell-a"
       )
     end
 
@@ -356,7 +359,8 @@ RSpec.describe "DataDrip Cell API", type: :request do
         start_at: Time.current,
         backfiller: backfiller,
         group_uuid: "group-1",
-        origin: :remote
+        origin: :remote,
+        cell_id: "cell-a"
       )
     end
 
@@ -385,25 +389,6 @@ RSpec.describe "DataDrip Cell API", type: :request do
       expect(run.reload).to be_running
     end
 
-    it "resumes a run whose planning failed, with no batch to retry" do
-      run.update_columns(
-        status: DataDrip::BackfillRun.statuses[:failed],
-        total_count: nil
-      )
-
-      expect do
-        post "/data_drip/cell_api/v1/backfill_runs/#{run.id}/retry_failed_batches",
-             params: {
-               target_cell_id: "cell-a",
-               acting_backfiller_id: backfiller.id
-             }.to_json,
-             headers: headers
-      end.to have_enqueued_job(DataDrip::Dripper).with(run)
-
-      expect(response).to have_http_status(:ok)
-      expect(JSON.parse(response.body)["status"]).to eq("running")
-    end
-
     it "refuses when there is nothing to retry" do
       post "/data_drip/cell_api/v1/backfill_runs/#{run.id}/retry_failed_batches",
            params: {
@@ -424,7 +409,8 @@ RSpec.describe "DataDrip Cell API", type: :request do
         start_at: 1.day.from_now,
         backfiller: backfiller,
         group_uuid: "group-1",
-        origin: :remote
+        origin: :remote,
+        cell_id: "cell-a"
       )
     end
 

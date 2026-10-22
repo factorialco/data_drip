@@ -48,36 +48,19 @@ module DataDrip
       running? && total_count.nil?
     end
 
-    # The dripper failed the run while planning it: total_count was never
-    # written, so part of its ids never made it into a batch, and there may be
-    # no failed batch at all to retry.
-    def planning_failed?
-      failed? && total_count.nil?
-    end
-
-    # Whether a retry has anything to do: failed batches to put back in line,
-    # or planning to resume.
-    def retryable?
-      planning_failed? || batches.failed.exists?
-    end
-
-    # Puts every failed batch back in line and the run back to running, and
-    # resumes planning if that is what failed; returns how many batches were
-    # retried. Each goes through BackfillRunBatch#enqueue, so a
-    # `max_parallel_batches` limit still holds. Shared by the UI and the Cell
-    # API so the two cannot drift.
+    # Puts every failed batch back in line and the run back to running; returns
+    # how many batches were retried. Each goes through BackfillRunBatch#enqueue,
+    # so a `max_parallel_batches` limit still holds. Shared by the UI and the
+    # Cell API so the two cannot drift.
     def retry_failed_batches!
-      resume_planning = planning_failed?
       count = 0
       batches.failed.find_each do |batch|
         batch.update!(status: :pending, error_message: nil)
         batch.enqueue
         count += 1
       end
-      return count unless count.positive? || resume_planning
+      return count if count.zero?
 
-      # The planning error is what is being retried, as a batch's is.
-      update!(error_message: nil) if resume_planning
       running! unless running?
       # A run that failed while planning has only part of its batches;
       # resume planning so the rest are created and the run can settle.
@@ -85,11 +68,12 @@ module DataDrip
       count
     end
 
-    # Still able to be stopped: running, or not started yet. A run stopped
-    # before it started never starts: the Dripper only plans a run that is
-    # still enqueued when its job comes up.
+    # Whether the Stop action applies. A single-cell run, as always, only while
+    # it runs. A multi-cell run also before it starts, since a group stop must
+    # reach legs still waiting in a queue somewhere; it never starts after
+    # that, as the Dripper only plans a run that is still enqueued.
     def stoppable?
-      running? || not_yet_run?
+      running? || (multi_cell_run? && not_yet_run?)
     end
 
     # Still safe to delete: the run has not started executing yet. Once it is

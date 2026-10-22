@@ -1,17 +1,17 @@
 import { Controller } from "@hotwired/stimulus"
 
-// Shows the per-cell checkbox list only when "Choose cells…" is picked.
-// Disabled checkboxes are not submitted, so "All cells" / "Only this cell"
-// submit no target_cell_ids and the server derives the list from cell_scope.
+// Shows the cell list only while "Run this in multiple cells" is ticked.
+// Disabled checkboxes are not submitted, so an unticked form sends no
+// target_cell_ids at all.
 export default class extends Controller {
-  static targets = ["custom", "checkbox"]
+  static targets = ["cells", "checkbox"]
 
   toggle(event) {
-    const custom = event.target.value === "custom"
+    const enabled = event.target.checked
 
-    this.customTarget.hidden = !custom
+    this.cellsTarget.hidden = !enabled
     this.checkboxTargets.forEach((box) => {
-      box.disabled = !custom
+      box.disabled = !enabled
     })
   }
 }

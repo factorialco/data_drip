@@ -18,14 +18,6 @@
   <%= button_to "Retry failed batches",
       retry_failed_batches_backfill_run_path(run),
       method: :post,
-      form: { data: { turbo_confirm: "Re-enqueue #{failed_batches} failed #{failed_batches == 1 ? "batch" : "batches"}#{" and resume planning" if run.planning_failed?}?" } },
-      class: secondary_button_classes(size: :small) %>
-<% elsif run.planning_failed? %>
-  <%# Planning failed before any batch did: nothing to re-enqueue, but the
-      rest of the run was never planned. %>
-  <%= button_to "Resume planning",
-      retry_failed_batches_backfill_run_path(run),
-      method: :post,
-      form: { data: { turbo_confirm: "Resume planning this run where it stopped?" } },
+      form: { data: { turbo_confirm: "Re-enqueue #{failed_batches} failed #{failed_batches == 1 ? "batch" : "batches"}?" } },
       class: secondary_button_classes(size: :small) %>
 <% end %>

@@ -17,36 +17,32 @@ RSpec.describe DataDrip::MultiCellRun do
   end
 
   describe "cell stamping" do
-    it "leaves cell_id nil in single-cell mode" do
+    # A run is stamped with its cell only when it is part of a multi-cell
+    # group (GroupCreator, or the Cell API for a leg). Every other run is saved
+    # exactly as single-cell DataDrip always saved it.
+    it "leaves cell_id nil on a plain run, even in multi-cell mode" do
+      configure_multi_cell!
+
       run = build_run
       run.save!
 
       expect(run.cell_id).to be_nil
       expect(run.origin).to eq("local")
-    end
-
-    it "stamps the current cell on creation in multi-cell mode" do
-      configure_multi_cell!
-
-      run = build_run
-      run.save!
-
-      expect(run.cell_id).to eq("cell-a")
-    end
-
-    it "keeps an explicitly assigned cell_id" do
-      configure_multi_cell!
-
-      run = build_run(cell_id: "somewhere-else")
-      run.save!
-
-      expect(run.cell_id).to eq("somewhere-else")
+      expect(run).not_to be_multi_cell_run
     end
   end
 
   describe "backfiller validation" do
-    it "requires a backfiller id always" do
+    # The same error the required belongs_to gave before multi-cell support.
+    it "requires a backfiller for local runs, as before" do
       run = build_run(backfiller: nil)
+
+      expect(run).not_to be_valid
+      expect(run.errors.full_messages).to eq([ "Backfiller must exist" ])
+    end
+
+    it "requires a backfiller id for remote runs" do
+      run = build_run(backfiller: nil, origin: :remote, cell_id: "cell-a")
 
       expect(run).not_to be_valid
       expect(run.errors[:backfiller_id]).to be_present
@@ -137,12 +133,12 @@ RSpec.describe DataDrip::MultiCellRun do
     it "enforces one run per (group, cell)" do
       configure_multi_cell!
 
-      build_run(group_uuid: "g-1").save!
+      build_run(group_uuid: "g-1", cell_id: "cell-a").save!
 
       # A different amount_of_elements sidesteps the duplicate-active-run
       # validation, proving the DB index itself is the last line of defense.
       expect do
-        build_run(group_uuid: "g-1", amount_of_elements: 1).save!
+        build_run(group_uuid: "g-1", cell_id: "cell-a", amount_of_elements: 1).save!
       end.to raise_error(ActiveRecord::RecordNotUnique)
     end
 

@@ -582,7 +582,7 @@ RSpec.describe DataDrip::BackfillRun, type: :model do
   describe "#retry_failed_batches!" do
     let(:backfiller) { User.create!(name: "Retry User") }
 
-    def build_failed_run(backfill_class_name, failed_batches:, total_count: 20)
+    def build_failed_run(backfill_class_name, failed_batches:)
       run =
         DataDrip::BackfillRun.new(
           backfill_class_name: backfill_class_name,
@@ -592,10 +592,7 @@ RSpec.describe DataDrip::BackfillRun, type: :model do
           options: {}
         )
       run.save!(validate: false)
-      run.update_columns(
-        status: DataDrip::BackfillRun.statuses[:failed],
-        total_count: total_count
-      )
+      run.update_column(:status, DataDrip::BackfillRun.statuses[:failed])
       failed_batches.times do
         batch = run.batches.new(batch_size: 10, start_id: 1, finish_id: 2)
         batch.save!(validate: false)
@@ -629,39 +626,6 @@ RSpec.describe DataDrip::BackfillRun, type: :model do
 
       expect(run.retry_failed_batches!).to eq(0)
       expect(run.reload).to be_failed
-    end
-
-    context "when the run failed while it was being planned" do
-      # The dripper raised before writing total_count, often before any batch
-      # failed: re-enqueueing failed batches alone would leave nothing to do.
-      it "resumes planning even with no failed batch" do
-        run =
-          build_failed_run("BackfillRunSpec::RetryableBackfill", failed_batches: 0, total_count: nil)
-        run.update_column(:error_message, "planning query timed out")
-
-        expect(run).to be_retryable
-        expect { expect(run.retry_failed_batches!).to eq(0) }.to have_enqueued_job(
-          DataDrip::Dripper
-        ).with(run)
-        expect(run.reload).to be_running
-        expect(run.error_message).to be_nil
-      end
-
-      it "retries its failed batches and resumes planning" do
-        run =
-          build_failed_run("BackfillRunSpec::RetryableBackfill", failed_batches: 1, total_count: nil)
-
-        expect { expect(run.retry_failed_batches!).to eq(1) }.to have_enqueued_job(
-          DataDrip::Dripper
-        )
-        expect(run.reload).to be_planning
-      end
-    end
-
-    it "is not retryable once planned with no failed batch" do
-      run = build_failed_run("BackfillRunSpec::RetryableBackfill", failed_batches: 0)
-
-      expect(run).not_to be_retryable
     end
   end
 

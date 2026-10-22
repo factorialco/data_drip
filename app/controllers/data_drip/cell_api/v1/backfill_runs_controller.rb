@@ -21,6 +21,7 @@ module DataDrip
 
           run = DataDrip::BackfillRun.new(create_params)
           run.origin = :remote
+          run.cell_id = current_cell_id
 
           if run.save
             audit("created", run_id: run.id)
@@ -82,11 +83,10 @@ module DataDrip
             return render json: { error: "not_owner" }, status: :forbidden
           end
 
-          unless run.retryable?
+          count = run.retry_failed_batches!
+          if count.zero?
             return render json: { error: "no_failed_batches" }, status: :conflict
           end
-
-          count = run.retry_failed_batches!
 
           audit("retried_batches", run_id: run.id, batches: count)
           render_snapshot(run)

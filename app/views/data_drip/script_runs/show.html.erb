@@ -32,7 +32,7 @@
       <%= @script_run.script_class.description %>
       <span class="text-zinc-400 dark:text-zinc-600" aria-hidden="true">·</span>
     <% end %>
-    Started by <%= @script_run.backfiller_display_name %>
+    Started by <%= @script_run.backfiller_name %>
     <span class="text-zinc-400 dark:text-zinc-600" aria-hidden="true">·</span>
     created <%= relative_time(@script_run.created_at, @user_timezone) %>
   </p>

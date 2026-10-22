@@ -18,17 +18,17 @@ module DataDrip
 
       DataDrip.cross_rails_enum(self, :origin, %i[local remote])
 
-      validates :backfiller_id, presence: true
-      # `remote` runs store the coordinator's backfiller_id verbatim: the id is
-      # meaningful in the coordinator's cell, where the record lives, and is
-      # what that cell's Cell API compares its own runs against. Only `local`
-      # runs require an id that resolves here. See "Requirements" in the
+      # A local run needs a backfiller that exists here: the same check, and the
+      # same message, as the required `belongs_to` this replaces. A `remote` run
+      # stores the coordinator's backfiller_id verbatim: the id is meaningful in
+      # the coordinator's cell, where the record lives, and is what that cell's
+      # Cell API compares its own runs against. See "Requirements" in the
       # README's multi-cell section on why those ids must not be reused across
       # cells.
-      validate :backfiller_must_exist_locally, if: :local?
+      validates :backfiller, presence: { message: :required }, if: :local?
+      validates :backfiller_id, presence: true, if: :remote?
 
-      before_validation :assign_current_cell, on: :create
-      before_create :capture_backfiller_name
+      before_create :capture_backfiller_name, if: :snapshot_backfiller_name?
     end
 
     # backfiller_name is snapshotted onto the row at creation so it survives
@@ -55,6 +55,13 @@ module DataDrip
       @group ||= DataDrip::MultiCellGroup.new(run: self)
     end
 
+    # Whether this run was created to run in several cells, as their
+    # coordinator or as one of the legs it sent out. Every other run takes the
+    # single-cell code paths, unchanged.
+    def multi_cell_run?
+      group_uuid.present?
+    end
+
     # Whether this run is the coordinator of a fan-out to other cells.
     def multi_cell_group?
       local? && group_uuid.present? && dispatches.exists?
@@ -75,25 +82,18 @@ module DataDrip
 
     private
 
-    def assign_current_cell
-      self.cell_id ||= DataDrip.resolved_current_cell_id
+    def snapshot_backfiller_name?
+      true
     end
 
     # Snapshot the backfiller's display name so it survives the record's
     # deletion. Remote runs arrive with the name already filled in by the
     # coordinator — keep it.
     def capture_backfiller_name
-      return if backfiller_name.present?
+      return if self[:backfiller_name].present?
 
       self.backfiller_name =
         backfiller&.send(DataDrip.backfiller_name_attribute.to_sym)
-    end
-
-    def backfiller_must_exist_locally
-      return if backfiller_id.blank?
-      return if backfiller.present?
-
-      errors.add(:backfiller, "must exist")
     end
   end
 end

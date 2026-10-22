@@ -52,35 +52,31 @@ module DataDrip
 
     private
 
-    # Which remote cells the create form selected. The current cell is always
-    # part of the run (it is where the run is being created) and is therefore
-    # never in this list.
-    def selected_remote_cell_ids
-      return [] unless DataDrip.multi_cell?
+    # Saves a new run. Unless the form opted in to several cells, this is the
+    # plain save single-cell DataDrip has always done: no group, no dispatch,
+    # none of the multi-cell code involved.
+    def save_new_run(run)
+      return run.save unless multi_cell_requested?
 
-      case params[:cell_scope]
-      when "local"
-        []
-      when "custom"
-        Array(params[:target_cell_ids]).map(&:to_s)
-      else
-        DataDrip.remote_cell_ids
+      remote_cell_ids = selected_remote_cell_ids
+      if remote_cell_ids.empty?
+        run.validate
+        run.errors.add(:base, "Pick at least one other cell, or untick \"Run this in multiple cells\".")
+        return false
       end
+
+      DataDrip::GroupCreator.call(run: run, remote_cell_ids: remote_cell_ids)
     end
 
-    # The "Where to run" choice a "Run again" form starts from: wherever the
-    # source run ran. A run sent in from another cell, or one that never fanned
-    # out, runs only here; re-running it must not fan it out to every cell.
-    def cell_scope_from(source_run)
-      return {} if source_run.nil? || !DataDrip.multi_cell?
-      return { cell_scope: "local" } unless source_run.local?
+    def multi_cell_requested?
+      DataDrip.multi_cell? && params[:multi_cell] == "1"
+    end
 
-      remote_cells = DataDrip.remote_cell_ids
-      cells = source_run.dispatches.pluck(:cell_id) & remote_cells
-      return { cell_scope: "local" } if cells.empty?
-      return { cell_scope: "all" } if (remote_cells - cells).empty?
-
-      { cell_scope: "custom", target_cell_ids: cells }
+    # The other cells the form picked. The current cell is always part of the
+    # run (it is where the run is being created), and unknown cells are
+    # dropped whatever the form said.
+    def selected_remote_cell_ids
+      Array(params[:target_cell_ids]).map(&:to_s) & DataDrip.remote_cell_ids
     end
 
     # Loads everything the per-cell cards need, entirely from the snapshots

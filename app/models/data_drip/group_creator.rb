@@ -5,8 +5,8 @@ module DataDrip
   # remote cell, each delivered by its own background job. The dispatch payload
   # is frozen here so retries re-send exactly what was originally requested.
   #
-  # In single-cell mode (DataDrip.multi_cell? false) this reduces to a plain
-  # save of the local run.
+  # Only for runs the operator opted in to running in several cells; every
+  # other run is a plain save, exactly as in single-cell DataDrip.
   class GroupCreator
     def self.call(run:, remote_cell_ids: [])
       new(run: run, remote_cell_ids: remote_cell_ids).call
@@ -20,10 +20,11 @@ module DataDrip
     # Returns whether the local run was saved (mirroring run.save so the
     # controllers keep their render-on-validation-error flow).
     def call
-      if DataDrip.multi_cell?
-        @run.group_uuid ||= SecureRandom.uuid
-        @run.origin = :local
-      end
+      raise DataDrip::Error, "multi-cell is not configured" unless DataDrip.multi_cell?
+
+      @run.group_uuid ||= SecureRandom.uuid
+      @run.origin = :local
+      @run.cell_id = DataDrip.resolved_current_cell_id
 
       dispatches = []
 
@@ -35,7 +36,7 @@ module DataDrip
         @run.class.transaction do
           raise ActiveRecord::Rollback unless @run.save
 
-          dispatches = create_dispatches if DataDrip.multi_cell?
+          dispatches = create_dispatches
           true
         end
 
@@ -43,7 +44,7 @@ module DataDrip
 
       # Enqueued outside the transaction: a worker must never see a job whose
       # row is not yet committed.
-      Array(dispatches).each(&:enqueue)
+      dispatches.each(&:enqueue)
       true
     end
 
@@ -76,7 +77,7 @@ module DataDrip
             "origin_cell_id" => DataDrip.resolved_current_cell_id,
             "start_at" => @run.start_at.utc.iso8601,
             "backfiller_id" => @run.backfiller_id,
-            "backfiller_name" => @run.backfiller_name
+            "backfiller_name" => @run.backfiller_display_name
           }
 
           if script?

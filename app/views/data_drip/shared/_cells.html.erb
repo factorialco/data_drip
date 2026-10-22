@@ -124,8 +124,8 @@
                 class: secondary_button_classes(size: :small) %>
           <% end %>
           <% failed_batches = remote_run["failed_batches_count"].to_i %>
-          <% if remote_run["type"] == "backfill" && (failed_batches.positive? || remote_run["planning_failed"]) %>
-            <%= button_to failed_batches.positive? ? "Retry #{failed_batches} failed #{failed_batches == 1 ? "batch" : "batches"}" : "Resume planning",
+          <% if remote_run["type"] == "backfill" && failed_batches.positive? %>
+            <%= button_to "Retry #{failed_batches} failed #{failed_batches == 1 ? "batch" : "batches"}",
                 retry_failed_batches_backfill_run_path(run, cell_id: dispatch.cell_id),
                 method: :post,
                 class: secondary_button_classes(size: :small) %>

@@ -16,17 +16,10 @@ RSpec.describe DataDrip::GroupCreator do
     )
   end
 
-  context "in single-cell mode" do
-    it "saves the run without any group or dispatches" do
-      run = build_run
-
-      expect(described_class.call(run: run, remote_cell_ids: [])).to be(true)
-
-      expect(run).to be_persisted
-      expect(run.group_uuid).to be_nil
-      expect(run.cell_id).to be_nil
-      expect(DataDrip::CellDispatch.count).to eq(0)
-    end
+  # Only reached for a run the operator opted in to running in several cells.
+  it "refuses to run without multi-cell configured" do
+    expect { described_class.call(run: build_run, remote_cell_ids: [ "cell-b" ]) }
+      .to raise_error(DataDrip::Error, /not configured/)
   end
 
   context "in multi-cell mode" do
