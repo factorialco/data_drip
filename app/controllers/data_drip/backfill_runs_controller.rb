@@ -188,14 +188,15 @@ module DataDrip
         return redirect_to backfill_run_path(@backfill_run)
       end
 
-      count = @backfill_run.retry_failed_batches!
-
-      if count.zero?
-        flash[:alert] = "This run has no failed batches to retry."
+      if @backfill_run.retryable?
+        resumed = @backfill_run.planning_failed?
+        count = @backfill_run.retry_failed_batches!
+        flash[:notice] = [
+          ("Re-enqueued #{count} failed #{count == 1 ? "batch" : "batches"}." if count.positive?),
+          ("Resumed planning the rest of the run." if resumed)
+        ].compact.join(" ")
       else
-        flash[
-          :notice
-        ] = "Re-enqueued #{count} failed #{count == 1 ? "batch" : "batches"}."
+        flash[:alert] = "This run has no failed batches to retry."
       end
 
       redirect_to backfill_run_path(@backfill_run)
@@ -389,7 +390,7 @@ module DataDrip
         # The leg is running again. Recording that now is what resumes polling
         # it; its cached "failed" would otherwise stand until the next refresh.
         dispatch.record_run!(response.body)
-        flash[:notice] = "Re-enqueued failed batches in #{cell_id}."
+        flash[:notice] = "Retried the run in #{cell_id}."
       else
         flash[:alert] =
           "Could not retry batches in #{cell_id}: #{cell_api_error_detail(response)}."

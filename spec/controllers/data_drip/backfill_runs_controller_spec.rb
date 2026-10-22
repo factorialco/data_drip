@@ -301,6 +301,35 @@ RSpec.describe DataDrip::BackfillRunsController, type: :controller do
       end
     end
 
+    # The dripper failed the run before any batch did, so there is nothing to
+    # re-enqueue; the rest of the run still has to be planned.
+    context "when planning failed before any batch did" do
+      render_views
+
+      before do
+        backfill_run.update_columns(
+          status: DataDrip::BackfillRun.statuses[:failed],
+          total_count: nil,
+          error_message: "planning query timed out"
+        )
+      end
+
+      it "offers to resume planning" do
+        get :show, params: { id: backfill_run.id }
+
+        expect(response.body).to include("Resume planning")
+      end
+
+      it "resumes planning" do
+        expect do
+          post :retry_failed_batches, params: { id: backfill_run.id }
+        end.to have_enqueued_job(DataDrip::Dripper).with(backfill_run)
+
+        expect(backfill_run.reload).to be_running
+        expect(flash[:notice]).to eq("Resumed planning the rest of the run.")
+      end
+    end
+
     context "without failed batches" do
       it "redirects with an alert" do
         post :retry_failed_batches, params: { id: backfill_run.id }

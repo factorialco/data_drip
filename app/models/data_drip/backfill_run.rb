@@ -48,21 +48,40 @@ module DataDrip
       running? && total_count.nil?
     end
 
-    # Puts every failed batch back in line and the run back to running; returns
-    # how many batches were retried. Each goes through BackfillRunBatch#enqueue,
-    # so a `max_parallel_batches` limit still holds. Shared by the UI and the
-    # Cell API so the two cannot drift.
+    # The dripper failed the run while planning it: total_count was never
+    # written, so part of its ids never made it into a batch, and there may be
+    # no failed batch at all to retry.
+    def planning_failed?
+      failed? && total_count.nil?
+    end
+
+    # Whether a retry has anything to do: failed batches to put back in line,
+    # or planning to resume.
+    def retryable?
+      planning_failed? || batches.failed.exists?
+    end
+
+    # Puts every failed batch back in line and the run back to running, and
+    # resumes planning if that is what failed; returns how many batches were
+    # retried. Each goes through BackfillRunBatch#enqueue, so a
+    # `max_parallel_batches` limit still holds. Shared by the UI and the Cell
+    # API so the two cannot drift.
     def retry_failed_batches!
+      resume_planning = planning_failed?
       count = 0
       batches.failed.find_each do |batch|
         batch.update!(status: :pending, error_message: nil)
         batch.enqueue
         count += 1
       end
-      running! if count.positive? && !running?
+      return count unless count.positive? || resume_planning
+
+      # The planning error is what is being retried, as a batch's is.
+      update!(error_message: nil) if resume_planning
+      running! unless running?
       # A run that failed while planning has only part of its batches;
       # resume planning so the rest are created and the run can settle.
-      DataDrip::Dripper.perform_later(self) if count.positive? && planning?
+      DataDrip::Dripper.perform_later(self) if planning?
       count
     end
 

@@ -123,8 +123,9 @@
                 form: { data: { turbo_confirm: "Stop this run in #{dispatch.cell_id}?" } },
                 class: secondary_button_classes(size: :small) %>
           <% end %>
-          <% if remote_run["type"] == "backfill" && remote_run["failed_batches_count"].to_i.positive? %>
-            <%= button_to "Retry #{remote_run["failed_batches_count"]} failed #{remote_run["failed_batches_count"].to_i == 1 ? "batch" : "batches"}",
+          <% failed_batches = remote_run["failed_batches_count"].to_i %>
+          <% if remote_run["type"] == "backfill" && (failed_batches.positive? || remote_run["planning_failed"]) %>
+            <%= button_to failed_batches.positive? ? "Retry #{failed_batches} failed #{failed_batches == 1 ? "batch" : "batches"}" : "Resume planning",
                 retry_failed_batches_backfill_run_path(run, cell_id: dispatch.cell_id),
                 method: :post,
                 class: secondary_button_classes(size: :small) %>

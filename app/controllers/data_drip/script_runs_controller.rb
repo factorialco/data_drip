@@ -160,6 +160,9 @@ module DataDrip
 
       render json: {
                status: @group.status,
+               # This cell's own run, which the error section describes. The
+               # group's status can be failed because of another cell.
+               run_status: @script_run.status,
                active: @cells_active,
                cells_html: cells_html,
                status_html: helpers.status_tag(@group.status),

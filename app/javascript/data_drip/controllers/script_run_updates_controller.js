@@ -52,7 +52,7 @@ export default class extends Controller {
     if (this.hasStartedAtTarget) this.startedAtTarget.textContent = data.started_at
     if (this.hasFinishedAtTarget) this.finishedAtTarget.textContent = data.finished_at
 
-    if (data.status === "failed") {
+    if (data.run_status === "failed") {
       if (this.hasErrorSectionTarget) this.errorSectionTarget.classList.remove("hidden")
       if (this.hasErrorMessageTarget) this.errorMessageTarget.textContent = data.error_message
       if (this.hasErrorBacktraceTarget) this.errorBacktraceTarget.textContent = data.error_backtrace

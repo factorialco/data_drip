@@ -22,6 +22,7 @@
 - The unused SSE `GET :stream` endpoint (live updates now poll the existing `updates` endpoint).
 
 ### Fixed
+- A run whose planning failed before any batch did can be retried: **Resume planning** (the retry action, from the UI or the Cell API) picks the planning up where it stopped. Previously it reported "no failed batches to retry" and the run could not be recovered.
 - A run whose dripper was killed while planning (e.g. by a deploy restarting the workers) no longer sits in `running` with no batches forever. The dripper marked the run `running` before planning and returned early on any run that was not `enqueued`, so the retried job did nothing. It now resumes from the last planned batch, without duplicating batches, and the run does not settle until planning has finished. "Retry failed batches" also resumes planning for a run that failed before it was fully planned.
 - Deleting a `pending` run no longer raises `FrozenError`: the run's `after_commit :enqueue` fired on every commit, including the destroy, and tried to mark the frozen record `enqueued!`. It now runs only on create.
 - A run due now is enqueued with a plain `perform_later` instead of `set(wait_until:)`, so the inline ActiveJob adapter (development, tests) can execute it; only runs scheduled for the future are delayed.

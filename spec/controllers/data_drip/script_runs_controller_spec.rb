@@ -233,6 +233,28 @@ RSpec.describe DataDrip::ScriptRunsController, type: :controller do
       expect(json["output"]).to include("progress line")
       expect(json["error_message"]).to eq("kapow")
       expect(json["error_backtrace"]).to eq("line1\nline2")
+      expect(json["run_status"]).to eq("failed")
+    end
+
+    # The page's error section describes this cell's run. The group's status
+    # can read failed because another cell failed while this run completed.
+    it "tells this cell's run status apart from the group's" do
+      configure_multi_cell!
+      script_run = create_script_run(group_uuid: "g-1")
+      script_run.update!(status: :completed)
+      DataDrip::CellDispatch.create!(
+        group_uuid: "g-1",
+        cell_id: "cell-b",
+        runnable_type: :script,
+        status: :failed,
+        error_message: "rejected"
+      )
+
+      get :updates, params: { id: script_run.id }
+
+      json = JSON.parse(response.body)
+      expect(json["status"]).to eq("failed")
+      expect(json["run_status"]).to eq("completed")
     end
   end
 
