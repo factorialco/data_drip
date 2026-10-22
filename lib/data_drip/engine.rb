@@ -5,6 +5,7 @@ require "turbo-rails"
 require "stimulus-rails"
 require_relative "concerns/paginatable"
 require_relative "concerns/backfiller_context"
+require_relative "concerns/multi_cell_context"
 
 module DataDrip
   class Engine < ::Rails::Engine

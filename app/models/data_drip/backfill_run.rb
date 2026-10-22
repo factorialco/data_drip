@@ -7,10 +7,11 @@ module DataDrip
     # Statuses in which a run (or batch) still has work outstanding.
     ACTIVE_STATUSES = %i[pending enqueued running].freeze
 
+    include DataDrip::MultiCellRun
+
     has_many :batches,
              class_name: "DataDrip::BackfillRunBatch",
              dependent: :destroy
-    belongs_to :backfiller, class_name: DataDrip.backfiller_class
 
     validates :backfill_class_name, presence: true
     validate :backfill_class_exists
@@ -27,7 +28,6 @@ module DataDrip
               },
               allow_nil: true
 
-    before_create :capture_backfiller_name
     after_commit :enqueue, on: :create
     after_commit :run_hooks
 
@@ -36,17 +36,6 @@ module DataDrip
       :status,
       %i[pending enqueued running completed failed stopped]
     )
-
-    DELETED_BACKFILLER_LABEL = "Deleted user"
-
-    # backfiller_name is snapshotted onto the row at creation so it survives the
-    # backfiller being deleted. Use this for display: it falls back to the live
-    # association (for rows created before the column existed), then a placeholder.
-    def backfiller_display_name
-      backfiller_name.presence ||
-        backfiller&.send(DataDrip.backfiller_name_attribute.to_sym) ||
-        DELETED_BACKFILLER_LABEL
-    end
 
     def terminal?
       completed? || failed? || stopped?
@@ -64,6 +53,44 @@ module DataDrip
     # no failed batch at all to retry.
     def planning_failed?
       failed? && total_count.nil?
+    end
+
+    # Whether a retry has anything to do: failed batches to put back in line,
+    # or planning to resume.
+    def retryable?
+      planning_failed? || batches.failed.exists?
+    end
+
+    # Puts every failed batch back in line and the run back to running, and
+    # resumes planning if that is what failed; returns how many batches were
+    # retried. Each goes through BackfillRunBatch#enqueue, so a
+    # `max_parallel_batches` limit still holds. Shared by the UI and the Cell
+    # API so the two cannot drift.
+    def retry_failed_batches!
+      resume_planning = planning_failed?
+      count = 0
+      batches.failed.find_each do |batch|
+        batch.update!(status: :pending, error_message: nil)
+        batch.enqueue
+        count += 1
+      end
+      return count unless count.positive? || resume_planning
+
+      # The planning error is what is being retried, as a batch's is.
+      update!(error_message: nil) if resume_planning
+      running! unless running?
+      # A run that failed while planning has only part of its batches;
+      # resume planning so the rest are created and the run can settle.
+      DataDrip::Dripper.perform_later(self) if planning?
+      count
+    end
+
+    # Whether the Stop action applies. A single-cell run, as always, only while
+    # it runs. A multi-cell run also before it starts, since a group stop must
+    # reach legs still waiting in a queue somewhere; it never starts after
+    # that, as the Dripper only plans a run that is still enqueued.
+    def stoppable?
+      running? || (multi_cell_run? && not_yet_run?)
     end
 
     # Still safe to delete: the run has not started executing yet. Once it is
@@ -161,11 +188,6 @@ module DataDrip
     end
 
     private
-
-    # Snapshot the backfiller's display name so it survives the record's deletion.
-    def capture_backfiller_name
-      self.backfiller_name = backfiller&.send(DataDrip.backfiller_name_attribute.to_sym)
-    end
 
     def run_hooks
       return unless status_previously_changed?
