@@ -59,6 +59,13 @@ module DataDrip
       running? && total_count.nil?
     end
 
+    # The dripper failed the run while planning it: total_count was never
+    # written, so part of its ids never made it into a batch, and there may be
+    # no failed batch at all to retry.
+    def planning_failed?
+      failed? && total_count.nil?
+    end
+
     # Still safe to delete: the run has not started executing yet. Once it is
     # running or terminal we keep it as history and no longer allow deletion.
     def not_yet_run?
