@@ -121,6 +121,15 @@ RSpec.describe DataDrip::MultiCellGroup do
       expect(described_class.new(run: run)).not_to be_active
     end
 
+    it "is false for a dispatch cancelled by a group stop, which reads as stopped" do
+      run = build_run(status: :stopped)
+      dispatch(cell_id: "cell-b", status: :cancelled, remote_run_id: nil)
+
+      group = described_class.new(run: run)
+      expect(group).not_to be_active
+      expect(group.status).to eq("stopped")
+    end
+
     it "is false once the local run and every leg are terminal" do
       run = build_run(status: :completed)
       dispatch(cell_id: "cell-b", last_status: "stopped")
@@ -149,6 +158,36 @@ RSpec.describe DataDrip::MultiCellGroup do
     it "never asks a cell whose run already reached a terminal status" do
       run = build_run(status: :completed)
       dispatch(cell_id: "cell-b", last_status: "completed", last_synced_at: 1.hour.ago)
+      stubbed = stub_request(:get, %r{cell-b\.example\.com})
+
+      described_class.new(run: run).refresh!
+
+      expect(stubbed).not_to have_been_requested
+    end
+
+    # Retrying its failed batches in its own cell brings a failed or stopped
+    # backfill back to running, and only asking that cell can tell.
+    %w[failed stopped].each do |status|
+      it "asks again about a #{status} backfill leg" do
+        run = build_run(status: :completed)
+        leg = dispatch(cell_id: "cell-b", last_status: status, last_synced_at: 1.hour.ago)
+        stub_request(:get, cell_api_url("cell-b", "/v1/groups/g-1?target_cell_id=cell-b"))
+          .to_return(status: 200, body: { runs: [ { id: 77, status: "running" } ] }.to_json)
+
+        described_class.new(run: run).refresh!
+
+        expect(leg.reload.last_status).to eq("running")
+      end
+    end
+
+    it "never asks again about a failed script leg, which nothing can revive" do
+      run = build_run(status: :completed)
+      dispatch(
+        cell_id: "cell-b",
+        runnable_type: :script,
+        last_status: "failed",
+        last_synced_at: 1.hour.ago
+      )
       stubbed = stub_request(:get, %r{cell-b\.example\.com})
 
       described_class.new(run: run).refresh!

@@ -79,6 +79,13 @@ module DataDrip
       count
     end
 
+    # Still able to be stopped: running, or not started yet. A run stopped
+    # before it started never starts: the Dripper only plans a run that is
+    # still enqueued when its job comes up.
+    def stoppable?
+      running? || not_yet_run?
+    end
+
     # Still safe to delete: the run has not started executing yet. Once it is
     # running or terminal we keep it as history and no longer allow deletion.
     def not_yet_run?

@@ -61,6 +61,7 @@ module DataDrip
           DataDrip::BackfillRun.new
         end
       @recent_backfill_class_names = recent_backfill_class_names
+      @cell_scope_defaults = cell_scope_from(@source_run)
     end
 
     def create
@@ -157,11 +158,11 @@ module DataDrip
         flash[:alert] = "You can only stop backfill runs you created."
       elsif params[:cell_id].present?
         stop_remote_leg(@backfill_run, params[:cell_id])
-      elsif @backfill_run.running? || @backfill_run.group.remote_legs_running?
+      elsif @backfill_run.stoppable? || @backfill_run.group.remote_legs_stoppable?
         # The group is stopped as a whole: this cell's run may already have
         # finished, or not started yet, while other cells are still working.
         local_note =
-          if @backfill_run.running?
+          if @backfill_run.stoppable?
             @backfill_run.stopped!
             "Backfill run has been stopped."
           end
@@ -310,19 +311,43 @@ module DataDrip
 
     private
 
+    # Stops every leg, delivered or not. Undelivered dispatches are cancelled
+    # first, so they are never (re)delivered and one already in flight is
+    # stopped by the dispatcher when it lands. Reading the legs back afterwards
+    # catches any delivery that completed in between. A cancelled leg may still
+    # have landed (a read timeout after the cell committed the run), so the
+    # cell is asked what it holds for the group, as delete does.
     def stop_remote_legs(run)
       actor_id = acting_backfiller_id
-      fanout_to_dispatched(run.dispatches) do |dispatch|
-        response =
-          cell_client.stop_backfill_run(
-            cell_id: dispatch.cell_id,
-            run_id: dispatch.remote_run_id,
-            acting_backfiller_id: actor_id
-          )
-        # A cell whose leg already finished (409) has nothing left to stop.
-        ok = response.success? || response.status == 409
-        [ ok, ok ? nil : cell_api_error_detail(response) ]
+      run.dispatches
+        .where(status: DataDrip::CellDispatch::UNDELIVERED_STATUSES)
+        .update_all(status: DataDrip::CellDispatch.statuses[:cancelled], updated_at: Time.current)
+      legs = run.dispatches.to_a
+      stopped = Concurrent::Map.new
+
+      result =
+        fanout_to(legs) do |dispatch|
+          remote_run_id = dispatch.remote_run_id.presence || landed_run_id(run, dispatch)
+          next [ true, nil ] if remote_run_id.nil?
+
+          response =
+            cell_client.stop_backfill_run(
+              cell_id: dispatch.cell_id,
+              run_id: remote_run_id,
+              acting_backfiller_id: actor_id
+            )
+          stopped[dispatch.cell_id] = response.body if response.success?
+          # A cell whose leg already finished (409) has nothing left to stop.
+          ok = response.success? || response.status == 409
+          [ ok, ok ? nil : cell_api_error_detail(response) ]
+        end
+
+      # Recorded here rather than in the fan-out: its blocks run on pool threads.
+      legs.select(&:dispatched?).each do |dispatch|
+        snapshot = stopped[dispatch.cell_id]
+        dispatch.record_run!(snapshot) if snapshot
       end
+      result
     end
 
     def stop_remote_leg(run, cell_id)
@@ -339,6 +364,7 @@ module DataDrip
           acting_backfiller_id: acting_backfiller_id
         )
       if response.success?
+        dispatch.record_run!(response.body)
         flash[:notice] = "Run stopped in #{cell_id}."
       else
         flash[:alert] =
@@ -362,6 +388,9 @@ module DataDrip
           acting_backfiller_id: acting_backfiller_id
         )
       if response.success?
+        # The leg is running again. Recording that now is what resumes polling
+        # it; its cached "failed" would otherwise stand until the next refresh.
+        dispatch.record_run!(response.body)
         flash[:notice] = "Re-enqueued failed batches in #{cell_id}."
       else
         flash[:alert] =

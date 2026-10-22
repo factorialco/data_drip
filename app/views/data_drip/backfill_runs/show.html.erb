@@ -19,13 +19,14 @@
           new_backfill_run_path(source_run_id: @backfill_run.id),
           class: secondary_button_classes %>
       <% if @backfill_run.manageable_by?(find_current_backfiller) %>
-        <% if @backfill_run.running? || @group.remote_legs_running? %>
+        <% if @backfill_run.stoppable? || @group.remote_legs_stoppable? %>
           <%= button_to "Stop run",
               stop_backfill_run_path(@backfill_run),
               method: :post,
               form: { data: { turbo_confirm: "Stop this backfill run? Batches that are already running will finish." } },
               class: danger_button_classes %>
-        <% elsif @backfill_run.not_yet_run? %>
+        <% end %>
+        <% if @backfill_run.not_yet_run? %>
           <%= button_to "Delete run",
               backfill_run_path(@backfill_run),
               method: :delete,

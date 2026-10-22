@@ -71,6 +71,56 @@ RSpec.describe DataDrip::CellDispatcherJob do
     end
   end
 
+  # The group was stopped while this delivery was in flight. The stop could
+  # not see a leg that did not exist yet, so the job stops the leg it just
+  # created, which keeps it in that cell's history and on the coordinator's page.
+  context "when the dispatch is cancelled while its delivery is in flight" do
+    before do
+      stub_request(:post, create_url).to_return do
+        DataDrip::CellDispatch.where(id: dispatch.id).update_all(
+          status: DataDrip::CellDispatch.statuses[:cancelled]
+        )
+        { status: 201, body: { id: 4242, status: "enqueued" }.to_json }
+      end
+    end
+
+    it "stops the leg it just created and records it" do
+      stop =
+        stub_request(:post, cell_api_url("cell-b", "/v1/backfill_runs/4242/stop"))
+          .with { |request| JSON.parse(request.body)["acting_backfiller_id"] == 1 }
+          .to_return(status: 200, body: { id: 4242, status: "stopped" }.to_json)
+
+      described_class.perform_now(dispatch)
+
+      expect(stop).to have_been_requested
+      expect(dispatch.reload).to be_dispatched
+      expect(dispatch.remote_run_id).to eq(4242)
+      expect(dispatch.last_status).to eq("stopped")
+    end
+  end
+
+  it "keeps a dispatch cancelled when its delivery then fails" do
+    stub_request(:post, create_url).to_return do
+      DataDrip::CellDispatch.where(id: dispatch.id).update_all(
+        status: DataDrip::CellDispatch.statuses[:cancelled]
+      )
+      { status: 422, body: { errors: [ "nope" ] }.to_json }
+    end
+
+    described_class.perform_now(dispatch)
+
+    expect(dispatch.reload).to be_cancelled
+  end
+
+  it "never delivers a cancelled dispatch" do
+    dispatch.update!(status: :cancelled)
+    stubbed = stub_request(:post, create_url)
+
+    described_class.perform_now(dispatch)
+
+    expect(stubbed).not_to have_been_requested
+  end
+
   it "treats a 200 (idempotent redelivery) as dispatched" do
     stub_request(:post, create_url).to_return(
       status: 200,

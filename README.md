@@ -544,7 +544,8 @@ Execution stays strictly cell-local (each cell's own workers process each cell's
 - The coordinator's show page renders one card per cell with that cell's own status, progress, errors, and (for scripts) the tail of its log. Cells that may still change are polled concurrently against one shared deadline; a cell whose run reached a terminal state is served from the snapshot cached on its dispatch record, so a finished group costs nothing to view and stays readable after those cells are gone.
 - A run's status in the lists and page headers is the **group's** status — the worst of the coordinator's own run and every leg. A run that completed here is not reported as completed while another cell is still working, or failed.
 - A cell that can't be reached shows as "unreachable" without blocking anything; a dispatch the target cell rejected (e.g. the class isn't deployed there yet) shows the error with a **Retry dispatch** button.
-- Stopping or deleting a coordinator run fans the action out to the other cells, which re-apply the usual rules (owner-only, runs that already executed are kept as history). A delete is refused unless every cell acknowledges: the coordinator's dispatch records are the only place a remote leg can be seen or stopped from, so they are never discarded while a leg is still scheduled somewhere.
+- Stopping or deleting a coordinator run fans the action out to the other cells, which re-apply the usual rules (owner-only, runs that already executed are kept as history). A stop also reaches legs that have not started yet, and dispatches not delivered yet are cancelled; one that lands anyway is stopped as it arrives.
+- **Run again** starts from the cells the source run ran in. A run that came in from another cell runs only in this cell unless you choose otherwise. A delete is refused unless every cell acknowledges: the coordinator's dispatch records are the only place a remote leg can be seen or stopped from, so they are never discarded while a leg is still scheduled somewhere.
 - In the cell *executing* a fanned-in run, any operator may stop or delete it. Backfiller ids are cell-scoped, so the coordinator's author matches nobody there and an ownership check would leave the run unstoppable from the one cell that can actually stop it.
 
 ### Requirements
@@ -618,8 +619,10 @@ never blocks on another cell, and never writes during a `GET` (hosts commonly ro
 replica where writing is forbidden). A status is therefore at most
 `cell_status_refresh_interval` old.
 
-A leg whose run reached a terminal state is never polled again: there is nothing left to learn,
-and a finished group stays readable long after those cells are gone. A cell that stops answering
+A leg whose run completed (or was deleted in its own cell) is never polled again: there is
+nothing left to learn, and a finished group stays readable long after those cells are gone. A
+failed or stopped backfill leg is still asked about when someone opens the group's page, because
+retrying its failed batches, from either cell, brings it back to running. A cell that stops answering
 keeps rendering what it last reported, flagged as stale, rather than blanking out.
 
 When several people watch the same run, one request claims the refresh per interval through
