@@ -21,8 +21,32 @@ RSpec.describe DataDrip::BackfillRunsController, type: :controller do
   end
 
   describe "POST #create with cell targeting" do
-    it "fans out to every remote cell by default" do
+    # The default must be the single-cell run DataDrip has always created, so
+    # nothing reaches another cell unless the operator asks for it.
+    it "runs only in this cell, as a plain run, unless asked otherwise" do
       post :create, params: { backfill_run: valid_attributes }
+
+      run = DataDrip::BackfillRun.last!
+      expect(run.group_uuid).to be_nil
+      expect(run.cell_id).to be_nil
+      expect(run).not_to be_multi_cell_run
+      expect(DataDrip::CellDispatch.count).to eq(0)
+    end
+
+    it "ignores cells picked while the box is unticked" do
+      post :create, params: { backfill_run: valid_attributes, target_cell_ids: %w[cell-b] }
+
+      expect(DataDrip::BackfillRun.last!.group_uuid).to be_nil
+      expect(DataDrip::CellDispatch.count).to eq(0)
+    end
+
+    it "fans out to the picked cells when asked to run in several" do
+      post :create,
+           params: {
+             backfill_run: valid_attributes,
+             multi_cell: "1",
+             target_cell_ids: %w[cell-b cell-c]
+           }
 
       run = DataDrip::BackfillRun.last!
       expect(run.group_uuid).to be_present
@@ -30,34 +54,51 @@ RSpec.describe DataDrip::BackfillRunsController, type: :controller do
       expect(run.dispatches.map(&:cell_id)).to eq(%w[cell-b cell-c])
     end
 
-    it "creates no dispatches for 'only this cell'" do
-      post :create,
-           params: { backfill_run: valid_attributes, cell_scope: "local" }
-
-      run = DataDrip::BackfillRun.last!
-      expect(run.dispatches).to be_empty
-    end
-
-    it "honors a custom subset of cells" do
+    it "honors a subset of cells" do
       post :create,
            params: {
              backfill_run: valid_attributes,
-             cell_scope: "custom",
+             multi_cell: "1",
              target_cell_ids: %w[cell-c]
            }
 
-      run = DataDrip::BackfillRun.last!
-      expect(run.dispatches.map(&:cell_id)).to eq(%w[cell-c])
+      expect(DataDrip::BackfillRun.last!.dispatches.map(&:cell_id)).to eq(%w[cell-c])
+    end
+
+    it "refuses to run in several cells without another cell picked" do
+      post :create, params: { backfill_run: valid_attributes, multi_cell: "1" }
+
+      expect(response).to have_http_status(:unprocessable_entity)
+      expect(DataDrip::BackfillRun.count).to eq(0)
+    end
+
+    it "never dispatches when multi-cell is not configured, whatever the form says" do
+      reset_multi_cell_config!
+
+      post :create,
+           params: {
+             backfill_run: valid_attributes,
+             multi_cell: "1",
+             target_cell_ids: %w[cell-b]
+           }
+
+      expect(DataDrip::BackfillRun.last!.group_uuid).to be_nil
+      expect(DataDrip::CellDispatch.count).to eq(0)
     end
   end
 
   describe "GET #new" do
     render_views
 
-    it "renders the cell targeting section in multi-cell mode" do
+    def multi_cell_box
+      Nokogiri::HTML(response.body).at_css("input[type=checkbox][name=multi_cell]")
+    end
+
+    it "offers running in several cells, unticked, in multi-cell mode" do
       get :new
 
-      expect(response.body).to include("Where to run")
+      expect(multi_cell_box).to be_present
+      expect(multi_cell_box["checked"]).to be_nil
       expect(response.body).to include("cell-b")
       expect(response.body).to include("cell-c")
     end
@@ -67,68 +108,77 @@ RSpec.describe DataDrip::BackfillRunsController, type: :controller do
 
       get :new
 
-      expect(response.body).not_to include("Where to run")
+      expect(multi_cell_box).to be_nil
     end
 
-    context "with a source run to run again" do
-      def checked_scope
-        Nokogiri::HTML(response.body).at_css("input[name=cell_scope][checked]")&.[]("value")
-      end
-
-      def checked_cells
-        Nokogiri::HTML(response.body)
-          .css("input[name='target_cell_ids[]'][checked]")
-          .map { |input| input["value"] }
-      end
-
-      let(:source) do
+    it "leaves the box unticked when running a multi-cell run again" do
+      source =
         DataDrip::BackfillRun.create!(
-          valid_attributes.merge(backfiller: backfiller, group_uuid: "g-source")
+          valid_attributes.merge(backfiller: backfiller, group_uuid: "g-source", cell_id: "cell-a")
         )
-      end
+      DataDrip::CellDispatch.create!(
+        group_uuid: "g-source",
+        cell_id: "cell-b",
+        runnable_type: :backfill,
+        status: :dispatched
+      )
 
-      def dispatch_to(cell_id)
-        DataDrip::CellDispatch.create!(
-          group_uuid: "g-source",
-          cell_id: cell_id,
-          runnable_type: :backfill,
-          status: :dispatched
-        )
-      end
+      get :new, params: { source_run_id: source.id }
 
-      it "runs it only here when it never fanned out" do
-        get :new, params: { source_run_id: source.id }
+      expect(multi_cell_box["checked"]).to be_nil
+    end
+  end
 
-        expect(checked_scope).to eq("local")
-      end
+  # Multi-cell mode is configured here, but these runs were not opted in to
+  # several cells: they must behave exactly as single-cell runs always have.
+  describe "a single-cell run while multi-cell is configured" do
+    let!(:run) do
+      DataDrip::BackfillRun.create!(valid_attributes.merge(backfiller: backfiller))
+    end
 
-      it "runs it in every cell when it ran in every cell" do
-        dispatch_to("cell-b")
-        dispatch_to("cell-c")
+    it "cannot be stopped before it starts, as before" do
+      expect(run.reload).to be_enqueued
 
-        get :new, params: { source_run_id: source.id }
+      post :stop, params: { id: run.id }
 
-        expect(checked_scope).to eq("all")
-      end
+      expect(run.reload).to be_enqueued
+      expect(flash[:alert]).to eq("Backfill run is not currently running.")
+    end
 
-      it "runs it in the same subset of cells it ran in" do
-        dispatch_to("cell-c")
+    it "stops while running, with no cross-cell request" do
+      run.running!
 
-        get :new, params: { source_run_id: source.id }
+      post :stop, params: { id: run.id }
 
-        expect(checked_scope).to eq("custom")
-        expect(checked_cells).to eq(%w[cell-c])
-      end
+      expect(run.reload).to be_stopped
+      expect(flash[:notice]).to eq("Backfill run has been stopped.")
+      expect(a_request(:any, /example\.com/)).not_to have_been_made
+    end
 
-      # Re-running a leg that another cell sent here must not make this cell
-      # fan it back out to every cell, the original coordinator included.
-      it "runs a fanned-in run only here" do
-        source.update!(origin: :remote, origin_cell_id: "cell-b")
+    it "lets anyone retry its failed batches, as before" do
+      other = User.create!(name: "Someone")
+      allow(controller).to receive(:find_current_backfiller).and_return(other)
+      DataDrip::BackfillRunBatch.create!(
+        backfill_run: run,
+        status: :failed,
+        batch_size: 100,
+        start_id: 1,
+        finish_id: 100
+      )
+      run.update!(status: :failed, total_count: 100)
 
-        get :new, params: { source_run_id: source.id }
+      post :retry_failed_batches, params: { id: run.id }
 
-        expect(checked_scope).to eq("local")
-      end
+      expect(flash[:notice]).to eq("Re-enqueued 1 failed batch.")
+      expect(run.reload).to be_running
+    end
+
+    it "is deleted with no cross-cell request" do
+      delete :destroy, params: { id: run.id }
+
+      expect(DataDrip::BackfillRun.exists?(run.id)).to be(false)
+      expect(flash[:notice]).to eq("Backfill run has been deleted.")
+      expect(a_request(:any, /example\.com/)).not_to have_been_made
     end
   end
 

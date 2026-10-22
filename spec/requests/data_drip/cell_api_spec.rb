@@ -203,6 +203,7 @@ RSpec.describe "DataDrip Cell API", type: :request do
         backfiller: backfiller,
         group_uuid: "group-s",
         origin: :remote,
+        cell_id: "cell-a",
         origin_cell_id: "cell-b"
       ).update!(status: :completed, output: "line 1\nline 2")
 
@@ -226,6 +227,7 @@ RSpec.describe "DataDrip Cell API", type: :request do
         backfiller: backfiller,
         group_uuid: "group-big",
         origin: :remote,
+        cell_id: "cell-a",
         origin_cell_id: "cell-b"
       ).update!(status: :completed, output: log)
 
@@ -250,7 +252,8 @@ RSpec.describe "DataDrip Cell API", type: :request do
         start_at: Time.current,
         backfiller: backfiller,
         group_uuid: "group-1",
-        origin: :remote
+        origin: :remote,
+        cell_id: "cell-a"
       )
     end
 
@@ -356,7 +359,8 @@ RSpec.describe "DataDrip Cell API", type: :request do
         start_at: Time.current,
         backfiller: backfiller,
         group_uuid: "group-1",
-        origin: :remote
+        origin: :remote,
+        cell_id: "cell-a"
       )
     end
 
@@ -424,7 +428,8 @@ RSpec.describe "DataDrip Cell API", type: :request do
         start_at: 1.day.from_now,
         backfiller: backfiller,
         group_uuid: "group-1",
-        origin: :remote
+        origin: :remote,
+        cell_id: "cell-a"
       )
     end
 

@@ -61,7 +61,6 @@ module DataDrip
           DataDrip::BackfillRun.new
         end
       @recent_backfill_class_names = recent_backfill_class_names
-      @cell_scope_defaults = cell_scope_from(@source_run)
     end
 
     def create
@@ -84,10 +83,7 @@ module DataDrip
           backfill_run_params.merge(backfiller: find_current_backfiller)
         )
 
-      if DataDrip::GroupCreator.call(
-        run: @run,
-        remote_cell_ids: selected_remote_cell_ids
-      )
+      if save_new_run(@run)
         notice =
           if @run.start_at <= 1.minute.from_now
             "Backfill job for #{@run.backfill_class_name} has been enqueued and will start shortly."
@@ -133,22 +129,22 @@ module DataDrip
         return redirect_to backfill_runs_path(tab: params[:tab] || "my_runs")
       end
 
-      fanout = delete_remote_legs(@backfill_run)
+      fanout = delete_remote_legs(@backfill_run) if @backfill_run.multi_cell_run?
 
       # A leg we could not reach is still scheduled to run in its own cell.
       # Destroying the coordinator's run and its dispatch records would erase
       # the only place that leg is visible or stoppable from, so the deletion is
       # refused until every cell has answered.
-      unless fanout.all_ok?
+      if fanout && !fanout.all_ok?
         flash[:alert] =
           "Backfill run not deleted — its remote legs are still scheduled. #{fanout.message}"
         return redirect_to backfill_run_path(@backfill_run)
       end
 
-      @backfill_run.dispatches.destroy_all
+      @backfill_run.dispatches.destroy_all if @backfill_run.multi_cell_run?
       @backfill_run.destroy!
       flash[:notice] =
-        [ "Backfill run has been deleted.", fanout.message ].compact.join(" ")
+        [ "Backfill run has been deleted.", fanout&.message ].compact.join(" ")
       redirect_to backfill_runs_path(tab: params[:tab] || "my_runs")
     end
 
@@ -166,8 +162,8 @@ module DataDrip
             @backfill_run.stopped!
             "Backfill run has been stopped."
           end
-        flash[:notice] =
-          [ local_note, stop_remote_legs(@backfill_run).message ].compact.join(" ")
+        remote_note = stop_remote_legs(@backfill_run).message if @backfill_run.multi_cell_run?
+        flash[:notice] = [ local_note, remote_note ].compact.join(" ")
       else
         flash[:alert] = "Backfill run is not currently running."
       end
@@ -178,13 +174,14 @@ module DataDrip
     def retry_failed_batches
       @backfill_run = DataDrip::BackfillRun.find(params[:id])
 
-      unless @backfill_run.manageable_by?(find_current_backfiller)
-        flash[:alert] = "You can only retry batches of runs you created."
-        return redirect_to backfill_run_path(@backfill_run)
-      end
-
+      # A remote leg is retried in its own cell, on behalf of the operator
+      # acting here; that cell's Cell API applies its ownership rule.
       if params[:cell_id].present?
-        retry_remote_failed_batches(@backfill_run, params[:cell_id])
+        if @backfill_run.manageable_by?(find_current_backfiller)
+          retry_remote_failed_batches(@backfill_run, params[:cell_id])
+        else
+          flash[:alert] = "You can only retry batches of runs you created."
+        end
         return redirect_to backfill_run_path(@backfill_run)
       end
 
@@ -241,6 +238,7 @@ module DataDrip
 
       render json: {
                status: @group.status,
+               terminal: @backfill_run.terminal?,
                active: @cells_active,
                cells_html: cells_html,
                status_html: helpers.status_tag(@group.status),

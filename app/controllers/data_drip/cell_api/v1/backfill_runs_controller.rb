@@ -21,6 +21,7 @@ module DataDrip
 
           run = DataDrip::BackfillRun.new(create_params)
           run.origin = :remote
+          run.cell_id = current_cell_id
 
           if run.save
             audit("created", run_id: run.id)

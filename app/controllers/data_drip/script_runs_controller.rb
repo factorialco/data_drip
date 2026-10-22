@@ -49,7 +49,6 @@ module DataDrip
           DataDrip::ScriptRun.new
         end
       @recent_script_class_names = recent_script_class_names
-      @cell_scope_defaults = cell_scope_from(@source_run)
     end
 
     def create
@@ -69,10 +68,7 @@ module DataDrip
           script_run_params.merge(backfiller: find_current_backfiller)
         )
 
-      if DataDrip::GroupCreator.call(
-        run: @script_run,
-        remote_cell_ids: selected_remote_cell_ids
-      )
+      if save_new_run(@script_run)
         local_time = @script_run.start_at.in_time_zone(@user_timezone)
         notice =
           if @script_run.start_at <= 1.minute.from_now
@@ -106,21 +102,21 @@ module DataDrip
         return redirect_to script_runs_path(tab: params[:tab] || "my_runs")
       end
 
-      fanout = delete_remote_legs(@script_run)
+      fanout = delete_remote_legs(@script_run) if @script_run.multi_cell_run?
 
       # A leg we could not reach is still scheduled to run in its own cell.
       # Destroying the coordinator's run and its dispatch records would erase
       # the only place that leg is visible or stoppable from, so the deletion is
       # refused until every cell has answered.
-      unless fanout.all_ok?
+      if fanout && !fanout.all_ok?
         flash[:alert] =
           "Script run not deleted — its remote legs are still scheduled. #{fanout.message}"
         return redirect_to script_run_path(@script_run)
       end
 
-      @script_run.dispatches.destroy_all
+      @script_run.dispatches.destroy_all if @script_run.multi_cell_run?
       @script_run.destroy!
-      flash[:notice] = [ "Script run has been deleted.", fanout.message ].compact.join(" ")
+      flash[:notice] = [ "Script run has been deleted.", fanout&.message ].compact.join(" ")
       redirect_to script_runs_path(tab: params[:tab] || "my_runs")
     end
 
@@ -163,6 +159,7 @@ module DataDrip
                # This cell's own run, which the error section describes. The
                # group's status can be failed because of another cell.
                run_status: @script_run.status,
+               terminal: @script_run.completed? || @script_run.failed?,
                active: @cells_active,
                cells_html: cells_html,
                status_html: helpers.status_tag(@group.status),
