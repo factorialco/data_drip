@@ -238,7 +238,6 @@ module DataDrip
 
       render json: {
                status: @group.status,
-               terminal: @backfill_run.terminal?,
                active: @cells_active,
                cells_html: cells_html,
                status_html: helpers.status_tag(@group.status),

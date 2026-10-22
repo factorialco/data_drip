@@ -155,19 +155,20 @@ RSpec.describe DataDrip::BackfillRunsController, type: :controller do
   end
 
   # Multi-cell mode is configured here, but these runs were not opted in to
-  # several cells: they must behave exactly as single-cell runs always have.
+  # several cells: nothing they do may reach another cell.
   describe "a single-cell run while multi-cell is configured" do
     let!(:run) do
       DataDrip::BackfillRun.create!(valid_attributes.merge(backfiller: backfiller))
     end
 
-    it "cannot be stopped before it starts, as before" do
+    it "can be stopped before it starts, with no cross-cell request" do
       expect(run.reload).to be_enqueued
 
       post :stop, params: { id: run.id }
 
-      expect(run.reload).to be_enqueued
-      expect(flash[:alert]).to eq("Backfill run is not currently running.")
+      expect(run.reload).to be_stopped
+      expect(flash[:notice]).to eq("Backfill run has been stopped.")
+      expect(a_request(:any, /example\.com/)).not_to have_been_made
     end
 
     it "stops while running, with no cross-cell request" do
