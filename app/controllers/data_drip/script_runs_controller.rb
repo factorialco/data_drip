@@ -49,6 +49,7 @@ module DataDrip
           DataDrip::ScriptRun.new
         end
       @recent_script_class_names = recent_script_class_names
+      @cell_scope_defaults = cell_scope_from(@source_run)
     end
 
     def create

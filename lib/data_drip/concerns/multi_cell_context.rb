@@ -68,6 +68,21 @@ module DataDrip
       end
     end
 
+    # The "Where to run" choice a "Run again" form starts from: wherever the
+    # source run ran. A run sent in from another cell, or one that never fanned
+    # out, runs only here; re-running it must not fan it out to every cell.
+    def cell_scope_from(source_run)
+      return {} if source_run.nil? || !DataDrip.multi_cell?
+      return { cell_scope: "local" } unless source_run.local?
+
+      remote_cells = DataDrip.remote_cell_ids
+      cells = source_run.dispatches.pluck(:cell_id) & remote_cells
+      return { cell_scope: "local" } if cells.empty?
+      return { cell_scope: "all" } if (remote_cells - cells).empty?
+
+      { cell_scope: "custom", target_cell_ids: cells }
+    end
+
     # Loads everything the per-cell cards need, entirely from the snapshots
     # cached on the dispatch rows, and asks a background job to catch up any leg
     # that has gone stale. The page therefore renders immediately, never waits on
@@ -77,7 +92,9 @@ module DataDrip
       @group = run.group
       @group.refresh_later
       @dispatches = @group.dispatches
-      @cells_active = @group.active?
+      # A failed or stopped leg is settled but may have been retried in its own
+      # cell; keep polling until the refresh just requested has reported on it.
+      @cells_active = @group.active? || @group.stale_dispatches.any?
     end
 
     def cell_client

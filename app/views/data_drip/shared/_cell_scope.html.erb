@@ -1,11 +1,13 @@
 <%# "Where to run" section of the new-run forms, only rendered in multi-cell
-    mode. The current cell is always included — the run is being created here —
+    mode. Local `defaults` ({cell_scope:, target_cell_ids:}) preselects a choice
+    the submitted params have not made, e.g. a "Run again". The current cell is always included — the run is being created here —
     so the custom picker only offers the remote cells. %>
 <% if DataDrip.multi_cell? %>
   <% current_cell = DataDrip.resolved_current_cell_id %>
   <% remote_cells = DataDrip.remote_cell_ids %>
-  <% selected_scope = params[:cell_scope].presence_in(%w[all local custom]) || "all" %>
-  <% selected_cells = Array(params[:target_cell_ids]).map(&:to_s) %>
+  <% defaults = local_assigns[:defaults] || {} %>
+  <% selected_scope = (params[:cell_scope] || defaults[:cell_scope]).presence_in(%w[all local custom]) || "all" %>
+  <% selected_cells = Array(params[:cell_scope] ? params[:target_cell_ids] : defaults[:target_cell_ids]).map(&:to_s) %>
 
   <fieldset class="mb-5" data-controller="cell-scope">
     <legend class="<%= DataDrip::BackfillRunsHelper::LABEL_CLASSES %>">Where to run</legend>

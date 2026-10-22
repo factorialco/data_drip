@@ -282,7 +282,25 @@ RSpec.describe "DataDrip Cell API", type: :request do
       expect(run.reload).to be_running
     end
 
-    it "refuses a run that is not running" do
+    # A group stop can reach a leg still waiting in this cell's queue; left
+    # alone it would start after the group was stopped.
+    it "stops a run that has not started yet" do
+      expect(run.reload).to be_enqueued
+
+      post "/data_drip/cell_api/v1/backfill_runs/#{run.id}/stop",
+           params: {
+             target_cell_id: "cell-a",
+             acting_backfiller_id: backfiller.id
+           }.to_json,
+           headers: headers
+
+      expect(response).to have_http_status(:ok)
+      expect(run.reload).to be_stopped
+    end
+
+    it "refuses a run that already finished" do
+      run.completed!
+
       post "/data_drip/cell_api/v1/backfill_runs/#{run.id}/stop",
            params: {
              target_cell_id: "cell-a",

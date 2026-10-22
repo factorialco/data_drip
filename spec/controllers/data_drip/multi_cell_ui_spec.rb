@@ -69,6 +69,67 @@ RSpec.describe DataDrip::BackfillRunsController, type: :controller do
 
       expect(response.body).not_to include("Where to run")
     end
+
+    context "with a source run to run again" do
+      def checked_scope
+        Nokogiri::HTML(response.body).at_css("input[name=cell_scope][checked]")&.[]("value")
+      end
+
+      def checked_cells
+        Nokogiri::HTML(response.body)
+          .css("input[name='target_cell_ids[]'][checked]")
+          .map { |input| input["value"] }
+      end
+
+      let(:source) do
+        DataDrip::BackfillRun.create!(
+          valid_attributes.merge(backfiller: backfiller, group_uuid: "g-source")
+        )
+      end
+
+      def dispatch_to(cell_id)
+        DataDrip::CellDispatch.create!(
+          group_uuid: "g-source",
+          cell_id: cell_id,
+          runnable_type: :backfill,
+          status: :dispatched
+        )
+      end
+
+      it "runs it only here when it never fanned out" do
+        get :new, params: { source_run_id: source.id }
+
+        expect(checked_scope).to eq("local")
+      end
+
+      it "runs it in every cell when it ran in every cell" do
+        dispatch_to("cell-b")
+        dispatch_to("cell-c")
+
+        get :new, params: { source_run_id: source.id }
+
+        expect(checked_scope).to eq("all")
+      end
+
+      it "runs it in the same subset of cells it ran in" do
+        dispatch_to("cell-c")
+
+        get :new, params: { source_run_id: source.id }
+
+        expect(checked_scope).to eq("custom")
+        expect(checked_cells).to eq(%w[cell-c])
+      end
+
+      # Re-running a leg that another cell sent here must not make this cell
+      # fan it back out to every cell, the original coordinator included.
+      it "runs a fanned-in run only here" do
+        source.update!(origin: :remote, origin_cell_id: "cell-b")
+
+        get :new, params: { source_run_id: source.id }
+
+        expect(checked_scope).to eq("local")
+      end
+    end
   end
 
   describe "GET #show with a multi-cell group" do
@@ -504,6 +565,92 @@ RSpec.describe DataDrip::BackfillRunsController, type: :controller do
 
       expect(run.reload).to be_stopped
       expect(flash[:notice]).to match(/did not acknowledge/)
+    end
+
+    it "records what each cell reports once it stopped" do
+      run.running!
+      dispatch.update!(last_status: "running", last_synced_at: 1.minute.ago)
+      stub_request(:post, cell_api_url("cell-b", "/v1/backfill_runs/77/stop"))
+        .to_return(status: 200, body: { id: 77, status: "stopped" }.to_json)
+
+      post :stop, params: { id: run.id }
+
+      expect(dispatch.reload.last_status).to eq("stopped")
+    end
+
+    # A run scheduled for later, here or in another cell, would otherwise
+    # start after the group was stopped.
+    it "stops a group none of whose runs has started yet" do
+      expect(run.reload).to be_enqueued
+      dispatch.update!(last_status: "enqueued", last_synced_at: Time.current)
+      stop_stub =
+        stub_request(:post, cell_api_url("cell-b", "/v1/backfill_runs/77/stop"))
+          .to_return(status: 200, body: { id: 77, status: "stopped" }.to_json)
+
+      post :stop, params: { id: run.id }
+
+      expect(run.reload).to be_stopped
+      expect(stop_stub).to have_been_requested
+    end
+
+    it "cancels a dispatch that has not been delivered yet" do
+      run.running!
+      dispatch.update!(status: :pending, remote_run_id: nil)
+
+      post :stop, params: { id: run.id }
+
+      expect(dispatch.reload).to be_cancelled
+      expect(a_request(:post, %r{cell-b\.example\.com})).not_to have_been_made
+    end
+
+    # The dispatch was marked failed after a timeout, but the cell had
+    # committed the run: it is found and stopped, not left to run alone.
+    it "stops the copy a failed dispatch turns out to have landed" do
+      run.running!
+      dispatch.update!(status: :failed, remote_run_id: nil)
+      stub_request(:get, cell_api_url("cell-b", "/v1/groups/g-1?target_cell_id=cell-b"))
+        .to_return(status: 200, body: { runs: [ { id: 88, status: "enqueued" } ] }.to_json)
+      stop_stub =
+        stub_request(:post, cell_api_url("cell-b", "/v1/backfill_runs/88/stop"))
+          .to_return(status: 200, body: { id: 88, status: "stopped" }.to_json)
+
+      post :stop, params: { id: run.id }
+
+      expect(stop_stub).to have_been_requested
+      expect(dispatch.reload).to be_cancelled
+      expect(flash[:notice]).to match(/acknowledged/)
+    end
+  end
+
+  describe "POST #retry_failed_batches for a remote leg" do
+    let!(:run) do
+      DataDrip::BackfillRun.create!(
+        valid_attributes.merge(backfiller: backfiller, group_uuid: "g-1")
+      )
+    end
+
+    let!(:dispatch) do
+      DataDrip::CellDispatch.create!(
+        group_uuid: "g-1",
+        cell_id: "cell-b",
+        runnable_type: :backfill,
+        status: :dispatched,
+        remote_run_id: 77,
+        last_status: "failed",
+        last_synced_at: 1.minute.ago
+      )
+    end
+
+    # A failed leg is settled, so nothing would ask the cell about it again:
+    # the card would keep showing "failed" while the leg runs.
+    it "records the leg as running again, so it is polled until it settles" do
+      stub_request(:post, cell_api_url("cell-b", "/v1/backfill_runs/77/retry_failed_batches"))
+        .to_return(status: 200, body: { id: 77, status: "running" }.to_json)
+
+      post :retry_failed_batches, params: { id: run.id, cell_id: "cell-b" }
+
+      expect(dispatch.reload.last_status).to eq("running")
+      expect(run.group).to be_active
     end
   end
 

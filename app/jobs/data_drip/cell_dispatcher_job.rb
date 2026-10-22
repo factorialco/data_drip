@@ -10,23 +10,27 @@ module DataDrip
     discard_on ActiveJob::DeserializationError
 
     def perform(dispatch)
-      return if dispatch.dispatched?
+      return unless dispatch.pending? || dispatch.failed?
 
       response = deliver(dispatch)
 
       if response.success?
-        # The coordinator's run was deleted while this delivery was in flight:
-        # the delete could not see a leg that did not exist yet, so the leg
-        # just created is withdrawn here instead of being left to run alone.
-        return withdraw(dispatch, response.body["id"]) unless DataDrip::CellDispatch.exists?(dispatch.id)
-
-        dispatch.update!(
-          status: :dispatched,
-          remote_run_id: response.body["id"],
-          error_message: nil
-        )
+        remote_run_id = response.body["id"]
+        # Only a delivery still owed becomes "dispatched". The row may have
+        # changed while the request was in flight: deleted with the
+        # coordinator's run, or cancelled by a group stop. Either way the leg
+        # just created is withdrawn here, since whatever acted on the group
+        # could not see a leg that did not exist yet.
+        delivered =
+          owed(dispatch).update_all(
+            status: DataDrip::CellDispatch.statuses[:dispatched],
+            remote_run_id: remote_run_id,
+            error_message: nil,
+            updated_at: Time.current
+          )
+        withdraw(dispatch, remote_run_id) if delivered.zero?
       else
-        dispatch.update!(status: :failed, error_message: failure_message(response))
+        mark_failed(dispatch, failure_message(response))
         # A 4xx is a considered rejection (validation, unknown class after a
         # deploy lag…) that needs a human and the "Retry dispatch" button; a
         # 5xx is worth going through the queue's normal retry policy.
@@ -41,7 +45,7 @@ module DataDrip
       # Recorded on every attempt, not just the first: the operator deciding
       # whether to press "Retry dispatch" needs the latest reason, not the one
       # from an attempt several backoffs ago.
-      dispatch.update!(status: :failed, error_message: e.message) unless dispatch.dispatched?
+      mark_failed(dispatch, e.message)
       raise
     end
 
@@ -57,8 +61,31 @@ module DataDrip
       end
     end
 
+    def owed(dispatch)
+      DataDrip::CellDispatch.where(
+        id: dispatch.id,
+        status: DataDrip::CellDispatch::UNDELIVERED_STATUSES
+      )
+    end
+
+    # Conditional for the same reason as the delivery: a cancelled dispatch
+    # must stay cancelled, or "Retry dispatch" would offer to deliver it again.
+    def mark_failed(dispatch, message)
+      owed(dispatch).update_all(
+        status: DataDrip::CellDispatch.statuses[:failed],
+        error_message: message,
+        updated_at: Time.current
+      )
+    end
+
+    # A leg whose dispatch row is gone (its run was deleted) is deleted too; one
+    # whose dispatch was cancelled is stopped, which keeps it in that cell's
+    # history and on the coordinator's page as a stopped leg.
     def withdraw(dispatch, remote_run_id)
       return if remote_run_id.nil?
+
+      current = DataDrip::CellDispatch.find_by(id: dispatch.id)
+      return stop_cancelled(current, remote_run_id) if current&.cancelled? && current.backfill?
 
       client = DataDrip::CellClient.new
       delete = dispatch.script? ? :delete_script_run : :delete_backfill_run
@@ -73,9 +100,22 @@ module DataDrip
 
       log_orphan(dispatch, remote_run_id, "HTTP #{response.status}")
     rescue DataDrip::CellTransport::Error => e
-      # The dispatch row is gone, so a queue retry could not even load this
-      # job again. Say loudly where the leg is instead.
+      # The dispatch row is gone or no longer owed, so a queue retry would not
+      # deliver it again. Say loudly where the leg is instead.
       log_orphan(dispatch, remote_run_id, e.message)
+    end
+
+    def stop_cancelled(dispatch, remote_run_id)
+      response =
+        DataDrip::CellClient.new.stop_backfill_run(
+          cell_id: dispatch.cell_id,
+          run_id: remote_run_id,
+          acting_backfiller_id: dispatch.payload["backfiller_id"]
+        )
+      return log_orphan(dispatch, remote_run_id, "HTTP #{response.status}") unless response.success?
+
+      dispatch.update!(status: :dispatched, remote_run_id: remote_run_id)
+      dispatch.record_run!(response.body)
     end
 
     def log_orphan(dispatch, remote_run_id, reason)

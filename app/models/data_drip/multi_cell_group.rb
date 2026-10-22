@@ -84,11 +84,15 @@ module DataDrip
       dispatches.any?(&:active?)
     end
 
-    # Whether another cell last reported its leg as running. Lets the group be
-    # stopped from the coordinator after its own run has finished (or before it
-    # started) while other cells are still working.
-    def remote_legs_running?
-      dispatches.any? { |dispatch| dispatch.dispatched? && dispatch.last_run_status == "running" }
+    # Whether another cell's leg may still start or keep running: being
+    # delivered, or last reported as not finished yet. Lets the group be stopped
+    # from the coordinator after its own run has finished (or before it started)
+    # while other cells are still working or about to.
+    def remote_legs_stoppable?
+      dispatches.any? do |dispatch|
+        dispatch.pending? ||
+          (dispatch.dispatched? && ACTIVE_STATUSES.include?(dispatch.last_run_status))
+      end
     end
 
     # True when every leg's state is known — i.e. no cell is merely unreachable.
@@ -100,15 +104,15 @@ module DataDrip
     end
 
     # Legs whose cached snapshot is worth replacing: still able to change, and
-    # not refreshed within the freshness window. A leg whose run reached a
-    # terminal state is never asked again — there is nothing left to tell us, and
-    # the group's page stays readable after that cell is decommissioned.
+    # not refreshed within the freshness window. A final leg is never asked
+    # again — there is nothing left to tell us, and the group's page stays
+    # readable after that cell is decommissioned.
     def stale_dispatches
       window = DataDrip.resolved_cell_status_refresh_interval.seconds.ago
 
       dispatches.select do |dispatch|
         next false unless dispatch.dispatched?
-        next false if dispatch.settled?
+        next false if dispatch.final?
 
         dispatch.last_synced_at.nil? || dispatch.last_synced_at < window
       end
@@ -177,7 +181,7 @@ module DataDrip
     def dispatch_status(dispatch)
       return "failed" if dispatch.failed?
       return "pending" if dispatch.pending?
-      return "stopped" if dispatch.deleted_remotely?
+      return "stopped" if dispatch.cancelled? || dispatch.deleted_remotely?
 
       dispatch.last_run_status
     end

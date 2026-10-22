@@ -64,7 +64,7 @@ module DataDrip
             audit("forbidden", run_id: run.id)
             return render json: { error: "not_owner" }, status: :forbidden
           end
-          unless run.running?
+          unless run.stoppable?
             return render json: { error: "not_running" }, status: :conflict
           end
 

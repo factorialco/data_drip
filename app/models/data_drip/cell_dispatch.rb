@@ -17,7 +17,14 @@ module DataDrip
     validates :cell_id, presence: true
 
     DataDrip.cross_rails_enum(self, :runnable_type, %i[backfill script])
-    DataDrip.cross_rails_enum(self, :status, %i[pending dispatched failed])
+    # `cancelled`: the group was stopped before this dispatch was delivered, so
+    # it must never be (re)delivered. A delivery already in flight that lands
+    # anyway is stopped by CellDispatcherJob.
+    DataDrip.cross_rails_enum(self, :status, %i[pending dispatched failed cancelled])
+
+    # Dispatches whose delivery is still owed: waiting for the job, or failed
+    # and waiting for a queue retry or a human.
+    UNDELIVERED_STATUSES = %i[pending failed].freeze
 
     # Recorded when the cell answers but no longer holds the leg: someone
     # deleted it there before it ran. It will never run, so it is as final as
@@ -25,6 +32,10 @@ module DataDrip
     DELETED_STATUS = "deleted"
 
     TERMINAL_RUN_STATUSES = [ *%w[completed failed stopped], DELETED_STATUS ].freeze
+
+    # Terminal statuses a backfill leaves again when someone retries its failed
+    # batches, from the coordinator or from that cell's own UI.
+    REVIVABLE_RUN_STATUSES = %w[failed stopped].freeze
 
     def enqueue
       DataDrip::CellDispatcherJob.perform_later(self)
@@ -43,10 +54,17 @@ module DataDrip
       last_status.presence
     end
 
-    # A leg whose run reached a terminal state can never change again, so the
-    # coordinator stops polling it and serves the cached snapshot forever.
+    # A leg whose run reached a terminal state: the show page stops polling it.
     def settled?
       dispatched? && TERMINAL_RUN_STATUSES.include?(last_run_status)
+    end
+
+    # A settled leg that can never change again, so the coordinator never asks
+    # about it again and serves the cached snapshot forever. A failed or stopped
+    # backfill is settled but not final: retrying its batches in its own cell
+    # brings it back, and only a later poll can tell.
+    def final?
+      settled? && !(backfill? && REVIVABLE_RUN_STATUSES.include?(last_run_status))
     end
 
     # Whether this leg may still change, and therefore whether the show page
@@ -55,7 +73,7 @@ module DataDrip
     # until we have seen it reach a terminal status.
     def active?
       return true if pending?
-      return false if failed?
+      return false if failed? || cancelled?
 
       !settled?
     end
@@ -74,6 +92,11 @@ module DataDrip
       run = Array(snapshot["runs"]).first
       return record_deleted! if run.nil?
 
+      record_run!(run)
+    end
+
+    # Records one run snapshot, as the Cell API returns it from its mutations.
+    def record_run!(run)
       update!(
         last_status: run["status"],
         last_snapshot: run,
