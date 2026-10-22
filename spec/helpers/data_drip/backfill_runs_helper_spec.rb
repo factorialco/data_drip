@@ -16,6 +16,73 @@ class DryRunnableBackfill < DataDrip::Backfill
 end
 
 RSpec.describe DataDrip::BackfillRunsHelper, type: :helper do
+  describe "#backfill_instructions_block" do
+    let(:run) do
+      DataDrip::BackfillRun.new(
+        backfill_class_name: "AddRoleToEmployee",
+        options: {}
+      )
+    end
+
+    it "renders the Markdown instructions as formatted HTML" do
+      html = helper.backfill_instructions_block(run)
+
+      expect(html).to include("Instructions") # the callout label
+      expect(html).to include("<h3")           # `# ` heading
+      expect(html).to include("<strong")       # **bold**
+      expect(html).to include("<code")         # `inline code`
+      expect(html).to include("<ul")           # bullet list
+      expect(html).to include("<li>")
+    end
+
+    it "escapes HTML in the source so instructions can't inject markup" do
+      klass =
+        Class.new(DataDrip::Backfill) do
+          instructions "<script>alert(1)</script> is **bold**"
+
+          def scope
+            Employee.all
+          end
+
+          def process_element(_element); end
+        end
+      allow(run).to receive(:backfill_class).and_return(klass)
+
+      html = helper.backfill_instructions_block(run)
+
+      expect(html).to include("&lt;script&gt;")
+      expect(html).not_to include("<script>")
+      expect(html).to include("<strong")
+    end
+
+    it "returns an empty string when the backfill sets no instructions" do
+      run =
+        DataDrip::BackfillRun.new(
+          backfill_class_name: "SetEmployeeRole",
+          options: {}
+        )
+
+      expect(helper.backfill_instructions_block(run)).to eq("")
+    end
+  end
+
+  describe "#backfill_form_details" do
+    it "renders the instructions above the option inputs" do
+      run =
+        DataDrip::BackfillRun.new(
+          backfill_class_name: "AddRoleToEmployee",
+          options: {}
+        )
+      html = helper.backfill_form_details(run)
+
+      expect(html).to include("Instructions")
+      expect(html).to include("backfill_run[options][age]")
+      expect(html.index("Instructions")).to be < html.index(
+        "backfill_run[options][age]"
+      )
+    end
+  end
+
   describe "#backfill_option_inputs with a boolean attribute" do
     let(:backfill_run) do
       DataDrip::BackfillRun.new(

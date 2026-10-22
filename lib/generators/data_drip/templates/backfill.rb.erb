@@ -3,6 +3,15 @@
 
 <% end -%>
 class <%= class_name %> < DataDrip::Backfill
+  # Optional: a one-line summary shown in the DataDrip backfills catalog.
+  # description "Short summary of what this backfill does"
+
+  # Optional: Markdown guidance shown in the New Backfill Run form when this
+  # backfill is selected.
+  # instructions <<~MARKDOWN
+  #   Explain what this backfill does and how to fill in each option.
+  # MARKDOWN
+
 <% if @sorbet_enabled -%>
   extend T::Sig
 
