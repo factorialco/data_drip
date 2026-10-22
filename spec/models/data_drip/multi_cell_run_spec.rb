@@ -72,6 +72,7 @@ RSpec.describe DataDrip::MultiCellRun do
   end
 
   describe "backfiller_name snapshot on script runs" do
+    # Single-cell script runs too, as backfill runs always have.
     it "snapshots the name at creation and survives backfiller deletion" do
       run =
         DataDrip::ScriptRun.create!(
@@ -83,7 +84,7 @@ RSpec.describe DataDrip::MultiCellRun do
       expect(run.backfiller_name).to eq("Suzie")
 
       backfiller.destroy!
-      expect(run.reload.backfiller_display_name).to eq("Suzie")
+      expect(DataDrip::ScriptRun.find(run.id).backfiller_display_name).to eq("Suzie")
     end
   end
 

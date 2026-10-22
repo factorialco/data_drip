@@ -13,6 +13,9 @@
 - `rake data_drip:css` compiles the engine's Tailwind CSS; CI verifies the checked-in `tailwind.css` is up to date.
 
 ### Changed
+- A backfill run can be stopped before it starts, like the legs of a multi-cell group; it then never starts. Previously only a running backfill could be stopped.
+- Script runs snapshot the backfiller's name at creation, as backfill runs do, so it survives the backfiller being deleted. Previously a script run read the name live.
+- The `updates` endpoints no longer return `terminal`: the pages poll while `active` is true.
 - The dripper plans a run in pages of 10,000 ids instead of two queries per batch, and commits each page so its children start while the rest is planned. A 16M-row scope with `batch_size: 100` went from ~320k planning queries in a single transaction (hours, nothing running until the end) to ~1,600 queries with the first batches enqueued within seconds. Batches and `total_count` stay exact. See "How a run is planned" in the README.
 - Status badges, buttons, and option inputs are now styled with Tailwind utilities (no inline styles) and meet WCAG contrast.
 - All inline `<script>` blocks were replaced with Stimulus controllers (timezone sync, class combobox, dynamic options, enum multi-select, live updates via polling).

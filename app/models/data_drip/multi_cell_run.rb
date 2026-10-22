@@ -28,7 +28,7 @@ module DataDrip
       validates :backfiller, presence: { message: :required }, if: :local?
       validates :backfiller_id, presence: true, if: :remote?
 
-      before_create :capture_backfiller_name, if: :snapshot_backfiller_name?
+      before_create :capture_backfiller_name
     end
 
     # backfiller_name is snapshotted onto the row at creation so it survives
@@ -81,10 +81,6 @@ module DataDrip
     end
 
     private
-
-    def snapshot_backfiller_name?
-      true
-    end
 
     # Snapshot the backfiller's display name so it survives the record's
     # deletion. Remote runs arrive with the name already filled in by the
