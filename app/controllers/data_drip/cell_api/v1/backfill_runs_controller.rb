@@ -82,10 +82,11 @@ module DataDrip
             return render json: { error: "not_owner" }, status: :forbidden
           end
 
-          count = run.retry_failed_batches!
-          if count.zero?
+          unless run.retryable?
             return render json: { error: "no_failed_batches" }, status: :conflict
           end
+
+          count = run.retry_failed_batches!
 
           audit("retried_batches", run_id: run.id, batches: count)
           render_snapshot(run)

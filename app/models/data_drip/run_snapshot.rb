@@ -34,6 +34,7 @@ module DataDrip
         "eta_seconds" => run.eta_seconds&.round,
         "error_message" => run.error_message,
         "failed_batches_count" => run.batches.failed.count,
+        "planning_failed" => run.planning_failed?,
         "backfiller_id" => run.backfiller_id,
         "not_yet_run" => run.not_yet_run?,
         "created_at" => run.created_at&.utc&.iso8601,

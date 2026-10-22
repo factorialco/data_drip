@@ -55,6 +55,12 @@ module DataDrip
       failed? && total_count.nil?
     end
 
+    # Whether a retry has anything to do: failed batches to put back in line,
+    # or planning to resume.
+    def retryable?
+      planning_failed? || batches.failed.exists?
+    end
+
     # Puts every failed batch back in line and the run back to running, and
     # resumes planning if that is what failed; returns how many batches were
     # retried. Each goes through BackfillRunBatch#enqueue, so a

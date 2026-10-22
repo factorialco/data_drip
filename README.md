@@ -564,6 +564,12 @@ architectures, but they are worth checking before you turn it on:
    status refreshes are jobs on `DataDrip.cell_queue_name` (default: `DataDrip.queue_name`); the UI itself never makes a cross-cell
    call (see [How statuses are refreshed](#how-statuses-are-refreshed)).
 
+Each cell also validates a fanned-out run's options against its own copy of the class. An
+`enum` option whose `values:` is a callable reading data (ids or names loaded from the
+database) can therefore offer different values in each cell: a value picked in the coordinator's form is rejected
+where it does not exist, and that cell's card shows "Dispatch failed" with the validation
+error. Keep such options free-form, or run those classes in one cell at a time.
+
 ### Configuration
 
 ```ruby
