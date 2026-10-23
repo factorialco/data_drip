@@ -1,11 +1,13 @@
 class AddRoleToEmployee < DataDrip::Backfill
   attribute :age, :integer
   attribute :name, :string
+  attribute :max_records, :integer
 
   def scope
     scope = Employee.where(role: nil)
     scope = scope.where(age: age) if age.present?
     scope = scope.where(name: name) if name.present?
+    scope = scope.limit(max_records) if max_records.present?
     scope
   end
 

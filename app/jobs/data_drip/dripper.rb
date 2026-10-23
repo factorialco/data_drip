@@ -57,7 +57,7 @@ module DataDrip
         next unless backfill_run.planning?
 
         planned = backfill_run.batches
-        limit = page_size(backfill_run, planned)
+        limit = page_size(backfill_run, scope, planned)
         ids = limit.zero? ? [] : next_ids(scope, planned.maximum(:finish_id), limit)
 
         ids.uniq.each_slice(backfill_run.batch_size) do |slice|
@@ -79,15 +79,25 @@ module DataDrip
       more
     end
 
-    # A whole number of batches, capped by what is left of amount_of_elements.
-    def page_size(backfill_run, planned)
+    # A whole number of batches, capped by what is left of the run's cap.
+    def page_size(backfill_run, scope, planned)
       batch_size = backfill_run.batch_size
       size = [ PLANNING_PAGE_SIZE / batch_size, 1 ].max * batch_size
 
-      amount = backfill_run.amount_of_elements
-      return size unless amount.present? && amount.positive?
+      cap = element_cap(backfill_run, scope)
+      return size if cap.nil?
 
-      [ size, amount - planned.sum(:batch_size) ].min.clamp(0, size)
+      [ size, cap - planned.sum(:batch_size) ].min.clamp(0, size)
+    end
+
+    # The fewest of amount_of_elements and the scope's own limit. Each page
+    # replaces the scope's limit with its page size, so a scope like
+    # `Company.limit(1)` would otherwise plan the whole table.
+    def element_cap(backfill_run, scope)
+      amount = backfill_run.amount_of_elements
+      caps = [ scope.limit_value ]
+      caps << amount if amount.present? && amount.positive?
+      caps.compact.min
     end
 
     # Keyset pagination over the scope's primary key: only ids are read, and

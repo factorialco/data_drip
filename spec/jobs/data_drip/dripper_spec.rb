@@ -180,13 +180,13 @@ RSpec.describe DataDrip::Dripper, type: :job do
     # does not mark the run failed and the job is retried.
     let(:worker_killed) { Class.new(Exception) } # rubocop:disable Lint/InheritException
 
-    def create_run(**attributes)
+    def create_run(options: {}, **attributes)
       DataDrip::BackfillRun.create!(
         backfill_class_name: "AddRoleToEmployee",
         batch_size: 2,
         start_at: 1.hour.from_now,
         backfiller: backfiller,
-        options: {},
+        options: options,
         **attributes
       )
     end
@@ -266,6 +266,46 @@ RSpec.describe DataDrip::Dripper, type: :job do
         expect(run.total_count).to eq(4)
         expect(ids_per_batch(run).flatten).to eq(scoped_ids.first(4))
         expect(queries.size).to eq(1)
+      end
+
+      context "when the scope has its own limit" do
+        it "plans no more records than the scope's limit" do
+          run = create_run(options: { max_records: 3 })
+
+          queries = employee_queries { described_class.new.perform(run) }
+
+          run.reload
+          expect(run.total_count).to eq(3)
+          expect(run.batches.order(:id).pluck(:batch_size)).to eq([ 2, 1 ])
+          expect(ids_per_batch(run).flatten).to eq(scoped_ids.first(3))
+          expect(queries.size).to eq(1)
+        end
+
+        it "plans a single record for a scope limited to one" do
+          run = create_run(options: { max_records: 1 })
+
+          described_class.new.perform(run)
+
+          run.reload
+          expect(run.total_count).to eq(1)
+          expect(ids_per_batch(run)).to eq([ scoped_ids.first(1) ])
+        end
+
+        it "uses amount_of_elements when it is lower than the scope's limit" do
+          run = create_run(amount_of_elements: 2, options: { max_records: 5 })
+
+          described_class.new.perform(run)
+
+          expect(run.reload.total_count).to eq(2)
+        end
+
+        it "uses the scope's limit when it is lower than amount_of_elements" do
+          run = create_run(amount_of_elements: 9, options: { max_records: 5 })
+
+          described_class.new.perform(run)
+
+          expect(run.reload.total_count).to eq(5)
+        end
       end
 
       context "when the worker is killed mid-planning" do

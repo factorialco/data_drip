@@ -21,6 +21,7 @@
 - The unused SSE `GET :stream` endpoint (live updates now poll the existing `updates` endpoint).
 
 ### Fixed
+- A scope with its own limit (`Company.limit(1)`, a backfill meant to run once) plans only that many records again. Each planning page replaced the scope's limit with the page size, so such a scope planned the whole table and ran once per record. The dripper now caps planning at the lower of the scope's limit and `amount_of_elements`.
 - A run whose planning failed before any batch did can be retried: **Resume planning** picks the planning up where it stopped. Previously the retry action reported "no failed batches to retry" and the run could not be recovered.
 - A run whose dripper was killed while planning (e.g. by a deploy restarting the workers) no longer sits in `running` with no batches forever. The dripper marked the run `running` before planning and returned early on any run that was not `enqueued`, so the retried job did nothing. It now resumes from the last planned batch, without duplicating batches, and the run does not settle until planning has finished. "Retry failed batches" also resumes planning for a run that failed before it was fully planned.
 - Deleting a `pending` run no longer raises `FrozenError`: the run's `after_commit :enqueue` fired on every commit, including the destroy, and tried to mark the frozen record `enqueued!`. It now runs only on create.
