@@ -297,12 +297,15 @@ module DataDrip
                     end
                   end
 
+                current = values[name]
+                value = current.nil? ? defaults.public_send(name) : current
+
                 input =
-                  if type.is_a?(DataDrip::Types::Enum)
+                  if type.is_a?(DataDrip::Types::Enum) && type.multiple?
                     build_enum_input(name, type, values, field_prefix)
+                  elsif type.is_a?(DataDrip::Types::Enum)
+                    build_single_enum_input(name, type, value, field_prefix, required: required)
                   else
-                    current = values[name]
-                    value = current.nil? ? defaults.public_send(name) : current
                     build_standard_input(
                       name,
                       type,
@@ -343,7 +346,10 @@ module DataDrip
             check_box_tag(
               field_name,
               "1",
-              value,
+              # A persisted value is the raw string ("0"/"1"); casting it
+              # avoids check_box_tag treating "0" as truthy and always
+              # rendering the box checked.
+              ActiveModel::Type::Boolean.new.cast(value),
               class: "size-4 accent-drip-700 dark:accent-drip-400"
             ) +
             label_tag(
@@ -363,10 +369,27 @@ module DataDrip
       end
     end
 
+    # Normalize to [label, value] pairs — supports both ["a","b"] and [["Label","val"],...]
+    def enum_pairs(type)
+      type.available_values.map { |choice| choice.is_a?(Array) ? choice : [ choice, choice ] }
+    end
+
+    def build_single_enum_input(name, type, value, field_prefix, required: false)
+      pairs = enum_pairs(type)
+      # Without a blank first choice the browser preselects the first value when the current one is
+      # missing or not a choice (a stale "Run again" value, a mistyped default), and `required` only
+      # makes it pick when that first choice is empty.
+      unmatched = pairs.none? { |_label, choice| choice.to_s == value.to_s }
+
+      select_tag "#{field_prefix}[#{name}]",
+                 options_for_select(pairs, value.to_s),
+                 include_blank: !required || unmatched,
+                 class: INPUT_CLASSES,
+                 required: required
+    end
+
     def build_enum_input(name, type, values, field_prefix)
-      raw_choices = type.available_values
-      # Normalize to [label, value] pairs — supports both ["a","b"] and [["Label","val"],...]
-      pairs = raw_choices.map { |choice| choice.is_a?(Array) ? choice : [ choice, choice ] }
+      pairs = enum_pairs(type)
 
       field_name = "#{field_prefix}[#{name}]"
       field_id = "enum_#{name}"

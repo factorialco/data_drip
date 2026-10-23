@@ -46,7 +46,18 @@ module DataDrip
     end
 
     def new
-      @run = DataDrip::BackfillRun.new
+      @source_run = DataDrip::BackfillRun.find_by(id: params[:source_run_id])
+      @run =
+        if @source_run
+          DataDrip::BackfillRun.new(
+            backfill_class_name: @source_run.backfill_class_name,
+            batch_size: @source_run.batch_size,
+            amount_of_elements: @source_run.amount_of_elements,
+            options: copied_options(@source_run)
+          )
+        else
+          DataDrip::BackfillRun.new
+        end
       @recent_backfill_class_names = recent_backfill_class_names
     end
 
@@ -136,8 +147,9 @@ module DataDrip
     def retry_failed_batches
       @backfill_run = DataDrip::BackfillRun.find(params[:id])
       failed_batches = @backfill_run.batches.failed
+      resume_planning = @backfill_run.planning_failed?
 
-      if failed_batches.none?
+      if failed_batches.none? && !resume_planning
         flash[:alert] = "This run has no failed batches to retry."
       else
         count = 0
@@ -146,13 +158,16 @@ module DataDrip
           batch.enqueue
           count += 1
         end
+        # The planning error is what is being retried, as a batch's is.
+        @backfill_run.update!(error_message: nil) if resume_planning
         @backfill_run.running! unless @backfill_run.running?
         # A run that failed while planning has only part of its batches;
         # resume planning so the rest are created and the run can settle.
         DataDrip::Dripper.perform_later(@backfill_run) if @backfill_run.planning?
-        flash[
-          :notice
-        ] = "Re-enqueued #{count} failed #{count == 1 ? "batch" : "batches"}."
+        flash[:notice] = [
+          ("Re-enqueued #{count} failed #{count == 1 ? "batch" : "batches"}." if count.positive?),
+          ("Resumed planning the rest of the run." if resume_planning)
+        ].compact.join(" ")
       end
 
       redirect_to backfill_run_path(@backfill_run)
@@ -262,6 +277,19 @@ module DataDrip
         .map(&:first)
         .select { |name| available.include?(name) }
         .first(limit)
+    end
+
+    # Slices the source run's options down to the attributes the backfill
+    # class currently declares, so a class whose options changed since the
+    # source run doesn't resurrect a now-unknown attribute
+    # (BackfillRun#validate_options_are_known would reject it on save).
+    def copied_options(source_run)
+      options_class = source_run.backfill_class&.backfill_options_class
+      return {} unless options_class
+
+      (source_run.options || {}).stringify_keys.slice(
+        *options_class.attribute_types.keys
+      )
     end
   end
 end

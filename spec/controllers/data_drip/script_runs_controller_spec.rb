@@ -120,6 +120,63 @@ RSpec.describe DataDrip::ScriptRunsController, type: :controller do
     end
   end
 
+  describe "GET #new" do
+    render_views
+
+    context "with source_run_id" do
+      let!(:source_run) do
+        create_script_run(
+          inputs: {
+            greeting: "Hi",
+            repeat: "3",
+            dry_run: "0"
+          }
+        )
+      end
+
+      it "pre-fills the class and inputs from the source run" do
+        get :new, params: { source_run_id: source_run.id }
+
+        expect(response.body).to include(
+          'type="text" value="GreetEmployees" name="script_run[script_class_name]"'
+        )
+        expect(response.body).to include(
+          'name="script_run[inputs][greeting]" id="script_run_inputs_greeting" value="Hi"'
+        )
+        expect(response.body).to include(
+          'name="script_run[inputs][repeat]" id="script_run_inputs_repeat" value="3"'
+        )
+      end
+
+      it "pre-fills a boolean input stored as the string \"0\" unchecked" do
+        get :new, params: { source_run_id: source_run.id }
+
+        expect(response.body).not_to match(
+          %r{<input[^>]*type="checkbox"[^>]*name="script_run\[inputs\]\[dry_run\]"[^>]*checked}
+        )
+      end
+
+      it "drops inputs the script class no longer declares" do
+        source_run.update_columns(
+          inputs: { greeting: "Hi", retired_input: "x" }
+        )
+
+        get :new, params: { source_run_id: source_run.id }
+
+        expect(response.body).not_to include("retired_input")
+      end
+
+      it "falls back to the empty form when the source run does not exist" do
+        get :new, params: { source_run_id: 999_999 }
+
+        expect(response).to have_http_status(:ok)
+        expect(response.body).not_to include(
+          'type="text" value="GreetEmployees" name="script_run[script_class_name]"'
+        )
+      end
+    end
+  end
+
   describe "GET #show" do
     render_views
 
@@ -133,6 +190,26 @@ RSpec.describe DataDrip::ScriptRunsController, type: :controller do
       expect(response).to have_http_status(:ok)
       expect(response.body).to include("hello from the script")
       expect(response.body).to include("GreetEmployees")
+    end
+
+    it "shows a Run again link to the new-run form pre-filled from this run" do
+      script_run = create_script_run
+
+      get :show, params: { id: script_run.id }
+
+      expect(response.body).to include(
+        %(href="#{new_script_run_path(source_run_id: script_run.id)}")
+      )
+    end
+
+    it "shows the Run again link even for a run owned by another backfiller" do
+      script_run = create_script_run(backfiller: User.create!(name: "Bob"))
+
+      get :show, params: { id: script_run.id }
+
+      expect(response.body).to include(
+        %(href="#{new_script_run_path(source_run_id: script_run.id)}")
+      )
     end
   end
 

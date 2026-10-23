@@ -25,6 +25,16 @@ RSpec.describe DataDrip::Types::Enum do
     end
   end
 
+  describe "#multiple?" do
+    it "allows several values by default" do
+      expect(described_class.new(values: %w[a b])).to be_multiple
+    end
+
+    it "allows a single value with multiple: false" do
+      expect(described_class.new(values: %w[a b], multiple: false)).not_to be_multiple
+    end
+  end
+
   describe "casting" do
     it "casts values to strings, like its String parent" do
       type = described_class.new(values: %w[a b])

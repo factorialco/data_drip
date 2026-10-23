@@ -45,6 +45,88 @@ RSpec.describe DataDrip::BackfillRunsController, type: :controller do
 
       expect(response.body).not_to include(">Recent<")
     end
+
+    context "with source_run_id" do
+      let!(:source_run) do
+        DataDrip::BackfillRun.create!(
+          backfill_class_name: "AddRoleToEmployee",
+          batch_size: 50,
+          amount_of_elements: 10,
+          start_at: 1.hour.from_now,
+          backfiller: backfiller,
+          options: {
+            age: "25",
+            name: "Pepe"
+          }
+        )
+      end
+
+      it "pre-fills the class, batch size, max records and options from the source run" do
+        get :new, params: { source_run_id: source_run.id }
+
+        expect(response.body).to include(
+          'type="text" value="AddRoleToEmployee" name="backfill_run[backfill_class_name]"'
+        )
+        expect(response.body).to include('value="50" name="backfill_run[batch_size]"')
+        expect(response.body).to include(
+          'value="10" name="backfill_run[amount_of_elements]"'
+        )
+        expect(response.body).to include(
+          'name="backfill_run[options][age]" id="backfill_run_options_age" value="25"'
+        )
+        expect(response.body).to include(
+          'name="backfill_run[options][name]" id="backfill_run_options_name" value="Pepe"'
+        )
+      end
+
+      it "does not copy the schedule, defaulting to Run immediately" do
+        get :new, params: { source_run_id: source_run.id }
+
+        expect(response.body).to include(
+          'id="schedule_mode_now" value="now" class="size-4 accent-drip-700 dark:accent-drip-400" ' \
+            'data-action="change-&gt;schedule#toggle" checked="checked"'
+        )
+      end
+
+      it "drops options the backfill class no longer declares" do
+        source_run.update_columns(options: { age: "25", retired_option: "x" })
+
+        get :new, params: { source_run_id: source_run.id }
+
+        expect(response.body).not_to include("retired_option")
+      end
+
+      it "falls back to the empty form when the source run does not exist" do
+        get :new, params: { source_run_id: 999_999 }
+
+        expect(response).to have_http_status(:ok)
+        expect(response.body).not_to include(
+          'type="text" value="AddRoleToEmployee" name="backfill_run[backfill_class_name]"'
+        )
+      end
+
+      context "with a boolean option stored as the string \"0\"" do
+        let!(:source_run) do
+          DataDrip::BackfillRun.create!(
+            backfill_class_name: "RunAgainDryRunBackfill",
+            batch_size: 100,
+            start_at: 1.hour.from_now,
+            backfiller: backfiller,
+            options: {
+              dry_run: "0"
+            }
+          )
+        end
+
+        it "pre-fills the checkbox unchecked" do
+          get :new, params: { source_run_id: source_run.id }
+
+          expect(response.body).not_to match(
+            %r{<input[^>]*type="checkbox"[^>]*name="backfill_run\[options\]\[dry_run\]"[^>]*checked}
+          )
+        end
+      end
+    end
   end
 
   describe "POST #create" do
@@ -216,6 +298,36 @@ RSpec.describe DataDrip::BackfillRunsController, type: :controller do
         expect do
           post :retry_failed_batches, params: { id: backfill_run.id }
         end.not_to have_enqueued_job(DataDrip::Dripper)
+      end
+    end
+
+    # The dripper failed the run before any batch did, so there is nothing to
+    # re-enqueue; the rest of the run still has to be planned.
+    context "when planning failed before any batch did" do
+      render_views
+
+      before do
+        backfill_run.update_columns(
+          status: DataDrip::BackfillRun.statuses[:failed],
+          total_count: nil,
+          error_message: "planning query timed out"
+        )
+      end
+
+      it "offers to resume planning" do
+        get :show, params: { id: backfill_run.id }
+
+        expect(response.body).to include("Resume planning")
+      end
+
+      it "resumes planning and clears the planning error" do
+        expect do
+          post :retry_failed_batches, params: { id: backfill_run.id }
+        end.to have_enqueued_job(DataDrip::Dripper).with(backfill_run)
+
+        expect(backfill_run.reload).to be_running
+        expect(backfill_run.error_message).to be_nil
+        expect(flash[:notice]).to eq("Resumed planning the rest of the run.")
       end
     end
 
@@ -495,6 +607,27 @@ RSpec.describe DataDrip::BackfillRunsController, type: :controller do
       expect(response.body).to include("boom")
       expect(response.body).to include("Failed")
     end
+
+    it "shows a Run again link to the new-run form pre-filled from this run" do
+      get :show, params: { id: backfill_run.id }
+
+      expect(response.body).to include(
+        "Run again</a>"
+      )
+      expect(response.body).to include(
+        %(href="#{new_backfill_run_path(source_run_id: backfill_run.id)}")
+      )
+    end
+
+    it "shows the Run again link even for a run owned by another backfiller" do
+      backfill_run.update!(backfiller: User.create!(name: "Bob"))
+
+      get :show, params: { id: backfill_run.id }
+
+      expect(response.body).to include(
+        %(href="#{new_backfill_run_path(source_run_id: backfill_run.id)}")
+      )
+    end
   end
 
   describe "GET #updates" do
@@ -677,4 +810,16 @@ RSpec.describe DataDrip::BackfillRunsController, type: :controller do
       end
     end
   end
+end
+
+# Inline backfill class exercising a boolean option through GET #new's
+# source_run_id pre-fill (see "with source_run_id" above).
+class RunAgainDryRunBackfill < DataDrip::Backfill
+  attribute :dry_run, :boolean, default: true
+
+  def scope
+    Employee.all
+  end
+
+  def process_element(_element); end
 end
