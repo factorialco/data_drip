@@ -234,6 +234,7 @@ RSpec.describe DataDrip::MultiCellGroup do
     it "clears the unreachable flag once the cell answers again" do
       run = build_run(status: :completed)
       leg = dispatch(cell_id: "cell-b", last_status: "running", unreachable_since: 1.hour.ago)
+      leg.update_columns(updated_at: 1.minute.ago)
       stub_request(:get, %r{cell-b\.example\.com})
         .to_return(
           status: 200,
@@ -243,6 +244,94 @@ RSpec.describe DataDrip::MultiCellGroup do
       described_class.new(run: run).refresh!
 
       expect(leg.reload).not_to be_unreachable
+    end
+  end
+
+  describe "#refresh_later" do
+    before { allow(Rails).to receive(:cache).and_return(ActiveSupport::Cache::MemoryStore.new) }
+
+    def answer(cell_id, status:)
+      stub_request(:get, cell_api_url(cell_id, "/v1/groups/g-1?target_cell_id=#{cell_id}"))
+        .to_return(status: 200, body: { runs: [ { id: 77, status: status } ] }.to_json)
+    end
+
+    it "asks for a refresh, which stays pending until the job has reported" do
+      run = build_run(status: :completed)
+      dispatch(cell_id: "cell-b", last_status: "running", last_synced_at: 1.minute.ago)
+      group = described_class.new(run: run)
+
+      expect { expect(group.refresh_later).to be(true) }.to have_enqueued_job(
+        DataDrip::CellStatusRefreshJob
+      ).with("g-1")
+      expect(group).to be_refresh_pending
+
+      answer("cell-b", status: "completed")
+      described_class.new(run: run).refresh!
+
+      expect(group).not_to be_refresh_pending
+    end
+
+    it "asks only once while a refresh is pending" do
+      run = build_run(status: :completed)
+      dispatch(cell_id: "cell-b", last_status: "running", last_synced_at: 1.minute.ago)
+
+      expect do
+        expect(described_class.new(run: run).refresh_later).to be(true)
+        expect(described_class.new(run: run).refresh_later).to be(false)
+      end.to have_enqueued_job(DataDrip::CellStatusRefreshJob).once
+    end
+
+    # A failed or stopped backfill leg is re-asked about when the page is
+    # opened, not on every poll: polling would otherwise never end for a group
+    # with one such leg.
+    it "re-asks about a settled leg only when told to" do
+      run = build_run(status: :completed)
+      dispatch(cell_id: "cell-b", last_status: "failed", last_synced_at: 1.hour.ago)
+      group = described_class.new(run: run)
+
+      expect(group.refresh_later).to be(false)
+      expect(group).not_to be_refresh_pending
+      expect(group.refresh_later(settled: true)).to be(true)
+      expect(group).to be_refresh_pending
+    end
+
+    it "releases the claim even when the refresh blows up" do
+      run = build_run(status: :completed)
+      dispatch(cell_id: "cell-b", last_status: "running", last_synced_at: 1.minute.ago)
+      group = described_class.new(run: run)
+      group.refresh_later
+      allow(DataDrip::CellFanout).to receive(:call).and_raise(RuntimeError, "boom")
+
+      expect { described_class.new(run: run).refresh! }.to raise_error(RuntimeError, "boom")
+
+      expect(group).not_to be_refresh_pending
+    end
+  end
+
+  describe "#stale_dispatches" do
+    # Asking an unreachable cell on every window would send a fan-out, and
+    # park a worker on a connect timeout, every few seconds.
+    it "backs off a cell that keeps not answering" do
+      run = build_run(status: :completed)
+      leg = dispatch(cell_id: "cell-b", last_status: "running", unreachable_since: 1.hour.ago)
+
+      leg.update_columns(updated_at: 10.seconds.ago)
+      expect(described_class.new(run: run).stale_dispatches).to be_empty
+
+      leg.update_columns(updated_at: 1.minute.ago)
+      expect(described_class.new(run: run).stale_dispatches).to eq([ leg ])
+    end
+
+    it "records every failed attempt so the backoff moves forward" do
+      run = build_run(status: :completed)
+      leg = dispatch(cell_id: "cell-b", last_status: "running", unreachable_since: 1.hour.ago)
+      leg.update_columns(updated_at: 1.minute.ago)
+      stub_request(:get, %r{cell-b\.example\.com}).to_timeout
+
+      described_class.new(run: run).refresh!
+
+      expect(leg.reload.updated_at).to be > 5.seconds.ago
+      expect(leg.unreachable_since).to be < 30.minutes.ago
     end
   end
 

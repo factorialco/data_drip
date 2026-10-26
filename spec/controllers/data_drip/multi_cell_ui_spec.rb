@@ -465,6 +465,42 @@ RSpec.describe DataDrip::BackfillRunsController, type: :controller do
       expect(response.parsed_body["cells_html"]).to include("cell-b")
     end
 
+    # A failed leg is settled: opening the page asks about it once, in case a
+    # retry in its own cell revived it, and the page polls until that answer
+    # lands. A poll itself never re-asks, so the polling ends.
+    it "polls a settled leg only until the refresh opening the page asked for has reported" do
+      allow(Rails).to receive(:cache).and_return(ActiveSupport::Cache::MemoryStore.new)
+      run.update_column(:status, DataDrip::BackfillRun.statuses[:completed])
+      dispatch_to("cell-b").update!(last_status: "failed", last_synced_at: 1.hour.ago)
+      stub_request(:get, cell_api_url("cell-b", "/v1/groups/g-1?target_cell_id=cell-b"))
+        .to_return(status: 200, body: { runs: [ { id: 77, status: "failed" } ] }.to_json)
+
+      expect { get :show, params: { id: run.id } }.to have_enqueued_job(
+        DataDrip::CellStatusRefreshJob
+      ).once
+      expect(response.body).to include("data-backfill-run-updates-active-value=\"true\"")
+
+      get :updates, params: { id: run.id }
+      expect(response.parsed_body["active"]).to be(true)
+
+      DataDrip::CellStatusRefreshJob.perform_now("g-1")
+
+      expect { get :updates, params: { id: run.id } }.not_to have_enqueued_job(
+        DataDrip::CellStatusRefreshJob
+      )
+      expect(response.parsed_body["active"]).to be(false)
+    end
+
+    it "does not re-ask about a settled leg on a poll" do
+      run.update_column(:status, DataDrip::BackfillRun.statuses[:completed])
+      dispatch_to("cell-b").update!(last_status: "stopped", last_synced_at: 1.hour.ago)
+
+      expect { get :updates, params: { id: run.id } }.not_to have_enqueued_job(
+        DataDrip::CellStatusRefreshJob
+      )
+      expect(response.parsed_body["active"]).to be(false)
+    end
+
     it "sends no cells payload for single-cell runs" do
       # A different amount_of_elements sidesteps the duplicate-active-run guard.
       plain =
@@ -667,8 +703,34 @@ RSpec.describe DataDrip::BackfillRunsController, type: :controller do
       post :stop, params: { id: run.id }
 
       expect(stop_stub).to have_been_requested
-      expect(dispatch.reload).to be_cancelled
+      # Delivered after all: the card shows the leg as stopped there, not as
+      # never having reached the cell.
+      dispatch.reload
+      expect(dispatch).to be_dispatched
+      expect(dispatch.remote_run_id).to eq(88)
+      expect(dispatch.last_status).to eq("stopped")
       expect(flash[:notice]).to match(/acknowledged/)
+    end
+
+    # The copy landed but the stop did not get through. Leaving the dispatch
+    # cancelled would tell the page the run never reached that cell, and
+    # nothing would ever ask about it again, while it runs there unseen.
+    it "keeps a landed copy in view when its stop does not get through" do
+      run.running!
+      dispatch.update!(status: :pending, remote_run_id: nil)
+      stub_request(:get, cell_api_url("cell-b", "/v1/groups/g-1?target_cell_id=cell-b"))
+        .to_return(status: 200, body: { runs: [ { id: 88, status: "running" } ] }.to_json)
+      stub_request(:post, cell_api_url("cell-b", "/v1/backfill_runs/88/stop"))
+        .to_return(status: 503, body: "")
+
+      post :stop, params: { id: run.id }
+
+      dispatch.reload
+      expect(dispatch).to be_dispatched
+      expect(dispatch.remote_run_id).to eq(88)
+      expect(dispatch.last_status).to be_nil
+      expect(run.reload.group).to be_active
+      expect(flash[:notice]).to match(/did not acknowledge/)
     end
   end
 

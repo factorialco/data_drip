@@ -13,9 +13,15 @@ module DataDrip
       return unless dispatch.pending? || dispatch.failed?
 
       response = deliver(dispatch)
+      remote_run_id = run_id_in(response) if response.success?
 
-      if response.success?
-        remote_run_id = response.body["id"]
+      if response.success? && remote_run_id.nil?
+        # A 2xx that is not a Cell API answer — a proxy's login page, say.
+        # Nothing was created there, and counting it as delivered would leave
+        # a leg that never exists, with stop and delete aimed at no run. Needs
+        # a human, like a 4xx does.
+        mark_failed(dispatch, "Cell answered HTTP #{response.status} without a run id")
+      elsif response.success?
         # Only a delivery still owed becomes "dispatched". The row may have
         # changed while the request was in flight: deleted with the
         # coordinator's run, or cancelled by a group stop. Either way the leg
@@ -128,6 +134,11 @@ module DataDrip
           reason: reason
         }.to_json
       )
+    end
+
+    def run_id_in(response)
+      body = response.body
+      body["id"] if body.is_a?(Hash)
     end
 
     def failure_message(response)

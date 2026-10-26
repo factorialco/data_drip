@@ -627,12 +627,16 @@ replica where writing is forbidden). A status is therefore at most
 
 A leg whose run completed (or was deleted in its own cell) is never polled again: there is
 nothing left to learn, and a finished group stays readable long after those cells are gone. A
-failed or stopped backfill leg is still asked about when someone opens the group's page, because
-retrying its failed batches, from either cell, brings it back to running. A cell that stops answering
-keeps rendering what it last reported, flagged as stale, rather than blanking out.
+failed or stopped backfill leg is asked about once more each time someone opens the group's page,
+because retrying its failed batches, from either cell, brings it back to running; the page polls
+until that answer has landed and then stops, rather than re-asking on every poll. A cell that stops
+answering keeps rendering what it last reported, flagged as stale, rather than blanking out, and is
+asked again at a longer interval (ten freshness windows) so a dead cell does not cost a fan-out
+every few seconds.
 
-When several people watch the same run, one request claims the refresh per interval through
-`Rails.cache`. With no shared cache store configured this simply stops deduplicating.
+When several people watch the same run, one request claims the refresh through `Rails.cache` and
+the job releases the claim once it has reported. With no shared cache store configured this simply
+stops deduplicating.
 
 ### Mounting the Cell API
 

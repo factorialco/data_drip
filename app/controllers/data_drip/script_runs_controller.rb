@@ -86,7 +86,7 @@ module DataDrip
 
     def show
       @script_run = DataDrip::ScriptRun.find(params[:id])
-      load_cell_fanout(@script_run)
+      load_cell_fanout(@script_run, opening: true)
     end
 
     def destroy

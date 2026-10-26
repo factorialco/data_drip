@@ -84,13 +84,17 @@ module DataDrip
     # that has gone stale. The page therefore renders immediately, never waits on
     # another cell, and never writes — which also keeps it safe on hosts that
     # send GETs to a read replica.
-    def load_cell_fanout(run)
+    #
+    # Opening the page also re-asks about settled legs, which a retry in their
+    # own cell may have revived; a poll only follows legs still known to be
+    # changing. The page keeps polling while anything may still change, or
+    # while a refresh asked for has not reported yet, so what it learns about a
+    # settled leg reaches the viewer — and then stops.
+    def load_cell_fanout(run, opening: false)
       @group = run.group
-      @group.refresh_later
+      @group.refresh_later(settled: opening)
       @dispatches = @group.dispatches
-      # A failed or stopped leg is settled but may have been retried in its own
-      # cell; keep polling until the refresh just requested has reported on it.
-      @cells_active = @group.active? || @group.stale_dispatches.any?
+      @cells_active = @group.active? || @group.refresh_pending?
     end
 
     def cell_client

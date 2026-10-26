@@ -132,6 +132,22 @@ RSpec.describe DataDrip::CellDispatcherJob do
     expect(dispatch.reload).to be_dispatched
   end
 
+  # A proxy answering 200 with a login page is not a delivery: nothing was
+  # created, and a "dispatched" leg with no run id could never be stopped.
+  it "marks a 2xx without a run id as failed, without raising" do
+    stub_request(:post, create_url).to_return(
+      status: 200,
+      body: "<html>Sign in</html>",
+      headers: { "Content-Type" => "text/html" }
+    )
+
+    expect { described_class.perform_now(dispatch) }.not_to raise_error
+
+    expect(dispatch.reload).to be_failed
+    expect(dispatch.remote_run_id).to be_nil
+    expect(dispatch.error_message).to match(/HTTP 200 without a run id/)
+  end
+
   it "marks a 422 rejection as failed with the errors, without raising" do
     stub_request(:post, create_url).to_return(
       status: 422,

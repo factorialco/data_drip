@@ -103,45 +103,71 @@ module DataDrip
         dispatches.none?(&:unreachable?)
     end
 
+    # How much longer than the freshness window an unreachable cell is left
+    # alone before it is asked again. Asking on every window would send a
+    # fan-out, and park a worker on a connect timeout, every few seconds for as
+    # long as anyone has the page open.
+    UNREACHABLE_BACKOFF = 10
+
     # Legs whose cached snapshot is worth replacing: still able to change, and
     # not refreshed within the freshness window. A final leg is never asked
     # again — there is nothing left to tell us, and the group's page stays
     # readable after that cell is decommissioned.
-    def stale_dispatches
-      window = DataDrip.resolved_cell_status_refresh_interval.seconds.ago
+    #
+    # A settled leg (a failed or stopped backfill, which a retry can revive) is
+    # included only when asked for: opening the page, and the refresh job
+    # itself. A poll leaves it alone, so the page stops polling once the
+    # refresh it asked for has reported, rather than re-asking every window for
+    # as long as the page is open.
+    def stale_dispatches(settled: false)
+      interval = DataDrip.resolved_cell_status_refresh_interval
+      window = interval.seconds.ago
+      backoff = (interval * UNREACHABLE_BACKOFF).seconds.ago
 
       dispatches.select do |dispatch|
         next false unless dispatch.dispatched?
         next false if dispatch.final?
+        next false if dispatch.settled? && !settled
+        # record_unreachable! touches the row on every failed attempt.
+        next dispatch.updated_at < backoff if dispatch.unreachable?
 
         dispatch.last_synced_at.nil? || dispatch.last_synced_at < window
       end
     end
 
-    # Asks for a refresh without performing one. Rendering the coordinator's page
-    # must not wait on other cells, and must not write (hosts send GETs to read
-    # replicas), so the page renders from cache and the job catches it up for the
-    # next poll.
+    # Asks for a refresh without performing one; returns whether one was asked
+    # for. Rendering the coordinator's page must not wait on other cells, and
+    # must not write (hosts send GETs to read replicas), so the page renders
+    # from cache and the job catches it up for the next poll.
     #
     # Several people watching the same run would otherwise each enqueue the same
-    # fan-out on every poll, so one request claims the refresh for the freshness
-    # window. The claim goes through Rails.cache rather than the database
-    # precisely because this runs on a read path; where the host has no shared
-    # cache it simply stops deduplicating.
-    def refresh_later
-      return self unless multi_cell?
-      return self if stale_dispatches.empty?
-      return self unless claim_refresh
+    # fan-out on every poll, so one request claims the refresh and the job
+    # releases the claim once it has reported. The claim goes through
+    # Rails.cache rather than the database precisely because this runs on a
+    # read path; where the host has no shared cache it simply stops
+    # deduplicating.
+    def refresh_later(settled: false)
+      return false unless multi_cell?
+      return false if stale_dispatches(settled: settled).empty?
+      return false unless claim_refresh
 
       DataDrip::CellStatusRefreshJob.perform_later(run.group_uuid)
-      self
+      true
+    end
+
+    # Whether a refresh asked for earlier has not reported yet. The page keeps
+    # polling while this holds, so what the refresh learns reaches the viewer
+    # even when nothing else in the group is active.
+    def refresh_pending?
+      multi_cell? && Rails.cache.exist?(refresh_key)
     end
 
     # Fetches every stale leg concurrently under one shared deadline and caches
     # what each reports. Writes, so it belongs off the request path — see
-    # CellStatusRefreshJob.
+    # CellStatusRefreshJob. Settled legs are included: this is the one place
+    # that can learn a retry brought one back.
     def refresh!(client: DataDrip::CellClient.new, deadline: DataDrip.resolved_cell_fanout_deadline)
-      stale = stale_dispatches
+      stale = stale_dispatches(settled: true)
       return self if stale.empty?
 
       by_cell = stale.index_by(&:cell_id)
@@ -152,18 +178,30 @@ module DataDrip
 
       results.each { |cell_id, result| apply(by_cell.fetch(cell_id), result) }
       self
+    ensure
+      release_refresh
     end
 
     private
 
     def claim_refresh
-      interval = DataDrip.resolved_cell_status_refresh_interval
-      Rails.cache.write(
-        "data_drip/cell_status_refresh/#{run.group_uuid}",
-        true,
-        expires_in: [ interval, 1 ].max.seconds,
-        unless_exist: true
-      )
+      Rails.cache.write(refresh_key, true, expires_in: claim_ttl, unless_exist: true)
+    end
+
+    def release_refresh
+      Rails.cache.delete(refresh_key)
+    end
+
+    def refresh_key
+      "data_drip/cell_status_refresh/#{run.group_uuid}"
+    end
+
+    # The job releases the claim itself; the expiry only covers a job that is
+    # lost, so the page stops polling for it rather than forever. It has to
+    # outlast a fan-out, or a slow refresh would be asked for twice.
+    def claim_ttl
+      ([ DataDrip.resolved_cell_status_refresh_interval, 1 ].max +
+        DataDrip.resolved_cell_fanout_deadline).seconds
     end
 
     def apply(dispatch, result)

@@ -116,9 +116,11 @@ module DataDrip
 
     # Records that the cell could not be reached, without discarding what it
     # last told us — the page keeps rendering the stale snapshot, flagged as
-    # stale, instead of blanking out.
+    # stale, instead of blanking out. Every failed attempt touches the row, so
+    # the coordinator can back off a cell that keeps not answering (see
+    # MultiCellGroup#stale_dispatches) instead of asking on every poll.
     def record_unreachable!
-      return if unreachable_since.present?
+      return touch if unreachable_since.present?
 
       update!(unreachable_since: Time.current)
     end

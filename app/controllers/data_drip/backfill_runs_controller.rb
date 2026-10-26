@@ -100,7 +100,7 @@ module DataDrip
 
     def show
       @backfill_run = DataDrip::BackfillRun.find(params[:id])
-      load_cell_fanout(@backfill_run)
+      load_cell_fanout(@backfill_run, opening: true)
 
       batch_scope = @backfill_run.batches
       batch_scope = batch_scope.failed if params[:batch_status] == "failed"
@@ -320,6 +320,7 @@ module DataDrip
         .where(status: DataDrip::CellDispatch::UNDELIVERED_STATUSES)
         .update_all(status: DataDrip::CellDispatch.statuses[:cancelled], updated_at: Time.current)
       legs = run.dispatches.to_a
+      landed = Concurrent::Map.new
       stopped = Concurrent::Map.new
 
       result =
@@ -327,6 +328,7 @@ module DataDrip
           remote_run_id = dispatch.remote_run_id.presence || landed_run_id(run, dispatch)
           next [ true, nil ] if remote_run_id.nil?
 
+          landed[dispatch.cell_id] = remote_run_id
           response =
             cell_client.stop_backfill_run(
               cell_id: dispatch.cell_id,
@@ -340,7 +342,18 @@ module DataDrip
         end
 
       # Recorded here rather than in the fan-out: its blocks run on pool threads.
-      legs.select(&:dispatched?).each do |dispatch|
+      # A cancelled dispatch whose leg turns out to have landed is delivered
+      # from here on, whatever the stop answered: it keeps being polled and its
+      # card shows the leg's real state — stopped, or still running if the stop
+      # did not get through — instead of claiming the run never reached that
+      # cell while it runs there unseen.
+      legs.each do |dispatch|
+        remote_run_id = landed[dispatch.cell_id]
+        next if remote_run_id.nil?
+
+        unless dispatch.dispatched?
+          dispatch.update!(status: :dispatched, remote_run_id: remote_run_id)
+        end
         snapshot = stopped[dispatch.cell_id]
         dispatch.record_run!(snapshot) if snapshot
       end
