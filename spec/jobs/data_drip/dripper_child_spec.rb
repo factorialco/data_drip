@@ -79,6 +79,18 @@ RSpec.describe DataDrip::DripperChild, type: :job do
       # Only the successful batch contributed to the processed count.
       expect(run.processed_count).to eq(2)
     end
+
+    it "records which record failed, the error class and the backtrace" do
+      expect { described_class.new.perform(failing_batch) }.to raise_error(/boom/)
+
+      failing_batch.reload
+      expect(failing_batch.error_message).to eq("boom on BOOM")
+      expect(failing_batch.error_class).to eq("RuntimeError")
+      expect(failing_batch.error_backtrace).to include("dripper_child_spec.rb")
+      expect(failing_batch.failed_record_id).to eq(employee3.id.to_s)
+      # Fail-fast: the record after the failing one was not processed.
+      expect(employee4.reload.role).to be_nil
+    end
   end
 
   context "when the same batch is delivered twice" do

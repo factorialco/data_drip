@@ -50,6 +50,16 @@ module DataDrip
       }
     }.freeze
 
+    # "Failed on record #42 · ActiveRecord::RecordInvalid". The record is only
+    # known for backfills that implement process_element.
+    def batch_failure_heading(batch)
+      record_id = batch.try(:failed_record_id)
+      [
+        record_id.present? ? "Failed on record ##{record_id}" : "Failed",
+        batch.try(:error_class).presence
+      ].compact.join(" · ")
+    end
+
     def status_tag(status)
       config = STATUS_BADGES.fetch(status.to_s, STATUS_BADGES["pending"])
 

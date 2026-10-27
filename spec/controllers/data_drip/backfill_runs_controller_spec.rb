@@ -601,6 +601,23 @@ RSpec.describe DataDrip::BackfillRunsController, type: :controller do
       expect(response.body).to include("Completed")
     end
 
+    it "shows a failed batch's error inline, with its record and fail-fast note" do
+      failed_batch.update_columns(
+        error_class: "ActiveRecord::RecordInvalid",
+        error_backtrace: "app/backfills/x.rb:3:in `process_element'",
+        failed_record_id: "142",
+        output: "[2026-10-27T15:00:00Z] processing 141\n"
+      )
+
+      get :show, params: { id: backfill_run.id }
+
+      expect(response.body).to include("Failed on record #142 · ActiveRecord::RecordInvalid")
+      expect(response.body).to include("Batches stop at their first error")
+      expect(response.body).to include("app/backfills/x.rb:3")
+      expect(response.body).to include("processing 141")
+      expect(response.body).not_to include("Show error")
+    end
+
     it "narrows to failed batches when batch_status=failed" do
       get :show, params: { id: backfill_run.id, batch_status: "failed" }
 
