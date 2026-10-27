@@ -28,8 +28,10 @@ module DataDrip
               allow_nil: true
 
     before_create :capture_backfiller_name
-    after_commit :enqueue, on: :create
-    after_commit :run_hooks
+    # One callback, not two: `enqueue` commits its own `enqueued!` transition, which runs these hooks
+    # for it and replaces `previous_changes`. This commit's hooks have to run first, and apps run
+    # separate after_commit callbacks in either order (run_after_transaction_callbacks_in_order_defined).
+    after_commit :run_hooks_and_enqueue
 
     DataDrip.cross_rails_enum(
       self,
@@ -165,6 +167,11 @@ module DataDrip
     # Snapshot the backfiller's display name so it survives the record's deletion.
     def capture_backfiller_name
       self.backfiller_name = backfiller&.send(DataDrip.backfiller_name_attribute.to_sym)
+    end
+
+    def run_hooks_and_enqueue
+      run_hooks
+      enqueue if transaction_include_any_action?(%i[create])
     end
 
     def run_hooks
