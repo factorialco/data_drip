@@ -25,8 +25,7 @@ module DataDrip
       parent.finalize_if_batches_finished!
       enqueue_next_pending(parent)
     rescue StandardError => e
-      backfill_run_batch.failed!
-      backfill_run_batch.update!(error_message: e.message)
+      backfill_run_batch.fail_with!(e)
       parent.finalize_if_batches_finished!
       enqueue_next_pending(parent)
       raise e

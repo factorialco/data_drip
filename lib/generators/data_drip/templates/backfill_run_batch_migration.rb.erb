@@ -4,6 +4,15 @@ class CreateDataDripBackfillRunBatches < ActiveRecord::Migration<%= migration_ve
       t.references :backfill_run, null: false, foreign_key: { to_table: :data_drip_backfill_runs }, type: :bigint, index: false
       t.integer :status, null: false, default: 0
       t.text :error_message
+      t.string :error_class
+      t.text :error_backtrace
+      # The id of the record being processed when the batch failed (only known
+      # when the backfill implements process_element).
+      t.string :failed_record_id
+      # Whatever the backfill logged while processing this batch. `limit` makes
+      # it MEDIUMTEXT on MySQL (TEXT tops out at 64KB) and is ignored by
+      # PostgreSQL and SQLite.
+      t.text :output, limit: 1.megabyte
       t.integer :batch_size, null: false, default: 100
       t.bigint :start_id, null: false
       t.bigint :finish_id, null: false

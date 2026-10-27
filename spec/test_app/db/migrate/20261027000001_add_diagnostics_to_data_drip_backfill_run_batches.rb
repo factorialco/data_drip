@@ -1,0 +1,12 @@
+class AddDiagnosticsToDataDripBackfillRunBatches < ActiveRecord::Migration[7.0]
+  def change
+    change_table :data_drip_backfill_run_batches, bulk: true do |t|
+      t.string :error_class
+      t.text :error_backtrace
+      t.string :failed_record_id
+      # MEDIUMTEXT on MySQL (TEXT tops out at 64KB); ignored by PostgreSQL
+      # and SQLite.
+      t.text :output, limit: 1.megabyte
+    end
+  end
+end

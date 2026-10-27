@@ -1,32 +1,54 @@
 <% batches.each do |batch| %>
-  <tr>
+  <% output = batch.try(:output) %>
+  <% details = batch.error_message.present? || output.present? %>
+  <%# No divider between a batch and its details: they read as one entry. %>
+  <tr class="<%= "border-b-0!" if details %>">
     <td class="py-2.5 pr-4"><%= status_tag(batch.status) %></td>
     <td class="py-2.5 pr-4 font-mono text-xs text-zinc-600 tabular-nums dark:text-zinc-300"><%= number_with_delimiter(batch.start_id) %> → <%= number_with_delimiter(batch.finish_id) %></td>
     <td class="py-2.5 pr-4 text-sm text-zinc-600 tabular-nums dark:text-zinc-300"><%= number_with_delimiter(batch.batch_size) %></td>
-    <td class="py-2.5 pr-4 text-sm text-zinc-500 dark:text-zinc-400">
+    <td class="py-2.5 text-sm text-zinc-500 dark:text-zinc-400">
       <%= batch.completed? || batch.failed? || batch.stopped? ? format_datetime_in_user_timezone(batch.updated_at, @user_timezone) : "—" %>
     </td>
-    <td class="py-2.5">
-      <% if batch.error_message.present? %>
-        <button
-          type="button"
-          class="text-sm font-medium text-drip-700 hover:text-drip-600 dark:text-drip-400 dark:hover:text-drip-300"
-          data-action="batch-errors#toggle"
-          data-batch-errors-id-param="<%= batch.id %>"
-          aria-expanded="false"
-          aria-controls="batch_error_<%= batch.id %>"
-        >Show error</button>
-      <% else %>
-        <span class="text-sm text-zinc-400 dark:text-zinc-600" aria-hidden="true">—</span>
-      <% end %>
-    </td>
   </tr>
-  <% if batch.error_message.present? %>
-    <tr id="batch_error_<%= batch.id %>" hidden>
-      <td colspan="5" class="pb-3">
-        <div class="overflow-x-auto rounded-lg bg-red-50 p-3 dark:bg-red-400/10">
-          <pre class="font-mono text-xs leading-5 whitespace-pre-wrap text-red-800 dark:text-red-300"><%= batch.error_message %></pre>
-        </div>
+  <% if details %>
+    <tr>
+      <td colspan="4" class="pb-3 whitespace-normal">
+        <% if batch.error_message.present? %>
+          <div class="overflow-x-auto rounded-lg bg-red-50 p-3 dark:bg-red-400/10" role="alert">
+            <p class="text-xs font-semibold text-red-800 dark:text-red-300">
+              <%= batch_failure_heading(batch) %>
+            </p>
+            <pre class="mt-1 font-mono text-xs leading-5 whitespace-pre-wrap wrap-anywhere text-red-800 dark:text-red-300"><%= batch.error_message %></pre>
+            <p class="mt-2 text-xs text-red-700/80 dark:text-red-400/80">
+              Batches stop at their first error: the records after it in this batch were not processed. Retrying runs the whole batch again.
+            </p>
+            <% if batch.try(:error_backtrace).present? %>
+              <details
+                id="batch_backtrace_<%= batch.id %>"
+                class="mt-2"
+                data-action="toggle->batch-details#remember"
+              >
+                <summary class="cursor-pointer text-xs font-medium text-red-800 dark:text-red-300">Backtrace</summary>
+                <pre class="mt-1 font-mono text-xs leading-5 whitespace-pre text-red-700/90 dark:text-red-400/90"><%= batch.error_backtrace %></pre>
+              </details>
+            <% end %>
+          </div>
+        <% end %>
+        <% if output.present? %>
+          <%# Open by default next to an error: what the batch logged before it
+              failed is the context for it. %>
+          <details
+            id="batch_output_<%= batch.id %>"
+            class="<%= "mt-2" if batch.error_message.present? %>"
+            data-action="toggle->batch-details#remember"
+            <%= "open" if batch.error_message.present? %>
+          >
+            <summary class="cursor-pointer text-xs font-medium text-zinc-600 dark:text-zinc-300">
+              Output <span class="font-normal text-zinc-400 dark:text-zinc-500">· <%= pluralize(output.lines.count, "line") %></span>
+            </summary>
+            <pre class="mt-1 max-h-64 overflow-auto rounded-lg bg-zinc-50 p-3 font-mono text-xs leading-5 whitespace-pre-wrap wrap-anywhere text-zinc-700 dark:bg-white/5 dark:text-zinc-300"><%= output %></pre>
+          </details>
+        <% end %>
       </td>
     </tr>
   <% end %>
