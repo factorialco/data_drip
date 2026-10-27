@@ -37,10 +37,12 @@ module DataDrip
     def initialize(
       batch_size: 100,
       sleep_time: DataDrip.sleep_time,
-      backfill_options: {}
+      backfill_options: {},
+      logger: nil
     )
       @batch_size = batch_size
       @sleep_time = sleep_time
+      @logger = logger
       @backfill_options =
         self.class.backfill_options_class.new(backfill_options)
     end
@@ -65,6 +67,24 @@ module DataDrip
 
     attr_reader :backfill_options, :sleep_time
 
+    # The id of the element process_element was handling when it raised. Only
+    # the default process_batch tracks it; a backfill that overrides
+    # process_batch processes the batch as a whole, so there is no single
+    # element to blame.
+    attr_reader :current_record_id
+
+    # Writes a line to the output of the batch being processed, shown on the
+    # run page next to that batch. Outside a run (a console `call`), the line
+    # goes to the Rails log.
+    def log(message)
+      line = "[#{Time.current.utc.iso8601}] #{message}"
+      if @logger
+        @logger.call(line)
+      else
+        Rails.logger.info(line)
+      end
+    end
+
     def scope
       raise NotImplementedError
     end
@@ -72,7 +92,11 @@ module DataDrip
     protected
 
     def process_batch(batch)
-      batch.each { |element| process_element(element) }
+      batch.each do |element|
+        @current_record_id = element.try(:id)
+        process_element(element)
+      end
+      @current_record_id = nil
     end
 
     def process_element(element)

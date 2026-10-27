@@ -70,7 +70,7 @@ module DataDrip
       resume_planning = planning_failed?
       count = 0
       batches.failed.find_each do |batch|
-        batch.update!(status: :pending, error_message: nil)
+        batch.reset_for_retry!
         batch.enqueue
         count += 1
       end

@@ -48,6 +48,14 @@ rails generate data_drip:add_backfiller_name
 
 This snapshots the backfiller's display name onto each run so it is preserved even if the backfiller record is later deleted.
 
+To record failure details (exception class, backtrace, failing record) and the `log` output of each batch on an older install:
+
+```bash
+rails generate data_drip:add_batch_diagnostics
+```
+
+Until it runs, batches keep working and show only the error message.
+
 To add the performance indexes to an older install (composite indexes on the runs list and per-run batch queries):
 
 ```bash
@@ -404,6 +412,22 @@ Every backfill must inherit from `DataDrip::Backfill` and implement:
    - `process_batch(batch)` - Processes entire batches at once (more efficient)
    - `process_element(element)` - Processes individual records (more flexible)
 
+### Errors and output
+
+Batches are **fail-fast**: the first exception stops the batch, and the records after it in that batch are left unprocessed until the batch is retried (a retry runs the whole batch again, so keep backfills idempotent). Other batches of the run keep going.
+
+The run page shows each failed batch's error right under it: the message, the exception class, the backtrace and, for backfills that implement `process_element`, the id of the record that raised. A backfill that overrides `process_batch` handles the batch as a whole, so only its record range is known.
+
+Call `log` from a backfill to write to the output of the batch being processed. Each batch's output is shown under it on the run page (opened by default next to an error), whether the batch failed or not, and is capped at 1MB per batch:
+
+```ruby
+def process_element(company)
+  checks = company.missing_default_checks
+  log("company ##{company.id}: creating #{checks.size} checks")
+  checks.each(&:save!)
+end
+```
+
 ### Examples
 
 #### Simple Update (Batch Processing)
@@ -430,7 +454,7 @@ Navigate to `/data_drip/backfill_runs` in your application to access the DataDri
 - Create new backfill runs with configurable options
 - Monitor progress live (progress bars, throughput, estimated time remaining)
 - Filter runs by class name and status
-- Inspect per-batch errors and retry failed batches
+- Inspect each failed batch's error (message, class, backtrace, failing record), each batch's logged output, and retry failed batches
 - Stop running backfills
 - Schedule backfills for future execution
 

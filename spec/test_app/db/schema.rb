@@ -10,13 +10,17 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[7.0].define(version: 2026_07_31_000002) do
+ActiveRecord::Schema[7.0].define(version: 2026_10_27_000001) do
   create_table "data_drip_backfill_run_batches", force: :cascade do |t|
     t.bigint "backfill_run_id", null: false
     t.integer "batch_size", default: 100, null: false
     t.datetime "created_at", null: false
+    t.text "error_backtrace"
+    t.string "error_class"
     t.text "error_message"
+    t.string "failed_record_id"
     t.bigint "finish_id", null: false
+    t.text "output"
     t.bigint "start_id", null: false
     t.integer "status", default: 0, null: false
     t.datetime "updated_at", null: false
