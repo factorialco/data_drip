@@ -4,6 +4,7 @@ module DataDrip
   class BackfillRunsController < DataDrip.base_controller_class.constantize
     include DataDrip::Paginatable
     include DataDrip::BackfillerContext
+    include DataDrip::MultiCellContext
 
     layout "data_drip/layouts/application"
     helper_method :backfill_class_names
@@ -43,6 +44,7 @@ module DataDrip
 
       @backfill_runs = pagination_data[:collection]
       @pagination = pagination_data
+      @groups = DataDrip::MultiCellGroup.preload_for(@backfill_runs)
     end
 
     def new
@@ -81,7 +83,7 @@ module DataDrip
           backfill_run_params.merge(backfiller: find_current_backfiller)
         )
 
-      if @run.save
+      if save_new_run(@run)
         notice =
           if @run.start_at <= 1.minute.from_now
             "Backfill job for #{@run.backfill_class_name} has been enqueued and will start shortly."
@@ -98,6 +100,7 @@ module DataDrip
 
     def show
       @backfill_run = DataDrip::BackfillRun.find(params[:id])
+      load_cell_fanout(@backfill_run, opening: true)
 
       batch_scope = @backfill_run.batches
       batch_scope = batch_scope.failed if params[:batch_status] == "failed"
@@ -117,26 +120,50 @@ module DataDrip
       @backfill_run = DataDrip::BackfillRun.find(params[:id])
       # Only the run's author may delete it, and only before it has started
       # running — once it has run we keep it as history.
-      if !@backfill_run.owned_by?(find_current_backfiller)
+      if !@backfill_run.manageable_by?(find_current_backfiller)
         flash[:alert] = "You can only delete backfill runs you created."
-      elsif !@backfill_run.not_yet_run?
-        flash[
-          :alert
-        ] = "Backfill run can only be deleted before it has run."
-      else
-        @backfill_run.destroy!
-        flash[:notice] = "Backfill run has been deleted."
+        return redirect_to backfill_runs_path(tab: params[:tab] || "my_runs")
       end
+      if !@backfill_run.not_yet_run?
+        flash[:alert] = "Backfill run can only be deleted before it has run."
+        return redirect_to backfill_runs_path(tab: params[:tab] || "my_runs")
+      end
+
+      fanout = delete_remote_legs(@backfill_run) if @backfill_run.multi_cell_run?
+
+      # A leg we could not reach is still scheduled to run in its own cell.
+      # Destroying the coordinator's run and its dispatch records would erase
+      # the only place that leg is visible or stoppable from, so the deletion is
+      # refused until every cell has answered.
+      if fanout && !fanout.all_ok?
+        flash[:alert] =
+          "Backfill run not deleted — its remote legs are still scheduled. #{fanout.message}"
+        return redirect_to backfill_run_path(@backfill_run)
+      end
+
+      @backfill_run.dispatches.destroy_all if @backfill_run.multi_cell_run?
+      @backfill_run.destroy!
+      flash[:notice] =
+        [ "Backfill run has been deleted.", fanout&.message ].compact.join(" ")
       redirect_to backfill_runs_path(tab: params[:tab] || "my_runs")
     end
 
     def stop
       @backfill_run = DataDrip::BackfillRun.find(params[:id])
-      if !@backfill_run.owned_by?(find_current_backfiller)
+      if !@backfill_run.manageable_by?(find_current_backfiller)
         flash[:alert] = "You can only stop backfill runs you created."
-      elsif @backfill_run.running?
-        @backfill_run.stopped!
-        flash[:notice] = "Backfill run has been stopped."
+      elsif params[:cell_id].present?
+        stop_remote_leg(@backfill_run, params[:cell_id])
+      elsif @backfill_run.stoppable? || @backfill_run.group.remote_legs_stoppable?
+        # The group is stopped as a whole: this cell's run may already have
+        # finished, or not started yet, while other cells are still working.
+        local_note =
+          if @backfill_run.stoppable?
+            @backfill_run.stopped!
+            "Backfill run has been stopped."
+          end
+        remote_note = stop_remote_legs(@backfill_run).message if @backfill_run.multi_cell_run?
+        flash[:notice] = [ local_note, remote_note ].compact.join(" ")
       else
         flash[:alert] = "Backfill run is not currently running."
       end
@@ -146,28 +173,45 @@ module DataDrip
 
     def retry_failed_batches
       @backfill_run = DataDrip::BackfillRun.find(params[:id])
-      failed_batches = @backfill_run.batches.failed
-      resume_planning = @backfill_run.planning_failed?
 
-      if failed_batches.none? && !resume_planning
-        flash[:alert] = "This run has no failed batches to retry."
-      else
-        count = 0
-        failed_batches.find_each do |batch|
-          batch.update!(status: :pending, error_message: nil)
-          batch.enqueue
-          count += 1
+      # A remote leg is retried in its own cell, on behalf of the operator
+      # acting here; that cell's Cell API applies its ownership rule.
+      if params[:cell_id].present?
+        if @backfill_run.manageable_by?(find_current_backfiller)
+          retry_remote_failed_batches(@backfill_run, params[:cell_id])
+        else
+          flash[:alert] = "You can only retry batches of runs you created."
         end
-        # The planning error is what is being retried, as a batch's is.
-        @backfill_run.update!(error_message: nil) if resume_planning
-        @backfill_run.running! unless @backfill_run.running?
-        # A run that failed while planning has only part of its batches;
-        # resume planning so the rest are created and the run can settle.
-        DataDrip::Dripper.perform_later(@backfill_run) if @backfill_run.planning?
+        return redirect_to backfill_run_path(@backfill_run)
+      end
+
+      if @backfill_run.retryable?
+        resumed = @backfill_run.planning_failed?
+        count = @backfill_run.retry_failed_batches!
         flash[:notice] = [
           ("Re-enqueued #{count} failed #{count == 1 ? "batch" : "batches"}." if count.positive?),
-          ("Resumed planning the rest of the run." if resume_planning)
+          ("Resumed planning the rest of the run." if resumed)
         ].compact.join(" ")
+      else
+        flash[:alert] = "This run has no failed batches to retry."
+      end
+
+      redirect_to backfill_run_path(@backfill_run)
+    end
+
+    # Re-delivers a failed dispatch to its cell (e.g. after the target cell
+    # caught up on a deploy).
+    def retry_dispatch
+      @backfill_run = DataDrip::BackfillRun.find(params[:id])
+      dispatch = @backfill_run.dispatches.failed.find_by(cell_id: params[:cell_id])
+
+      if !@backfill_run.manageable_by?(find_current_backfiller)
+        flash[:alert] = "You can only retry dispatches of runs you created."
+      elsif dispatch.nil?
+        flash[:alert] = "No failed dispatch for that cell."
+      else
+        dispatch.retry!
+        flash[:notice] = "Dispatch to #{dispatch.cell_id} re-enqueued."
       end
 
       redirect_to backfill_run_path(@backfill_run)
@@ -175,14 +219,29 @@ module DataDrip
 
     def updates
       @backfill_run = DataDrip::BackfillRun.find(params[:id])
+      load_cell_fanout(@backfill_run)
 
       batches =
         @backfill_run.batches.order(created_at: :desc).limit(20)
 
+      cells_html =
+        if @dispatches.any?
+          render_to_string(
+            partial: "data_drip/shared/cells",
+            locals: {
+              run: @backfill_run,
+              dispatches: @dispatches
+            },
+            formats: [ :html ]
+          )
+        end
+
       render json: {
-               status: @backfill_run.status,
+               status: @group.status,
                terminal: @backfill_run.terminal?,
-               status_html: helpers.status_tag(@backfill_run.status),
+               active: @cells_active,
+               cells_html: cells_html,
+               status_html: helpers.status_tag(@group.status),
                progress_html:
                  render_to_string(
                    partial: "progress",
@@ -248,6 +307,108 @@ module DataDrip
     end
 
     private
+
+    # Stops every leg, delivered or not. Undelivered dispatches are cancelled
+    # first, so they are never (re)delivered and one already in flight is
+    # stopped by the dispatcher when it lands. Reading the legs back afterwards
+    # catches any delivery that completed in between. A cancelled leg may still
+    # have landed (a read timeout after the cell committed the run), so the
+    # cell is asked what it holds for the group, as delete does.
+    def stop_remote_legs(run)
+      actor_id = acting_backfiller_id
+      run.dispatches
+        .where(status: DataDrip::CellDispatch::UNDELIVERED_STATUSES)
+        .update_all(status: DataDrip::CellDispatch.statuses[:cancelled], updated_at: Time.current)
+      legs = run.dispatches.to_a
+      landed = Concurrent::Map.new
+      stopped = Concurrent::Map.new
+
+      result =
+        fanout_to(legs) do |dispatch|
+          remote_run_id = dispatch.remote_run_id.presence || landed_run_id(run, dispatch)
+          next [ true, nil ] if remote_run_id.nil?
+
+          landed[dispatch.cell_id] = remote_run_id
+          response =
+            cell_client.stop_backfill_run(
+              cell_id: dispatch.cell_id,
+              run_id: remote_run_id,
+              acting_backfiller_id: actor_id
+            )
+          stopped[dispatch.cell_id] = response.body if response.success?
+          # A cell whose leg already finished (409) has nothing left to stop.
+          ok = response.success? || response.status == 409
+          [ ok, ok ? nil : cell_api_error_detail(response) ]
+        end
+
+      # Recorded here rather than in the fan-out: its blocks run on pool threads.
+      # A cancelled dispatch whose leg turns out to have landed is delivered
+      # from here on, whatever the stop answered: it keeps being polled and its
+      # card shows the leg's real state — stopped, or still running if the stop
+      # did not get through — instead of claiming the run never reached that
+      # cell while it runs there unseen.
+      legs.each do |dispatch|
+        remote_run_id = landed[dispatch.cell_id]
+        next if remote_run_id.nil?
+
+        unless dispatch.dispatched?
+          dispatch.update!(status: :dispatched, remote_run_id: remote_run_id)
+        end
+        snapshot = stopped[dispatch.cell_id]
+        dispatch.record_run!(snapshot) if snapshot
+      end
+      result
+    end
+
+    def stop_remote_leg(run, cell_id)
+      dispatch = find_dispatched_dispatch(run, cell_id)
+      if dispatch.nil?
+        flash[:alert] = "No dispatched run for cell #{cell_id}."
+        return
+      end
+
+      response =
+        cell_client.stop_backfill_run(
+          cell_id: dispatch.cell_id,
+          run_id: dispatch.remote_run_id,
+          acting_backfiller_id: acting_backfiller_id
+        )
+      if response.success?
+        dispatch.record_run!(response.body)
+        flash[:notice] = "Run stopped in #{cell_id}."
+      else
+        flash[:alert] =
+          "Could not stop the run in #{cell_id}: #{cell_api_error_detail(response)}."
+      end
+    rescue DataDrip::CellTransport::Error => e
+      flash[:alert] = "Could not reach #{cell_id}: #{e.message}"
+    end
+
+    def retry_remote_failed_batches(run, cell_id)
+      dispatch = find_dispatched_dispatch(run, cell_id)
+      if dispatch.nil?
+        flash[:alert] = "No dispatched run for cell #{cell_id}."
+        return
+      end
+
+      response =
+        cell_client.retry_failed_batches(
+          cell_id: dispatch.cell_id,
+          run_id: dispatch.remote_run_id,
+          acting_backfiller_id: acting_backfiller_id
+        )
+      if response.success?
+        # The leg is running again. Recording that now is what resumes polling
+        # it; its cached "failed" would otherwise stand until the next refresh.
+        dispatch.record_run!(response.body)
+        flash[:notice] = "Retried the run in #{cell_id}."
+      else
+        flash[:alert] =
+          "Could not retry batches in #{cell_id}: #{cell_api_error_detail(response)}."
+      end
+    rescue DataDrip::CellTransport::Error => e
+      flash[:alert] = "Could not reach #{cell_id}: #{e.message}"
+    end
 
     def backfill_run_params
       params.require(:backfill_run).permit(

@@ -30,3 +30,5 @@ gem "propshaft"
 # json 3 dropped the quirks_mode option this Rails version still passes
 # when encoding JSON (e.g. loading the json column in schema.rb).
 gem "json", "< 3"
+
+gem "webmock"
