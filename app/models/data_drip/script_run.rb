@@ -4,7 +4,7 @@ module DataDrip
   class ScriptRun < ApplicationRecord
     self.table_name = "data_drip_script_runs"
 
-    belongs_to :backfiller, class_name: DataDrip.backfiller_class
+    include DataDrip::MultiCellRun
 
     validates :script_class_name, presence: true
     validate :script_class_exists
@@ -33,7 +33,12 @@ module DataDrip
     OUTPUT_LIMIT = 1.megabyte
     TRUNCATION_NOTICE = "[output truncated: reached the #{OUTPUT_LIMIT} byte limit]\n"
 
+    # The backfiller's live name, as it always was for a script run. A run sent
+    # in from another cell has no backfiller here, so it carries the name the
+    # coordinator snapshotted instead.
     def backfiller_name
+      return self[:backfiller_name] if remote?
+
       @backfiller_name ||=
         backfiller.send(DataDrip.backfiller_name_attribute.to_sym)
     end
@@ -132,6 +137,12 @@ module DataDrip
       DateTime.parse(start_at.to_s)
     rescue ArgumentError, TypeError
       errors.add(:start_at, "must be a valid datetime")
+    end
+
+    # Single-cell script runs read the name live (see #backfiller_name); only
+    # runs that may be shown in another cell need the snapshot.
+    def snapshot_backfiller_name?
+      multi_cell_run?
     end
   end
 end
