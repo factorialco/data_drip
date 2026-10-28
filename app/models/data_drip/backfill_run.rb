@@ -28,8 +28,10 @@ module DataDrip
               },
               allow_nil: true
 
-    after_commit :enqueue, on: :create
-    after_commit :run_hooks
+    # One callback, not two: `enqueue` commits its own `enqueued!` transition, which runs these hooks
+    # for it and replaces `previous_changes`. This commit's hooks have to run first, and apps run
+    # separate after_commit callbacks in either order (run_after_transaction_callbacks_in_order_defined).
+    after_commit :run_hooks_and_enqueue
 
     DataDrip.cross_rails_enum(
       self,
@@ -188,6 +190,11 @@ module DataDrip
     end
 
     private
+
+    def run_hooks_and_enqueue
+      run_hooks
+      enqueue if transaction_include_any_action?(%i[create])
+    end
 
     def run_hooks
       return unless status_previously_changed?

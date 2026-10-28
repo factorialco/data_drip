@@ -30,7 +30,7 @@ module DataDrip
 
       # The run and the record of where else it must go are one fact: a crash
       # between them would leave a run executing here with no trace that other
-      # cells were ever meant to run it. The run's own `after_commit :enqueue`
+      # cells were ever meant to run it. The run's own after_commit enqueue
       # therefore also fires only once the dispatches are durable.
       saved =
         @run.class.transaction do

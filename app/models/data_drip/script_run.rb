@@ -15,8 +15,10 @@ module DataDrip
 
     before_validation :default_start_at, on: :create
 
-    after_commit :enqueue
-    after_commit :run_hooks
+    # One callback, not two: `enqueue` commits its own `enqueued!` transition, which runs these hooks
+    # for it and replaces `previous_changes`. This commit's hooks have to run first, and apps run
+    # separate after_commit callbacks in either order (run_after_transaction_callbacks_in_order_defined).
+    after_commit :run_hooks_and_enqueue
 
     DataDrip.cross_rails_enum(
       self,
@@ -84,6 +86,11 @@ module DataDrip
 
     def default_start_at
       self.start_at ||= Time.current
+    end
+
+    def run_hooks_and_enqueue
+      run_hooks
+      enqueue
     end
 
     def run_hooks
