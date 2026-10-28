@@ -13,6 +13,7 @@
 - `rake data_drip:css` compiles the engine's Tailwind CSS; CI verifies the checked-in `tailwind.css` is up to date.
 
 ### Changed
+- A multi-choice `:enum` option (the checkbox list) ticks the values of its `default:` on a fresh form, instead of ticking every value. Options without a `default:` still tick every value, and a submitted or **Run again** value still wins over the default. Unticking everything still submits `""`, which the `default:` does not replace.
 - The dripper plans a run in pages of 10,000 ids instead of two queries per batch, and commits each page so its children start while the rest is planned. A 16M-row scope with `batch_size: 100` went from ~320k planning queries in a single transaction (hours, nothing running until the end) to ~1,600 queries with the first batches enqueued within seconds. Batches and `total_count` stay exact. See "How a run is planned" in the README.
 - Status badges, buttons, and option inputs are now styled with Tailwind utilities (no inline styles) and meet WCAG contrast.
 - All inline `<script>` blocks were replaced with Stimulus controllers (timezone sync, class combobox, dynamic options, enum multi-select, live updates via polling).

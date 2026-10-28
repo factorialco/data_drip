@@ -386,10 +386,11 @@ DataDrip supports various attribute types that automatically generate appropriat
 - **`:date`** - Date picker
 - **`:time`** - Time picker
 - **`:datetime`** - Date and time picker
-- **`:enum`** - Searchable checkbox list of the given `values:` (an array, or a lambda that returns one); the attribute holds the ticked values as a comma-separated string, all ticked by default. Pass `multiple: false` for a dropdown that picks a single value:
+- **`:enum`** - Searchable checkbox list of the given `values:` (an array, or a lambda that returns one); the attribute holds the ticked values as a comma-separated string. A fresh form ticks the values of its `default:` (a comma-separated string), or all of them when it declares none. Pass `multiple: false` for a dropdown that picks a single value:
 
 ```ruby
 attribute :regions, :enum, values: %w[eu us apac]
+attribute :statuses, :enum, values: %w[open in_review closed], default: "open,in_review"
 attribute :mode, :enum, values: %w[dry_run apply], multiple: false, required: true, default: "dry_run"
 ```
 
