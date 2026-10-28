@@ -356,7 +356,7 @@ module DataDrip
 
                 input =
                   if type.is_a?(DataDrip::Types::Enum) && type.multiple?
-                    build_enum_input(name, type, values, field_prefix)
+                    build_enum_input(name, type, value, field_prefix)
                   elsif type.is_a?(DataDrip::Types::Enum)
                     build_single_enum_input(name, type, value, field_prefix, required: required)
                   else
@@ -442,14 +442,15 @@ module DataDrip
                  required: required
     end
 
-    def build_enum_input(name, type, values, field_prefix)
+    # +value+ is the submitted value, or the attribute's `default:` on a fresh form. A blank one
+    # (no default declared, or an empty selection brought back by "Run again") ticks every value.
+    def build_enum_input(name, type, value, field_prefix)
       pairs = enum_pairs(type)
 
       field_name = "#{field_prefix}[#{name}]"
       field_id = "enum_#{name}"
-      current_value = values[name].to_s
       selected_values =
-        current_value.present? ? current_value.split(",") : pairs.map(&:last).map(&:to_s)
+        value.present? ? value.to_s.split(",") : pairs.map(&:last).map(&:to_s)
 
       content_tag :div, data: { controller: "enum-select" } do
         hidden =
