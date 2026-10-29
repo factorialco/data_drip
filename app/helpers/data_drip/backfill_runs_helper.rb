@@ -57,6 +57,11 @@ module DataDrip
         badge: "bg-zinc-50 text-zinc-600 inset-ring-zinc-500/20 " \
           "dark:bg-white/5 dark:text-zinc-400 dark:inset-ring-white/10",
         dot: "bg-zinc-400"
+      },
+      "deleted" => {
+        badge: "bg-zinc-50 text-zinc-600 inset-ring-zinc-500/20 " \
+          "dark:bg-white/5 dark:text-zinc-400 dark:inset-ring-white/10",
+        dot: "bg-zinc-400"
       }
     }.freeze
 
@@ -151,6 +156,55 @@ module DataDrip
 
     def backfiller_initials(name)
       name.to_s.split.map { |part| part[0] }.first(2).join.upcase
+    end
+
+    # The status to show for a run in the lists: for a coordinator run, the
+    # group's worst-of status, so a failed or still-working cell is never hidden
+    # behind a local run that happens to have completed. Reads only the
+    # preloaded groups — the lists must not fan out or query per row.
+    def group_status(run, groups = nil)
+      groups&.dig(run.id)&.status || run.status
+    end
+
+    # Small pill flagging a run's multi-cell nature in the run lists: where a
+    # remote run came from, or how many cells a coordinator run fans out to.
+    def cell_badge(run, groups = nil)
+      group = groups&.dig(run.id)
+      label =
+        if run.remote?
+          "from #{run.origin_cell_id.presence || "another cell"}"
+        elsif group&.multi_cell?
+          "#{group.cells_count} cells"
+        end
+      return if label.nil?
+
+      content_tag(
+        :span,
+        label,
+        class:
+          "inline-flex items-center rounded-full bg-drip-50 px-2 py-0.5 " \
+          "text-xs font-medium text-drip-700 " \
+          "dark:bg-drip-400/10 dark:text-drip-300"
+      )
+    end
+
+    # Link into another cell's own DataDrip UI, when the host configured
+    # DataDrip.cell_ui_url.
+    def cell_ui_link(cell_id, path, label = "Open in #{cell_id}")
+      return unless DataDrip.cell_ui_url
+
+      url = DataDrip.cell_ui_url.call(cell_id, path)
+      return if url.blank?
+
+      link_to(
+        label,
+        url,
+        target: "_blank",
+        rel: "noopener",
+        class:
+          "text-xs font-medium text-drip-700 hover:text-drip-600 " \
+          "dark:text-drip-400 dark:hover:text-drip-300"
+      )
     end
 
     def primary_button_classes
@@ -347,12 +401,15 @@ module DataDrip
                     end
                   end
 
+                current = values[name]
+                value = current.nil? ? defaults.public_send(name) : current
+
                 input =
-                  if type.is_a?(DataDrip::Types::Enum)
-                    build_enum_input(name, type, values, field_prefix)
+                  if type.is_a?(DataDrip::Types::Enum) && type.multiple?
+                    build_enum_input(name, type, value, field_prefix)
+                  elsif type.is_a?(DataDrip::Types::Enum)
+                    build_single_enum_input(name, type, value, field_prefix, required: required)
                   else
-                    current = values[name]
-                    value = current.nil? ? defaults.public_send(name) : current
                     build_standard_input(
                       name,
                       type,
@@ -471,7 +528,10 @@ module DataDrip
             check_box_tag(
               field_name,
               "1",
-              value,
+              # A persisted value is the raw string ("0"/"1"); casting it
+              # avoids check_box_tag treating "0" as truthy and always
+              # rendering the box checked.
+              ActiveModel::Type::Boolean.new.cast(value),
               class: "size-4 accent-drip-700 dark:accent-drip-400"
             ) +
             label_tag(
@@ -491,16 +551,34 @@ module DataDrip
       end
     end
 
-    def build_enum_input(name, type, values, field_prefix)
-      raw_choices = type.available_values
-      # Normalize to [label, value] pairs — supports both ["a","b"] and [["Label","val"],...]
-      pairs = raw_choices.map { |choice| choice.is_a?(Array) ? choice : [ choice, choice ] }
+    # Normalize to [label, value] pairs — supports both ["a","b"] and [["Label","val"],...]
+    def enum_pairs(type)
+      type.available_values.map { |choice| choice.is_a?(Array) ? choice : [ choice, choice ] }
+    end
+
+    def build_single_enum_input(name, type, value, field_prefix, required: false)
+      pairs = enum_pairs(type)
+      # Without a blank first choice the browser preselects the first value when the current one is
+      # missing or not a choice (a stale "Run again" value, a mistyped default), and `required` only
+      # makes it pick when that first choice is empty.
+      unmatched = pairs.none? { |_label, choice| choice.to_s == value.to_s }
+
+      select_tag "#{field_prefix}[#{name}]",
+                 options_for_select(pairs, value.to_s),
+                 include_blank: !required || unmatched,
+                 class: INPUT_CLASSES,
+                 required: required
+    end
+
+    # +value+ is the submitted value, or the attribute's `default:` on a fresh form. A blank one
+    # (no default declared, or an empty selection brought back by "Run again") ticks every value.
+    def build_enum_input(name, type, value, field_prefix)
+      pairs = enum_pairs(type)
 
       field_name = "#{field_prefix}[#{name}]"
       field_id = "enum_#{name}"
-      current_value = values[name].to_s
       selected_values =
-        current_value.present? ? current_value.split(",") : pairs.map(&:last).map(&:to_s)
+        value.present? ? value.to_s.split(",") : pairs.map(&:last).map(&:to_s)
 
       content_tag :div, data: { controller: "enum-select" } do
         hidden =

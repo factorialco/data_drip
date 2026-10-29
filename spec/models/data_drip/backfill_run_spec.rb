@@ -3,6 +3,46 @@
 require "spec_helper"
 
 RSpec.describe DataDrip::BackfillRun, type: :model do
+  describe "enqueueing" do
+    let(:backfiller) { User.create!(name: "Enqueue User") }
+
+    def build_pending_run(start_at:)
+      run =
+        DataDrip::BackfillRun.new(
+          backfill_class_name: "AddRoleToEmployee",
+          batch_size: 10,
+          start_at: start_at,
+          backfiller: backfiller,
+          options: { age: 25 }
+        )
+      run.save!(validate: false)
+      run
+    end
+
+    it "pushes a run due now without scheduling, so the inline adapter can run it" do
+      expect { build_pending_run(start_at: Time.current) }.to have_enqueued_job(
+        DataDrip::Dripper
+      ).at(:no_wait)
+    end
+
+    it "schedules a run whose start_at is in the future" do
+      # Whole seconds: the job's scheduled time is compared against the
+      # persisted value, and databases keep fewer fractional digits than Ruby.
+      start_at = 2.hours.from_now.floor
+      expect { build_pending_run(start_at: start_at) }.to have_enqueued_job(
+        DataDrip::Dripper
+      ).at(start_at)
+    end
+
+    it "does not try to enqueue again when a pending run is destroyed" do
+      run = build_pending_run(start_at: 2.hours.from_now)
+      run.update_column(:status, DataDrip::BackfillRun.statuses[:pending])
+
+      expect { run.destroy! }.not_to raise_error
+      expect(DataDrip::BackfillRun.exists?(run.id)).to be(false)
+    end
+  end
+
   let!(:backfiller) { User.create!(name: "Test User") }
   let!(:employee1) { Employee.create!(name: "John", role: nil, age: 25) }
   let!(:employee2) { Employee.create!(name: "Jane", role: nil, age: 30) }
@@ -179,6 +219,40 @@ RSpec.describe DataDrip::BackfillRun, type: :model do
     end
   end
 
+  describe "enqueueing" do
+    include ActiveJob::TestHelper
+
+    after { clear_enqueued_jobs }
+
+    # Regression: the job used to be enqueued before the `enqueued!` transition
+    # committed. A worker picking it up inside that window read `pending`, hit
+    # Dripper's `return unless enqueued?` guard, and silently dropped the run --
+    # which then sat in `enqueued` forever with no batches, no error and no
+    # retry, and (via no_active_run_for_same_class) blocked every later run of
+    # the same class.
+    it "commits the enqueued transition before the job becomes visible" do
+      status_when_enqueued = nil
+
+      allow(DataDrip::Dripper).to receive(:set).and_wrap_original do |orig, *args|
+        orig.call(*args).tap do |configured|
+          allow(configured).to receive(:perform_later) do |run|
+            status_when_enqueued =
+              DataDrip::BackfillRun.find(run.id).status
+          end
+        end
+      end
+
+      DataDrip::BackfillRun.create!(
+        backfill_class_name: "AddRoleToEmployee",
+        batch_size: 100,
+        start_at: 1.hour.from_now,
+        backfiller: backfiller
+      )
+
+      expect(status_when_enqueued).to eq("enqueued")
+    end
+  end
+
   describe "backfiller name" do
     let(:valid_attributes) do
       {
@@ -266,6 +340,56 @@ RSpec.describe DataDrip::BackfillRun, type: :model do
       expect(run_with(:pending)).not_to be_terminal
       expect(run_with(:enqueued)).not_to be_terminal
       expect(run_with(:running)).not_to be_terminal
+    end
+  end
+
+  describe "#planning?" do
+    def run_with(status, total_count: nil)
+      run =
+        DataDrip::BackfillRun.new(
+          backfill_class_name: "AddRoleToEmployee",
+          batch_size: 100,
+          start_at: 1.hour.from_now,
+          backfiller: backfiller,
+          options: { age: 25 }
+        )
+      run.save!(validate: false)
+      run.update_columns(
+        status: DataDrip::BackfillRun.statuses[status],
+        total_count: total_count
+      )
+      run.reload
+    end
+
+    it "is true for a running run whose batches are not all planned yet" do
+      expect(run_with(:running)).to be_planning
+    end
+
+    it "is false once planning wrote the total_count" do
+      expect(run_with(:running, total_count: 0)).not_to be_planning
+    end
+
+    it "is false for runs that are not running" do
+      expect(run_with(:enqueued)).not_to be_planning
+      expect(run_with(:stopped)).not_to be_planning
+    end
+
+    it "keeps finalize_if_batches_finished! from settling the run" do
+      run = run_with(:running)
+      DataDrip::BackfillRunBatch.create!(
+        backfill_run: run,
+        status: :completed,
+        batch_size: 1,
+        start_id: 1,
+        finish_id: 1
+      )
+
+      run.finalize_if_batches_finished!
+      expect(run.reload.status).to eq("running")
+
+      run.update!(total_count: 1)
+      run.finalize_if_batches_finished!
+      expect(run.reload.status).to eq("completed")
     end
   end
 
@@ -455,6 +579,92 @@ RSpec.describe DataDrip::BackfillRun, type: :model do
     end
   end
 
+  describe "#retry_failed_batches!" do
+    let(:backfiller) { User.create!(name: "Retry User") }
+
+    def build_failed_run(backfill_class_name, failed_batches:, total_count: 20)
+      run =
+        DataDrip::BackfillRun.new(
+          backfill_class_name: backfill_class_name,
+          batch_size: 10,
+          start_at: 1.hour.from_now,
+          backfiller: backfiller,
+          options: {}
+        )
+      run.save!(validate: false)
+      run.update_columns(
+        status: DataDrip::BackfillRun.statuses[:failed],
+        total_count: total_count
+      )
+      failed_batches.times do
+        batch = run.batches.new(batch_size: 10, start_id: 1, finish_id: 2)
+        batch.save!(validate: false)
+        batch.update_columns(
+          status: DataDrip::BackfillRunBatch.statuses[:failed],
+          error_message: "boom"
+        )
+      end
+      run
+    end
+
+    it "requeues every failed batch and puts the run back to running" do
+      run = build_failed_run("BackfillRunSpec::RetryableBackfill", failed_batches: 2)
+
+      expect { expect(run.retry_failed_batches!).to eq(2) }.to have_enqueued_job(
+        DataDrip::DripperChild
+      ).exactly(:twice)
+      expect(run.reload).to be_running
+      expect(run.batches.pluck(:error_message).compact).to be_empty
+    end
+
+    it "keeps to the backfill's parallelism limit" do
+      run = build_failed_run("BackfillRunSpec::SequentialRetryableBackfill", failed_batches: 3)
+
+      expect { run.retry_failed_batches! }.to have_enqueued_job(DataDrip::DripperChild).exactly(:once)
+      expect(run.batches.pluck(:status).tally).to eq("enqueued" => 1, "pending" => 2)
+    end
+
+    it "changes nothing when no batch failed" do
+      run = build_failed_run("BackfillRunSpec::RetryableBackfill", failed_batches: 0)
+
+      expect(run.retry_failed_batches!).to eq(0)
+      expect(run.reload).to be_failed
+    end
+
+    context "when the run failed while it was being planned" do
+      # The dripper raised before writing total_count, often before any batch
+      # failed: re-enqueueing failed batches alone would leave nothing to do.
+      it "resumes planning even with no failed batch" do
+        run =
+          build_failed_run("BackfillRunSpec::RetryableBackfill", failed_batches: 0, total_count: nil)
+        run.update_column(:error_message, "planning query timed out")
+
+        expect(run).to be_retryable
+        expect { expect(run.retry_failed_batches!).to eq(0) }.to have_enqueued_job(
+          DataDrip::Dripper
+        ).with(run)
+        expect(run.reload).to be_running
+        expect(run.error_message).to be_nil
+      end
+
+      it "retries its failed batches and resumes planning" do
+        run =
+          build_failed_run("BackfillRunSpec::RetryableBackfill", failed_batches: 1, total_count: nil)
+
+        expect { expect(run.retry_failed_batches!).to eq(1) }.to have_enqueued_job(
+          DataDrip::Dripper
+        )
+        expect(run.reload).to be_planning
+      end
+    end
+
+    it "is not retryable once planned with no failed batch" do
+      run = build_failed_run("BackfillRunSpec::RetryableBackfill", failed_batches: 0)
+
+      expect(run).not_to be_retryable
+    end
+  end
+
   describe "status enum" do
     it "has the correct status values" do
       backfill_run = DataDrip::BackfillRun.allocate
@@ -605,5 +815,19 @@ module BackfillRunSpec
     end
 
     def process_element(_element); end
+  end
+
+  class RetryableBackfill < DataDrip::Backfill
+    def scope
+      Employee.none
+    end
+
+    def process_element(_element); end
+  end
+
+  class SequentialRetryableBackfill < RetryableBackfill
+    def self.max_parallel_batches
+      1
+    end
   end
 end

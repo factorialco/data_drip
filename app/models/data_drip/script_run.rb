@@ -4,7 +4,7 @@ module DataDrip
   class ScriptRun < ApplicationRecord
     self.table_name = "data_drip_script_runs"
 
-    belongs_to :backfiller, class_name: DataDrip.backfiller_class
+    include DataDrip::MultiCellRun
 
     validates :script_class_name, presence: true
     validate :script_class_exists
@@ -15,8 +15,10 @@ module DataDrip
 
     before_validation :default_start_at, on: :create
 
-    after_commit :enqueue
-    after_commit :run_hooks
+    # One callback, not two: `enqueue` commits its own `enqueued!` transition, which runs these hooks
+    # for it and replaces `previous_changes`. This commit's hooks have to run first, and apps run
+    # separate after_commit callbacks in either order (run_after_transaction_callbacks_in_order_defined).
+    after_commit :run_hooks_and_enqueue
 
     DataDrip.cross_rails_enum(
       self,
@@ -24,7 +26,19 @@ module DataDrip
       %i[pending enqueued running completed failed]
     )
 
+    # `output` is a MEDIUMTEXT column (16MB) but a runaway script can still
+    # outgrow it, and every appended line rewrites the whole blob — so a log
+    # that big is slow long before the database complains. Keep the first
+    # OUTPUT_LIMIT bytes and replace the rest with a single notice.
+    OUTPUT_LIMIT = 1.megabyte
+    TRUNCATION_NOTICE = "[output truncated: reached the #{OUTPUT_LIMIT} byte limit]\n"
+
+    # The backfiller's live name, as it always was for a script run. A run sent
+    # in from another cell has no backfiller here, so it carries the name the
+    # coordinator snapshotted instead.
     def backfiller_name
+      return self[:backfiller_name] if remote?
+
       @backfiller_name ||=
         backfiller.send(DataDrip.backfiller_name_attribute.to_sym)
     end
@@ -49,18 +63,34 @@ module DataDrip
     def enqueue
       return unless pending?
 
-      DataDrip::ScriptRunner.set(wait_until: start_at).perform_later(self)
+      # The transition MUST commit before the job is enqueued. A worker can pick
+      # the job up the instant it is visible, and ScriptRunner starts work immediately,
+      # so enqueueing first leaves a window where the job sees the stale state.
       enqueued!
+      DataDrip::ScriptRunner.set(wait_until: start_at).perform_later(self)
     end
 
     def append_output(line)
-      update_column(:output, "#{output}#{line}\n")
+      current = output.to_s
+      return if current.end_with?(TRUNCATION_NOTICE)
+
+      appended = "#{current}#{line}\n"
+      if appended.bytesize > OUTPUT_LIMIT
+        appended = "#{current}#{TRUNCATION_NOTICE}"
+      end
+
+      update_column(:output, appended)
     end
 
     private
 
     def default_start_at
       self.start_at ||= Time.current
+    end
+
+    def run_hooks_and_enqueue
+      run_hooks
+      enqueue
     end
 
     def run_hooks
@@ -107,6 +137,12 @@ module DataDrip
       DateTime.parse(start_at.to_s)
     rescue ArgumentError, TypeError
       errors.add(:start_at, "must be a valid datetime")
+    end
+
+    # Single-cell script runs read the name live (see #backfiller_name); only
+    # runs that may be shown in another cell need the snapshot.
+    def snapshot_backfiller_name?
+      multi_cell_run?
     end
   end
 end

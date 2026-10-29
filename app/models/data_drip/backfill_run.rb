@@ -7,10 +7,11 @@ module DataDrip
     # Statuses in which a run (or batch) still has work outstanding.
     ACTIVE_STATUSES = %i[pending enqueued running].freeze
 
+    include DataDrip::MultiCellRun
+
     has_many :batches,
              class_name: "DataDrip::BackfillRunBatch",
              dependent: :destroy
-    belongs_to :backfiller, class_name: DataDrip.backfiller_class
 
     validates :backfill_class_name, presence: true
     validate :backfill_class_exists
@@ -27,9 +28,10 @@ module DataDrip
               },
               allow_nil: true
 
-    before_create :capture_backfiller_name
-    after_commit :enqueue
-    after_commit :run_hooks
+    # One callback, not two: `enqueue` commits its own `enqueued!` transition, which runs these hooks
+    # for it and replaces `previous_changes`. This commit's hooks have to run first, and apps run
+    # separate after_commit callbacks in either order (run_after_transaction_callbacks_in_order_defined).
+    after_commit :run_hooks_and_enqueue
 
     DataDrip.cross_rails_enum(
       self,
@@ -37,19 +39,60 @@ module DataDrip
       %i[pending enqueued running completed failed stopped]
     )
 
-    DELETED_BACKFILLER_LABEL = "Deleted user"
-
-    # backfiller_name is snapshotted onto the row at creation so it survives the
-    # backfiller being deleted. Use this for display: it falls back to the live
-    # association (for rows created before the column existed), then a placeholder.
-    def backfiller_display_name
-      backfiller_name.presence ||
-        backfiller&.send(DataDrip.backfiller_name_attribute.to_sym) ||
-        DELETED_BACKFILLER_LABEL
-    end
-
     def terminal?
       completed? || failed? || stopped?
+    end
+
+    # The dripper writes total_count once it has planned every batch, so a
+    # running run without one is still being planned: more batches may follow
+    # even when every batch created so far has finished.
+    def planning?
+      running? && total_count.nil?
+    end
+
+    # The dripper failed the run while planning it: total_count was never
+    # written, so part of its ids never made it into a batch, and there may be
+    # no failed batch at all to retry.
+    def planning_failed?
+      failed? && total_count.nil?
+    end
+
+    # Whether a retry has anything to do: failed batches to put back in line,
+    # or planning to resume.
+    def retryable?
+      planning_failed? || batches.failed.exists?
+    end
+
+    # Puts every failed batch back in line and the run back to running, and
+    # resumes planning if that is what failed; returns how many batches were
+    # retried. Each goes through BackfillRunBatch#enqueue, so a
+    # `max_parallel_batches` limit still holds. Shared by the UI and the Cell
+    # API so the two cannot drift.
+    def retry_failed_batches!
+      resume_planning = planning_failed?
+      count = 0
+      batches.failed.find_each do |batch|
+        batch.update!(status: :pending, error_message: nil)
+        batch.enqueue
+        count += 1
+      end
+      return count unless count.positive? || resume_planning
+
+      # The planning error is what is being retried, as a batch's is.
+      update!(error_message: nil) if resume_planning
+      running! unless running?
+      # A run that failed while planning has only part of its batches;
+      # resume planning so the rest are created and the run can settle.
+      DataDrip::Dripper.perform_later(self) if planning?
+      count
+    end
+
+    # Whether the Stop action applies. A single-cell run, as always, only while
+    # it runs. A multi-cell run also before it starts, since a group stop must
+    # reach legs still waiting in a queue somewhere; it never starts after
+    # that, as the Dripper only plans a run that is still enqueued.
+    def stoppable?
+      running? || (multi_cell_run? && not_yet_run?)
     end
 
     # Still safe to delete: the run has not started executing yet. Once it is
@@ -120,16 +163,27 @@ module DataDrip
     def enqueue
       return unless pending?
 
-      DataDrip::Dripper.set(wait_until: start_at).perform_later(self)
+      # The transition MUST commit before the job is enqueued. A worker can pick
+      # the job up the instant it is visible, and Dripper guards on `enqueued?`,
+      # so enqueueing first leaves a window where the job sees the stale state.
       enqueued!
+      # A run scheduled for the future waits in the queue backend; one due now
+      # is pushed directly, which also keeps the inline adapter usable (it
+      # cannot schedule at all).
+      if start_at.present? && start_at > Time.current
+        DataDrip::Dripper.set(wait_until: start_at).perform_later(self)
+      else
+        DataDrip::Dripper.perform_later(self)
+      end
     end
 
     # Called after each batch reaches a terminal state. Once no batch is still
     # active, the run settles on its own terminal state: failed if any batch
-    # failed, otherwise completed. A run that was stopped is left untouched.
+    # failed, otherwise completed. A run that was stopped is left untouched,
+    # and so is one still being planned: the dripper finalizes it at the end.
     def finalize_if_batches_finished!
       reload
-      return if terminal?
+      return if terminal? || planning?
       return if batches.where(status: ACTIVE_STATUSES).exists?
 
       batches.failed.exists? ? failed! : completed!
@@ -137,9 +191,9 @@ module DataDrip
 
     private
 
-    # Snapshot the backfiller's display name so it survives the record's deletion.
-    def capture_backfiller_name
-      self.backfiller_name = backfiller&.send(DataDrip.backfiller_name_attribute.to_sym)
+    def run_hooks_and_enqueue
+      run_hooks
+      enqueue if transaction_include_any_action?(%i[create])
     end
 
     def run_hooks

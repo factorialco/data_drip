@@ -112,6 +112,37 @@ RSpec.describe DataDrip::BackfillRunsHelper, type: :helper do
       # exactly two inputs share the name: the hidden 0 and the checkbox 1
       expect(occurrences).to eq(2)
     end
+
+    context "pre-filled with a persisted value" do
+      let(:backfill_run) do
+        DataDrip::BackfillRun.new(
+          backfill_class_name: "DryRunnableBackfill",
+          options: {
+            "dry_run" => stored_value
+          }
+        )
+      end
+
+      context "when the stored value is the string \"0\"" do
+        let(:stored_value) { "0" }
+
+        it "renders the checkbox unchecked, not truthy-string-checked" do
+          expect(html).not_to match(
+            %r{<input[^>]*type="checkbox"[^>]*name="backfill_run\[options\]\[dry_run\]"[^>]*checked}
+          )
+        end
+      end
+
+      context "when the stored value is the string \"1\"" do
+        let(:stored_value) { "1" }
+
+        it "renders the checkbox checked" do
+          expect(html).to match(
+            %r{<input[^>]*type="checkbox"[^>]*name="backfill_run\[options\]\[dry_run\]"[^>]*checked}
+          )
+        end
+      end
+    end
   end
 
   describe "#backfill_option_inputs with an enum attribute" do
@@ -143,6 +174,97 @@ RSpec.describe DataDrip::BackfillRunsHelper, type: :helper do
       expect(html).to match(
         %r{<input[^>]*type="hidden"[^>]*name="backfill_run\[options\]\[tiers\]"[^>]*value="growth"}
       )
+    end
+  end
+
+  describe "#backfill_option_inputs with an enum attribute that declares a default" do
+    def enum_html(options)
+      helper.backfill_option_inputs(
+        DataDrip::BackfillRun.new(backfill_class_name: "BackfillRunsHelperSpec::DefaultTieredBackfill", options: options)
+      )
+    end
+
+    def checked_ids(html)
+      html.scan(/<input[^>]*type="checkbox"[^>]*>/).grep(/checked="checked"/).map { |input| input[/id="([^"]+)"/, 1] }
+    end
+
+    it "ticks exactly the default values on a fresh form" do
+      html = enum_html({})
+
+      expect(html).to match(
+        %r{<input[^>]*type="hidden"[^>]*name="backfill_run\[options\]\[tiers\]"[^>]*value="starter,growth"}
+      )
+      expect(checked_ids(html)).to contain_exactly("enum_tiers_starter", "enum_tiers_growth")
+    end
+
+    it "ticks the submitted values instead of the default" do
+      html = enum_html({ "tiers" => "enterprise" })
+
+      expect(html).to match(
+        %r{<input[^>]*type="hidden"[^>]*name="backfill_run\[options\]\[tiers\]"[^>]*value="enterprise"}
+      )
+      expect(checked_ids(html)).to contain_exactly("enum_tiers_enterprise")
+    end
+  end
+
+  describe "#backfill_option_inputs with a single-choice enum attribute" do
+    let(:backfill_run) do
+      DataDrip::BackfillRun.new(
+        backfill_class_name: "BackfillRunsHelperSpec::SingleTierBackfill",
+        options: {}
+      )
+    end
+
+    let(:html) { helper.backfill_option_inputs(backfill_run) }
+
+    it "renders a select with one option per value and the default selected" do
+      expect(html).to match(%r{<select[^>]*name="backfill_run\[options\]\[tier\]"})
+      expect(html).to include(%(<option value="starter">starter</option>))
+      expect(html).to include(%(<option selected="selected" value="growth">growth</option>))
+    end
+
+    it "does not render the multi-select checkboxes" do
+      expect(html).not_to include(%(data-controller="enum-select"))
+    end
+
+    def single_choice_html(class_name)
+      helper.backfill_option_inputs(DataDrip::BackfillRun.new(backfill_class_name: class_name, options: {}))
+    end
+
+    it "offers a blank choice when the option is optional" do
+      expect(html).to include(%(<option value="" label=" "></option>))
+    end
+
+    it "offers a blank choice when the option is required without a default, so nothing is preselected" do
+      expect(single_choice_html("BackfillRunsHelperSpec::RequiredSingleTierBackfill")).to include(
+        %(<option value="" label=" "></option>)
+      )
+    end
+
+    it "offers no blank choice when the option is required and has a default" do
+      html = single_choice_html("BackfillRunsHelperSpec::RequiredDefaultSingleTierBackfill")
+
+      expect(html).not_to include(%(<option value=""))
+      expect(html).to include(%(<option selected="selected" value="growth">growth</option>))
+    end
+
+    it "offers a blank choice when a required option's default is not one of its values" do
+      expect(single_choice_html("BackfillRunsHelperSpec::RequiredMistypedDefaultSingleTierBackfill")).to include(
+        %(<option value="" label=" "></option>)
+      )
+    end
+
+    it "offers a blank choice when a run again brings a value that is no longer a choice" do
+      stale_run =
+        DataDrip::BackfillRun.new(
+          backfill_class_name: "BackfillRunsHelperSpec::RequiredDefaultSingleTierBackfill",
+          options: { "tier" => "enterprise" }
+        )
+
+      html = helper.backfill_option_inputs(stale_run)
+
+      expect(html).to include(%(<option value="" label=" "></option>))
+      expect(html).not_to include(%(selected="selected"))
     end
   end
 
@@ -405,6 +527,56 @@ module BackfillRunsHelperSpec
 
   class TieredBackfill < DataDrip::Backfill
     attribute :tiers, :enum, values: %w[starter growth]
+
+    def scope
+      Employee.all
+    end
+
+    def process_element(_element); end
+  end
+
+  class DefaultTieredBackfill < DataDrip::Backfill
+    attribute :tiers, :enum, values: %w[starter growth enterprise], default: "starter,growth"
+
+    def scope
+      Employee.all
+    end
+
+    def process_element(_element); end
+  end
+
+  class SingleTierBackfill < DataDrip::Backfill
+    attribute :tier, :enum, values: %w[starter growth], multiple: false, default: "growth"
+
+    def scope
+      Employee.all
+    end
+
+    def process_element(_element); end
+  end
+
+  class RequiredSingleTierBackfill < DataDrip::Backfill
+    attribute :tier, :enum, values: %w[starter growth], multiple: false, required: true
+
+    def scope
+      Employee.all
+    end
+
+    def process_element(_element); end
+  end
+
+  class RequiredDefaultSingleTierBackfill < DataDrip::Backfill
+    attribute :tier, :enum, values: %w[starter growth], multiple: false, required: true, default: "growth"
+
+    def scope
+      Employee.all
+    end
+
+    def process_element(_element); end
+  end
+
+  class RequiredMistypedDefaultSingleTierBackfill < DataDrip::Backfill
+    attribute :tier, :enum, values: %w[starter growth], multiple: false, required: true, default: "grwoth"
 
     def scope
       Employee.all

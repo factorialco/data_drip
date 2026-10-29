@@ -9,6 +9,7 @@ DataDrip::Engine.routes.draw do
   resources :backfill_runs, only: %i[index show new create destroy] do
     post :stop, on: :member
     post :retry_failed_batches, on: :member
+    post :retry_dispatch, on: :member
     get :updates, on: :member
     get :backfill_options, on: :collection
   end
@@ -22,6 +23,7 @@ DataDrip::Engine.routes.draw do
   resources :backfills, only: %i[index]
 
   resources :script_runs, only: %i[index show new create destroy] do
+    post :retry_dispatch, on: :member
     get :updates, on: :member
     get :script_inputs, on: :collection
   end

@@ -1,0 +1,12 @@
+class WidenDataDripScriptRunOutput < ActiveRecord::Migration<%= migration_version %>
+  def up
+    # MySQL's TEXT holds 64KB, which a script that logs a line per record blows
+    # past mid-run. `limit` makes this MEDIUMTEXT (16MB) there and is a no-op on
+    # PostgreSQL and SQLite, where text is already unbounded.
+    change_column :data_drip_script_runs, :output, :text, limit: 1.megabyte
+  end
+
+  def down
+    change_column :data_drip_script_runs, :output, :text
+  end
+end

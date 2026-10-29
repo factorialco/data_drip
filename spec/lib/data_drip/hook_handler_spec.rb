@@ -71,6 +71,63 @@ RSpec.describe "HookHandler" do
     end
   end
 
+  # `enqueue` commits its own `enqueued!` transition from inside the creating commit. Hooks must
+  # still fire once per transition, whatever order the app runs after_commit callbacks in.
+  context "when a record is created and enqueued" do
+    before { DataDrip.hooks_handler_class_name = "HookHandler" }
+
+    def hooks_fired(handler, hooks)
+      fired = []
+      hooks.each do |hook|
+        allow(handler).to receive(hook) { |record| fired << [ hook, record.status ] }
+      end
+      yield
+      fired
+    end
+
+    it "fires each run hook once" do
+      backfill_run.delete # an identical pending run would fail validation
+      fired =
+        hooks_fired(HookHandler, %i[on_run_pending on_run_enqueued]) do
+          DataDrip::BackfillRun.create!(
+            backfill_class_name: "AddRoleToEmployee",
+            batch_size: 100,
+            start_at: Time.current,
+            backfiller: User.create!(name: "Test User")
+          )
+        end
+
+      expect(fired).to eq([ [ :on_run_enqueued, "enqueued" ] ])
+    end
+
+    it "fires each batch hook once" do
+      fired =
+        hooks_fired(HookHandler, %i[on_batch_pending on_batch_enqueued]) do
+          DataDrip::BackfillRunBatch.create!(
+            backfill_run: backfill_run,
+            start_id: 1,
+            finish_id: 100,
+            batch_size: 100
+          )
+        end
+
+      expect(fired).to eq([ [ :on_batch_enqueued, "enqueued" ] ])
+    end
+
+    it "fires each script run hook once" do
+      fired =
+        hooks_fired(HookHandler, %i[on_script_run_pending on_script_run_enqueued]) do
+          DataDrip::ScriptRun.create!(
+            script_class_name: "GreetEmployees",
+            backfiller: User.create!(name: "Test User"),
+            inputs: { greeting: "Hello", dry_run: true }
+          )
+        end
+
+      expect(fired).to eq([ [ :on_script_run_enqueued, "enqueued" ] ])
+    end
+  end
+
   context "when the hook handler is not configured" do
     before { DataDrip.hooks_handler_class_name = nil }
 

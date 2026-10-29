@@ -55,6 +55,12 @@ To add the performance indexes to an older install (composite indexes on the run
 rails generate data_drip:add_performance_indexes
 ```
 
+If your scripts hit `Data too long for column 'output'` on MySQL, widen the script run log column (the original migration created a 64KB `TEXT`):
+
+```bash
+rails generate data_drip:widen_script_run_output
+```
+
 ## Requirements
 
 - **Ruby**: >= 3.1.0
@@ -124,6 +130,29 @@ end
 - **`hooks_handler_class_name`**: The name of the class that handles lifecycle hooks for backfill runs and batches. When configured, this class will receive callbacks when backfills change status (e.g., `on_run_completed`, `on_batch_failed`). This is useful for sending notifications, tracking metrics, or integrating with external systems. See the [Hooks](#hooks) section for more details.
 
 This configuration is particularly useful when your application uses custom authentication systems, non-standard naming conventions, or when you need DataDrip to integrate with existing API controllers or admin interfaces.
+
+## How a run is planned
+
+The `Dripper` job turns a run into batches by paging through the scope's primary keys, 10,000 ids per query (`SELECT id … WHERE id > <last planned id> ORDER BY id LIMIT 10000`), and cutting each page into batches of `batch_size`. Each page is committed on its own, so its children are enqueued while the rest of the scope is still being planned.
+
+- **Exact batches.** Each batch covers the ids of `batch_size` records that matched the scope, so sparse scopes (one company out of a large table) never produce empty batches, and `total_count` is the exact number of planned records.
+- **Restart-safe.** If the worker dies mid-planning (a deploy restarting the queue), the retried job resumes after the last planned batch instead of leaving the run in `running` with no batches. A run is still planning while it is `running` without a `total_count`; it does not settle until planning has finished, even if every batch created so far is done.
+- **`amount_of_elements`** caps the number of planned records, i.e. the first N matching ids.
+
+## Limiting parallelism
+
+Every batch of a run is enqueued as soon as the dripper creates it, so a run with 200 batches occupies up to 200 worker threads at once. When batches serialize on one shared resource anyway (a global lock, a single external system), declare how many may be in flight:
+
+```ruby
+class RebuildSearchIndex < DataDrip::Backfill
+  # Children run one at a time; the finishing child enqueues the next pending batch.
+  def self.max_parallel_batches
+    1
+  end
+end
+```
+
+The default (`nil`) keeps the unlimited behaviour. "Retry failed batches" respects the limit too.
 
 ## Hooks
 
@@ -358,6 +387,15 @@ DataDrip supports various attribute types that automatically generate appropriat
 - **`:date`** - Date picker
 - **`:time`** - Time picker
 - **`:datetime`** - Date and time picker
+- **`:enum`** - Searchable checkbox list of the given `values:` (an array, or a lambda that returns one); the attribute holds the ticked values as a comma-separated string. A fresh form ticks the values of its `default:` (a comma-separated string), or all of them when it declares none. Pass `multiple: false` for a dropdown that picks a single value:
+
+```ruby
+attribute :regions, :enum, values: %w[eu us apac]
+attribute :statuses, :enum, values: %w[open in_review closed], default: "open,in_review"
+attribute :mode, :enum, values: %w[dry_run apply], multiple: false, required: true, default: "dry_run"
+```
+
+A single-choice option offers a blank choice when it is optional, or when it is required and its current value is not one of the choices (no `default:`, a mistyped one, or a stale value brought by **Run again**), so nobody runs the first value without picking it. An optional one left blank arrives as `""`, and its `default:` does not re-apply.
 
 ### Documenting Backfills
 
@@ -471,6 +509,10 @@ rails generate data_drip:install_scripts
 
 This creates the `app/scripts` directory and the `data_drip_script_runs` migration.
 
+### Output size
+
+Everything a script logs is appended to `data_drip_script_runs.output`, a `MEDIUMTEXT` column on MySQL (16MB) and unbounded `text` elsewhere. DataDrip caps a single run's log at 1MB: past that, further lines are dropped and the log ends with `[output truncated: ...]`. Installs created before the column was widened should run `rails generate data_drip:widen_script_run_output`, otherwise MySQL rejects the write at 64KB with `Data too long for column 'output'`.
+
 ### Creating Scripts
 
 Generate a new script:
@@ -524,6 +566,141 @@ Scripts fire lifecycle hooks with the same precedence rules as backfills (script
 - Script runs are enqueued on the shared `DataDrip.queue_name` queue (default: `ENV["DATA_DRIP_QUEUE"]` or `:data_drip`), the same one backfills use — make sure your worker processes it.
 - Datetime inputs are interpreted without timezone conversion (only the run's top-level "start at" field is converted from your browser timezone).
 - If your `base_job_class` retries on errors, a failed script will re-run from scratch. Make scripts idempotent, or configure `discard_on` in your base job class.
+
+## Multi-cell deployments
+
+If your application runs as several independent copies ("cells") — each with its own database, job queue, and workers — DataDrip can coordinate the same backfill or script across all of them: a developer triggers it **once**, from any cell's UI, and DataDrip creates and executes an independent copy of the run in every cell.
+
+Execution stays strictly cell-local (each cell's own workers process each cell's own data); only control traffic crosses cells over HTTPS. Everything is opt-in — without the configuration below, nothing changes.
+
+### How it works
+
+- Running in several cells is a choice made per run: the new-run form's **Run this in multiple cells** box, unticked by default (also on **Run again**). An unticked run is created and handled exactly as in single-cell DataDrip — no group, no dispatch records, and none of the multi-cell code paths below.
+- The cell whose UI created the run is the **coordinator**: it holds the `local` run plus one *dispatch* record per target cell, and delivers each one through a background job (`POST` to that cell's **Cell API**).
+- Runs are correlated by a `group_uuid`, and creation is idempotent per `(group_uuid, cell_id)` — duplicate deliveries and retries are safe.
+- The coordinator's show page renders one card per cell with that cell's own status, progress, errors, and (for scripts) the tail of its log. Cells that may still change are polled concurrently against one shared deadline; a cell whose run reached a terminal state is served from the snapshot cached on its dispatch record, so a finished group costs nothing to view and stays readable after those cells are gone.
+- A run's status in the lists and page headers is the **group's** status — the worst of the coordinator's own run and every leg. A run that completed here is not reported as completed while another cell is still working, or failed.
+- A cell that can't be reached shows as "unreachable" without blocking anything; a dispatch the target cell rejected (e.g. the class isn't deployed there yet) shows the error with a **Retry dispatch** button.
+- Stopping or deleting a coordinator run fans the action out to the other cells, which re-apply the usual rules (owner-only, runs that already executed are kept as history). A stop also reaches legs that have not started yet, and dispatches not delivered yet are cancelled; one that lands anyway is stopped as it arrives. A delete is refused unless every cell acknowledges: the coordinator's dispatch records are the only place a remote leg can be seen or stopped from, so they are never discarded while a leg is still scheduled somewhere.
+- In the cell *executing* a fanned-in run, any operator may stop or delete it. Backfiller ids are cell-scoped, so the coordinator's author matches nobody there and an ownership check would leave the run unstoppable from the one cell that can actually stop it.
+
+### Requirements
+
+Multi-cell mode makes two assumptions about your deployment. Both hold in most cell
+architectures, but they are worth checking before you turn it on:
+
+1. **Backfiller ids are not reused between cells.** A fanned-out run stores the creator's id
+   verbatim in every cell, and that id is what a cell's Cell API compares its own runs against.
+   If two cells can both have a user `42`, a run created by cell A's user 42 will appear under
+   cell B's user 42's "My runs". Deployments that shard the id space per cell (per-cell
+   `AUTO_INCREMENT` offsets, UUIDs, snowflake ids) satisfy this automatically. The creator's
+   record itself only has to exist in the coordinator's cell — other cells display the name
+   snapshot taken at creation.
+2. **A cell can reach the other cells' Cell API, and runs a background queue.** Dispatch and
+   status refreshes are jobs on `DataDrip.cell_queue_name` (default: `DataDrip.queue_name`); the UI itself never makes a cross-cell
+   call (see [How statuses are refreshed](#how-statuses-are-refreshed)).
+
+Each cell also validates a fanned-out run's options against its own copy of the class. An
+`enum` option whose `values:` is a callable reading data (ids or names loaded from the
+database) can therefore offer different values in each cell: a value picked in the coordinator's form is rejected
+where it does not exist, and that cell's card shows "Dispatch failed" with the validation
+error. Keep such options free-form, or run those classes in one cell at a time.
+
+### Configuration
+
+```ruby
+# config/initializers/data_drip.rb
+
+# This deployment's own cell id. nil (the default) => single-cell mode.
+DataDrip.current_cell_id = -> { ENV["CELL_ID"] }
+
+# All cell ids, including this one.
+DataDrip.cell_ids = -> { ENV.fetch("CELL_IDS", "").split(",") }
+
+# Token(s) this cell accepts on its own Cell API (array supports rotation).
+DataDrip.cell_api_tokens = -> { [ENV["DATA_DRIP_CELL_SECRET"]].compact }
+
+# How to reach the other cells' Cell API. The built-in HTTP transport sends
+# JSON over HTTPS; `url`, `query` and `headers` accept values or callables.
+DataDrip.cell_transport = DataDrip::CellTransport::Http.new(
+  url: ->(cell_id) { "https://api.#{cell_id}.example.com/data_drip/cell_api" },
+  headers: -> { { "Authorization" => "Bearer #{ENV["DATA_DRIP_CELL_SECRET"]}" } }
+)
+
+# Optional: lets the UI deep-link into other cells' DataDrip UIs.
+DataDrip.cell_ui_url = ->(cell_id, path) {
+  "https://api.#{cell_id}.example.com/data_drip#{path}"
+}
+```
+
+Any transport object responding to `call(cell_id:, method:, path:, body: nil)` and returning a `DataDrip::CellTransport::Response`-like object works — swap in your own if your infrastructure routes between cells differently (e.g. a routing query parameter on a single shared hostname). A transport should raise `DataDrip::CellTransport::Error` for anything that makes a cell unusable — unreachable, but also "not in my registry" or "I refuse to send a secret over plaintext" — and the built-in HTTP transport converts errors raised by your `url` callable into exactly that. DataDrip then treats it as *that cell* failing: a retriable dispatch failure, not a crash.
+
+Optional tuning (defaults shown). Each accepts a value or a callable:
+
+```ruby
+DataDrip.cell_fanout_concurrency = 8       # cells talked to at once
+DataDrip.cell_fanout_deadline = 5          # seconds for a whole fan-out, however many cells
+DataDrip.cell_status_refresh_interval = 3  # seconds a cached per-cell status stays fresh
+DataDrip.script_output_tail_bytes = 4_096  # log tail carried in a cross-cell snapshot
+DataDrip.cell_queue_name = nil             # queue for dispatch/refresh jobs; nil => queue_name
+```
+
+Dispatch and status-refresh jobs share `queue_name` with `Dripper` and `ScriptRunner` unless
+`cell_queue_name` says otherwise. A long script holding that queue's workers delays them, and
+with them how fresh the per-cell cards are; give them their own queue if that matters to you.
+
+Keep your transport's timeouts near `cell_fanout_deadline`: work the fan-out has given up on
+keeps running until its socket times out.
+
+### How statuses are refreshed
+
+The coordinator does not query the other cells while rendering a page. Each dispatch record
+caches the last status its cell reported, the page renders from that cache, and a
+`CellStatusRefreshJob` catches up any leg that has gone stale — so the page returns immediately,
+never blocks on another cell, and never writes during a `GET` (hosts commonly route reads to a
+replica where writing is forbidden). A status is therefore at most
+`cell_status_refresh_interval` old.
+
+A leg whose run completed (or was deleted in its own cell) is never polled again: there is
+nothing left to learn, and a finished group stays readable long after those cells are gone. A
+failed or stopped backfill leg is asked about once more each time someone opens the group's page,
+because retrying its failed batches, from either cell, brings it back to running; the page polls
+until that answer has landed and then stops, rather than re-asking on every poll. A cell that stops
+answering keeps rendering what it last reported, flagged as stale, rather than blanking out, and is
+asked again at a longer interval (ten freshness windows) so a dead cell does not cost a fan-out
+every few seconds.
+
+When several people watch the same run, one request claims the refresh through `Rails.cache` and
+the job releases the claim once it has reported. With no shared cache store configured this simply
+stops deduplicating.
+
+### Mounting the Cell API
+
+The Cell API is a separate engine so it can live outside whatever staff/admin gate protects the human UI (machine-to-machine calls carry only the bearer token, no user session):
+
+```ruby
+# config/routes.rb
+mount DataDrip::Engine => "/data_drip"                    # human UI (behind your admin auth)
+mount DataDrip::CellApi::Engine => "/data_drip/cell_api"  # cell-to-cell API (token auth only)
+```
+
+With no `cell_api_tokens` configured the Cell API rejects every request, so mounting it in a single-cell app is harmless.
+
+### Upgrading an existing install
+
+```bash
+rails generate data_drip:add_multi_cell
+```
+
+This adds the multi-cell columns (`group_uuid`, `cell_id`, `origin`, `origin_cell_id`, and `backfiller_name` on script runs) and the `data_drip_cell_dispatches` table. Fresh installs get everything from `data_drip:install`.
+
+### Notes
+
+- The "no identical active run" guard stays local to each cell; cross-cell duplicates of the same trigger are prevented by the `(group_uuid, cell_id)` unique index instead.
+- Deleting a coordinator run is refused unless every cell acknowledges. Its dispatch records are the only place a remote leg can be seen or stopped from, so they are never discarded while a leg is still scheduled somewhere.
+- In the cell *executing* a fanned-in run, any operator who can reach the UI may stop or delete it. Such a run has no owner there — the id it carries belongs to a record in the coordinator's cell — and requiring ownership would leave it unstoppable from the one cell that can stop it.
+- A status a cell reports that this version of DataDrip does not recognise (a cell on a newer release) is shown as-is and never counted as finished.
+- Scheduled runs are dispatched immediately with their `start_at`; each cell honors the schedule on its own, so a coordinator outage doesn't delay the other cells.
 
 ## Contributing
 

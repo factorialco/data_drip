@@ -16,14 +16,31 @@ module DataDrip
       %i[pending enqueued running completed failed stopped]
     )
 
-    after_commit :enqueue, on: :create
-    after_commit :run_hooks
+    # One callback, not two: `enqueue` commits its own `enqueued!` transition, which runs these hooks
+    # for it and replaces `previous_changes`. This commit's hooks have to run first, and apps run
+    # separate after_commit callbacks in either order (run_after_transaction_callbacks_in_order_defined).
+    after_commit :run_hooks_and_enqueue
 
     def enqueue
       return unless pending?
+      return unless slot_available?
 
-      DataDrip::DripperChild.perform_later(self)
+      # The transition MUST commit before the job is enqueued. A worker can pick
+      # the job up the instant it is visible; if it runs the batch to completion
+      # first, a trailing `enqueued!` would stomp that terminal state and the
+      # parent run, seeing a forever-active batch, would never settle.
       enqueued!
+      DataDrip::DripperChild.perform_later(self)
+    end
+
+    # With a parallelism limit, a batch is only enqueued while fewer than that
+    # many siblings are enqueued or running; DripperChild enqueues the next
+    # pending batch when one finishes.
+    def slot_available?
+      limit = backfill_run.backfill_class&.max_parallel_batches
+      return true if limit.nil?
+
+      backfill_run.batches.where(status: %i[enqueued running]).count < limit
     end
 
     def run!
@@ -49,6 +66,11 @@ module DataDrip
     end
 
     private
+
+    def run_hooks_and_enqueue
+      run_hooks
+      enqueue if transaction_include_any_action?(%i[create])
+    end
 
     def run_hooks
       return unless status_previously_changed?
