@@ -458,6 +458,15 @@ To play with the UI locally, boot the dummy app and visit `http://localhost:3000
 bin/dev
 ```
 
+To exercise [multi-cell runs](#multi-cell-deployments), boot the dummy app as several cells instead. Each cell is its own server with its own database, and they reach each other through the Cell API on localhost:
+
+```bash
+bin/dev-cells                   # cell-a on :3000, cell-b on :3001, cell-c on :3002
+CELL_IDS=eu,us bin/dev-cells    # choose the cells (and CELLS_BASE_PORT the first port)
+```
+
+Each cell seeds a user with an id from its own range and one employee only it has, so a run's results differ per cell.
+
 ## Scripts
 
 Besides backfills, DataDrip can run **scripts**: arbitrary one-shot pieces of code with typed inputs, triggered from the web UI. Unlike backfills there is no collection to iterate — a script runs once, in a background job, and everything it logs is stored and shown live in the UI.

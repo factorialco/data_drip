@@ -1,0 +1,33 @@
+#!/usr/bin/env bash
+# Boots the dummy app (spec/test_app) as several cells, to exercise multi-cell
+# runs locally. Each cell is its own server with its own database; the Nth cell
+# listens on CELLS_BASE_PORT + N (cell-a on 3000, cell-b on 3001, …).
+#
+#   bin/dev-cells                     # cell-a, cell-b, cell-c
+#   CELL_IDS=eu,us bin/dev-cells      # pick your own cells
+set -euo pipefail
+
+cd "$(dirname "$0")/../spec/test_app"
+export BUNDLE_GEMFILE=../../Gemfile
+export CELL_IDS="${CELL_IDS:-cell-a,cell-b,cell-c}"
+export CELLS_BASE_PORT="${CELLS_BASE_PORT:-3000}"
+
+IFS=',' read -r -a cells <<< "$CELL_IDS"
+
+# Stop every cell when this script exits (Ctrl-C included).
+trap 'trap - EXIT; kill 0' INT TERM EXIT
+
+for i in "${!cells[@]}"; do
+  cell="${cells[$i]}"
+  CELL_ID="$cell" bin/rails db:prepare
+done
+
+for i in "${!cells[@]}"; do
+  cell="${cells[$i]}"
+  port=$((CELLS_BASE_PORT + i))
+  echo "==> $cell: http://localhost:$port/data_drip"
+  CELL_ID="$cell" bin/rails server -p "$port" -P "tmp/pids/server-$cell.pid" 2>&1 \
+    | sed -u "s/^/[$cell] /" &
+done
+
+wait

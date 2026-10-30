@@ -11,7 +11,8 @@ default: &default
 
 development:
   <<: *default
-  database: storage/development.sqlite3
+  # bin/dev-cells gives every cell its own database, as real cells have.
+  database: storage/development<%= "-#{ENV["CELL_ID"]}" if ENV["CELL_ID"].present? %>.sqlite3
 
 # Warning: The database defined as "test" will be erased and
 # re-generated from your development database when you run "rake".
