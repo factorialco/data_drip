@@ -1,12 +1,15 @@
-<%# Opt-in to running the new run in several cells, only rendered in
-    multi-cell mode. Unticked (the default, "Run again" included), the run is
-    created exactly as in single-cell DataDrip: no group, no dispatches. The
-    current cell is always included, so the list only offers the other cells. %>
+<%# Running the new run in several cells, only rendered in multi-cell mode.
+    A fresh form ("Run again" included) starts ticked with every cell picked;
+    a form shown again after a failed create keeps what was submitted.
+    Unticked, the run is created exactly as in single-cell DataDrip: no group,
+    no dispatches. The current cell is always included, so the list only
+    offers the other cells. %>
 <% if DataDrip.multi_cell? %>
   <% current_cell = DataDrip.resolved_current_cell_id %>
   <% remote_cells = DataDrip.remote_cell_ids %>
-  <% enabled = params[:multi_cell] == "1" %>
-  <% selected_cells = enabled ? Array(params[:target_cell_ids]).map(&:to_s) : remote_cells %>
+  <% submitted_ticked = !request.get? && params[:multi_cell] == "1" %>
+  <% enabled = request.get? || submitted_ticked %>
+  <% selected_cells = submitted_ticked ? Array(params[:target_cell_ids]).map(&:to_s) : remote_cells %>
 
   <fieldset class="mb-5" data-controller="cell-scope">
     <legend class="<%= DataDrip::BackfillRunsHelper::LABEL_CLASSES %>">Cells</legend>

@@ -549,7 +549,7 @@ Execution stays strictly cell-local (each cell's own workers process each cell's
 
 ### How it works
 
-- Running in several cells is a choice made per run: the new-run form's **Run this in multiple cells** box, unticked by default (also on **Run again**). An unticked run is created and handled exactly as in single-cell DataDrip — no group, no dispatch records, and none of the multi-cell code paths below.
+- Running in several cells is a choice made per run: the new-run form's **Run this in multiple cells** box, ticked by default with every cell picked (also on **Run again**). Untick it to run in this cell only. An unticked run is created and handled exactly as in single-cell DataDrip — no group, no dispatch records, and none of the multi-cell code paths below.
 - The cell whose UI created the run is the **coordinator**: it holds the `local` run plus one *dispatch* record per target cell, and delivers each one through a background job (`POST` to that cell's **Cell API**).
 - Runs are correlated by a `group_uuid`, and creation is idempotent per `(group_uuid, cell_id)` — duplicate deliveries and retries are safe.
 - The coordinator's show page renders one card per cell with that cell's own status, progress, errors, and (for scripts) the tail of its log. Cells that may still change are polled concurrently against one shared deadline; a cell whose run reached a terminal state is served from the snapshot cached on its dispatch record, so a finished group costs nothing to view and stays readable after those cells are gone.

@@ -94,13 +94,17 @@ RSpec.describe DataDrip::BackfillRunsController, type: :controller do
       Nokogiri::HTML(response.body).at_css("input[type=checkbox][name=multi_cell]")
     end
 
-    it "offers running in several cells, unticked, in multi-cell mode" do
+    def target_cell_boxes
+      Nokogiri::HTML(response.body).css("input[type=checkbox][name='target_cell_ids[]']")
+    end
+
+    it "offers running in several cells, ticked with every cell, in multi-cell mode" do
       get :new
 
       expect(multi_cell_box).to be_present
-      expect(multi_cell_box["checked"]).to be_nil
-      expect(response.body).to include("cell-b")
-      expect(response.body).to include("cell-c")
+      expect(multi_cell_box["checked"]).to be_present
+      expect(target_cell_boxes.map { |box| box["value"] }).to eq(%w[cell-b cell-c])
+      expect(target_cell_boxes).to all(satisfy { |box| box["checked"] && !box["disabled"] })
     end
 
     it "hides the cell targeting section in single-cell mode" do
@@ -111,7 +115,7 @@ RSpec.describe DataDrip::BackfillRunsController, type: :controller do
       expect(multi_cell_box).to be_nil
     end
 
-    it "leaves the box unticked when running a multi-cell run again" do
+    it "ticks the box when running a run again" do
       source =
         DataDrip::BackfillRun.create!(
           valid_attributes.merge(backfiller: backfiller, group_uuid: "g-source", cell_id: "cell-a")
@@ -125,7 +129,28 @@ RSpec.describe DataDrip::BackfillRunsController, type: :controller do
 
       get :new, params: { source_run_id: source.id }
 
+      expect(multi_cell_box["checked"]).to be_present
+    end
+
+    it "keeps the box unticked when a form submitted unticked is shown again" do
+      post :create, params: { backfill_run: valid_attributes.merge(batch_size: 0) }
+
+      expect(response).to have_http_status(:unprocessable_entity)
       expect(multi_cell_box["checked"]).to be_nil
+      expect(target_cell_boxes).to all(satisfy { |box| box["disabled"] })
+    end
+
+    it "keeps the cells picked when a form submitted ticked is shown again" do
+      post :create,
+           params: {
+             backfill_run: valid_attributes.merge(batch_size: 0),
+             multi_cell: "1",
+             target_cell_ids: %w[cell-c]
+           }
+
+      expect(response).to have_http_status(:unprocessable_entity)
+      expect(multi_cell_box["checked"]).to be_present
+      expect(target_cell_boxes.select { |box| box["checked"] }.map { |box| box["value"] }).to eq(%w[cell-c])
     end
   end
 
