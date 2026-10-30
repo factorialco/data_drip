@@ -87,7 +87,7 @@
   </div>
 
   <div data-backfill-options-target="container">
-    <%= backfill_option_inputs(@run) if @run.backfill_class_name.present? %>
+    <%= backfill_form_details(@run) if @run.backfill_class_name.present? %>
   </div>
 
   <%= render "data_drip/shared/cell_scope" %>

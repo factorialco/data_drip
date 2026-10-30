@@ -1,0 +1,75 @@
+<h1 class="text-xl font-semibold tracking-tight text-zinc-900 dark:text-white">Backfills catalog</h1>
+<p class="mt-1 text-sm text-pretty text-zinc-500 dark:text-zinc-400">Every backfill available in this app, with what it does and the options it accepts.</p>
+
+<%= turbo_frame_tag "backfills", data: { turbo_action: "advance" } do %>
+  <%= form_with url: backfills_path, method: :get,
+      data: { controller: "autosubmit", turbo_action: "advance" },
+      class: "mt-6 flex flex-wrap items-center gap-3" do %>
+    <div class="relative w-full max-w-80">
+      <svg viewBox="0 0 20 20" fill="none" class="pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-zinc-400" aria-hidden="true">
+        <path stroke="currentColor" stroke-linecap="round" stroke-width="2" d="m13 13 4 4M8.5 3a5.5 5.5 0 1 0 0 11 5.5 5.5 0 0 0 0-11Z" />
+      </svg>
+      <%= text_field_tag :q, @query,
+          placeholder: "Search by name, description, or field…",
+          autocomplete: "off",
+          aria: { label: "Search backfills" },
+          data: { action: "input->autosubmit#submit" },
+          class: "#{DataDrip::BackfillRunsHelper::INPUT_CLASSES} pl-8" %>
+    </div>
+  <% end %>
+
+  <% if @backfills.any? %>
+    <div class="-mx-4 mt-2 overflow-x-auto sm:-mx-6 lg:-mx-8">
+      <div class="inline-block min-w-full px-4 py-2 align-middle sm:px-6 lg:px-8">
+        <table class="w-full table-fixed text-left">
+          <thead>
+            <tr>
+              <th class="w-1/4 border-b border-zinc-950/10 py-2.5 pr-4 text-sm font-medium whitespace-nowrap text-zinc-500 dark:border-white/10 dark:text-zinc-400">Backfill class</th>
+              <th class="w-1/2 border-b border-zinc-950/10 py-2.5 pr-4 text-sm font-medium whitespace-nowrap text-zinc-500 dark:border-white/10 dark:text-zinc-400">Description</th>
+              <th class="w-1/4 border-b border-zinc-950/10 py-2.5 text-sm font-medium whitespace-nowrap text-zinc-500 dark:border-white/10 dark:text-zinc-400">Configurable fields</th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-zinc-950/5 dark:divide-white/5">
+            <% @backfills.each do |backfill| %>
+              <tr class="align-top">
+                <td class="py-3 pr-4 break-words">
+                  <span class="font-mono text-sm font-medium text-zinc-900 dark:text-white"><%= backfill.name %></span>
+                </td>
+                <td class="py-3 pr-4 text-sm text-pretty text-zinc-600 dark:text-zinc-300">
+                  <% description = backfill_description(backfill) %>
+                  <% if description.present? %>
+                    <%= description %>
+                  <% else %>
+                    <span class="text-zinc-400 dark:text-zinc-600">No description</span>
+                  <% end %>
+                </td>
+                <td class="py-3"><%= backfill_configurable_field_tags(backfill) %></td>
+              </tr>
+            <% end %>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <%= render 'data_drip/shared/pagination',
+        pagination: @pagination,
+        item_name: "backfills",
+        page_param: :page,
+        additional_params: { q: @query.presence } %>
+  <% else %>
+    <div class="border-t border-zinc-950/5 py-16 text-center dark:border-white/5">
+      <% filtered = @query.present? %>
+      <p class="text-sm font-semibold text-zinc-900 dark:text-white"><%= filtered ? "No backfills match your search." : "No backfills defined yet." %></p>
+      <p class="mx-auto mt-1 max-w-[45ch] text-sm text-pretty text-zinc-500 dark:text-zinc-400">
+        <%= filtered ?
+          "Try a different name, description, or field name." :
+          "Define a DataDrip::Backfill subclass to see it listed here." %>
+      </p>
+      <% if filtered %>
+        <div class="mt-5">
+          <%= link_to "Clear search", backfills_path, class: secondary_button_classes %>
+        </div>
+      <% end %>
+    </div>
+  <% end %>
+<% end %>

@@ -1,5 +1,25 @@
 
 class AddBirthdayToEmployee < DataDrip::Backfill
+  description "Backfills today's date as the birthday for employees missing one."
+
+  instructions <<~MARKDOWN
+    Sets today's date as the **birthday** for all employees missing one.
+
+    ## Options
+    - `employee_id`: Target a **single employee** by ID (optional)
+
+    ## Finding an employee ID
+    You can get the ID from an email with:
+    ```
+    SELECT id FROM employees
+    WHERE email = 'jane@example.com';
+    ```
+
+    ## Notes
+    - Uses `update_all` for fast batch processing
+    - Safe to re-run — only touches employees where `birthday` is `nil`
+  MARKDOWN
+
   attribute :employee_id, :integer
 def scope
     Employee.where(birthday: nil)
