@@ -265,6 +265,31 @@ RSpec.describe DataDrip::BackfillRunBatch, type: :model do
       expect(batch.output).to include("processing #{employee1.id}")
     end
 
+    it "keeps lines logged inside a transaction the failure rolled back" do
+      batch = build_batch_for("BackfillRunBatchSpec::FailInTransactionBackfill")
+
+      batch.fail_with!(raised_by_run(batch))
+
+      expect(batch.reload.output).to include("processing #{employee2.id}")
+    end
+
+    it "sends log lines to the Rails log when the install lacks the output column" do
+      batch = build_batch_for("BackfillRunBatchSpec::LoggingBackfill")
+      allow(DataDrip::BackfillRunBatch).to receive(:diagnostics_supported?).and_return(false)
+      allow(Rails.logger).to receive(:info)
+
+      batch.run!
+
+      expect(Rails.logger).to have_received(:info).with(/processing #{employee1.id}/)
+    end
+
+    it "runs backfills whose initialize only takes the documented keywords" do
+      batch = build_batch_for("BackfillRunBatchSpec::CustomInitializeBackfill")
+
+      expect { batch.run! }.not_to raise_error
+      expect(batch.reload.output.lines.size).to eq(3)
+    end
+
     it "clears the diagnostics when the batch is reset for a retry" do
       batch = build_batch_for("BackfillRunBatchSpec::FailOnSecondBackfill")
       batch.fail_with!(raised_by_run(batch))
@@ -423,6 +448,22 @@ module BackfillRunBatchSpec
     def process_element(element)
       super
       raise ArgumentError, "bad record" if element.id != Employee.minimum(:id)
+    end
+  end
+
+  class FailInTransactionBackfill < LoggingBackfill
+    def process_element(element)
+      ActiveRecord::Base.transaction do
+        super
+        raise ArgumentError, "bad record" if element.id != Employee.minimum(:id)
+      end
+    end
+  end
+
+  class CustomInitializeBackfill < LoggingBackfill
+    def initialize(batch_size: 100, sleep_time: 0, backfill_options: {})
+      super
+      @cache = {}
     end
   end
 end

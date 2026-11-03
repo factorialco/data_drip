@@ -459,6 +459,9 @@
   .w-\(--progress\) {
     width: var(--progress);
   }
+  .w-0 {
+    width: calc(var(--spacing) * 0);
+  }
   .w-9 {
     width: calc(var(--spacing) * 9);
   }

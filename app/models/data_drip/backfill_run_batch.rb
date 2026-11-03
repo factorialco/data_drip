@@ -60,9 +60,11 @@ module DataDrip
       migration =
         backfill_run.backfill_class.new(
           batch_size: batch_size,
-          backfill_options: backfill_run.options,
-          logger: ->(line) { append_output(line) }
+          backfill_options: backfill_run.options
         )
+      # Set after construction, not passed to `new`: apps' backfills may
+      # override initialize with only the keywords above.
+      migration.output_logger = ->(line) { append_output(line) }
 
       migration
         .scope
@@ -86,6 +88,10 @@ module DataDrip
     # Status and diagnostics are written together, so on_batch_failed hooks
     # already see the full error.
     def fail_with!(error)
+      # Lines logged inside a transaction the backfill opened were rolled back
+      # with it, but are still in memory: write the output again so the lines
+      # that led up to the error survive.
+      output_will_change! if self.class.diagnostics_supported?
       update!(
         diagnostic_attributes(
           status: :failed,
@@ -113,7 +119,8 @@ module DataDrip
     end
 
     def append_output(line)
-      return unless self.class.diagnostics_supported?
+      # Older installs have nowhere to store it: keep the line in the Rails log.
+      return Rails.logger.info(line) unless self.class.diagnostics_supported?
 
       current = output.to_s
       return if current.end_with?(TRUNCATION_NOTICE)

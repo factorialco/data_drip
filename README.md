@@ -54,7 +54,7 @@ To record failure details (exception class, backtrace, failing record) and the `
 rails generate data_drip:add_batch_diagnostics
 ```
 
-Until it runs, batches keep working and show only the error message.
+Until it runs, batches keep working and show only the error message, and `log` lines go to the Rails log.
 
 To add the performance indexes to an older install (composite indexes on the runs list and per-run batch queries):
 

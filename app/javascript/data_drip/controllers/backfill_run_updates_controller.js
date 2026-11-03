@@ -56,6 +56,7 @@ export default class extends Controller {
 
     if (this.hasBatchesMetaTarget) this.batchesMetaTarget.innerHTML = data.batches_meta_html
     if (this.hasBatchesTableTarget) {
+      this.dispatch("rendering")
       this.batchesTableTarget.innerHTML = data.batches_html
       this.dispatch("rendered")
     }

@@ -37,12 +37,10 @@ module DataDrip
     def initialize(
       batch_size: 100,
       sleep_time: DataDrip.sleep_time,
-      backfill_options: {},
-      logger: nil
+      backfill_options: {}
     )
       @batch_size = batch_size
       @sleep_time = sleep_time
-      @logger = logger
       @backfill_options =
         self.class.backfill_options_class.new(backfill_options)
     end
@@ -73,13 +71,17 @@ module DataDrip
     # element to blame.
     attr_reader :current_record_id
 
+    # Set by the batch running this backfill: a callable that receives each
+    # `log` line. Internal to DataDrip.
+    attr_writer :output_logger
+
     # Writes a line to the output of the batch being processed, shown on the
     # run page next to that batch. Outside a run (a console `call`), the line
     # goes to the Rails log.
     def log(message)
       line = "[#{Time.current.utc.iso8601}] #{message}"
-      if @logger
-        @logger.call(line)
+      if @output_logger
+        @output_logger.call(line)
       else
         Rails.logger.info(line)
       end
