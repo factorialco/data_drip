@@ -29,8 +29,7 @@ module DataDrip
             render_snapshot(existing)
           else
             audit("rejected", errors: run.errors.full_messages)
-            render json: { errors: run.errors.full_messages },
-                   status: :unprocessable_entity
+            render_rejection(run)
           end
         rescue ActiveRecord::RecordNotUnique
           render_snapshot(find_existing)

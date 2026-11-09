@@ -380,6 +380,9 @@
   .mb-6 {
     margin-bottom: calc(var(--spacing) * 6);
   }
+  .ml-1 {
+    margin-left: calc(var(--spacing) * 1);
+  }
   .ml-6 {
     margin-left: calc(var(--spacing) * 6);
   }
@@ -794,6 +797,9 @@
   .px-1 {
     padding-inline: calc(var(--spacing) * 1);
   }
+  .px-1\.5 {
+    padding-inline: calc(var(--spacing) * 1.5);
+  }
   .px-2 {
     padding-inline: calc(var(--spacing) * 2);
   }
@@ -1090,6 +1096,12 @@
     --tw-inset-ring-color: color-mix(in srgb, oklch(54.6% 0.245 262.881) 20%, transparent);
     @supports (color: color-mix(in lab, red, red)) {
       --tw-inset-ring-color: color-mix(in oklab, var(--color-blue-600) 20%, transparent);
+    }
+  }
+  .inset-ring-drip-700\/10 {
+    --tw-inset-ring-color: color-mix(in srgb, #7209b7 10%, transparent);
+    @supports (color: color-mix(in lab, red, red)) {
+      --tw-inset-ring-color: color-mix(in oklab, var(--color-drip-700) 10%, transparent);
     }
   }
   .inset-ring-green-600\/20 {
@@ -1594,6 +1606,14 @@
       --tw-inset-ring-color: color-mix(in srgb, oklch(70.7% 0.165 254.624) 30%, transparent);
       @supports (color: color-mix(in lab, red, red)) {
         --tw-inset-ring-color: color-mix(in oklab, var(--color-blue-400) 30%, transparent);
+      }
+    }
+  }
+  .dark\:inset-ring-drip-400\/20 {
+    @media (prefers-color-scheme: dark) {
+      --tw-inset-ring-color: color-mix(in srgb, #b075e2 20%, transparent);
+      @supports (color: color-mix(in lab, red, red)) {
+        --tw-inset-ring-color: color-mix(in oklab, var(--color-drip-400) 20%, transparent);
       }
     }
   }

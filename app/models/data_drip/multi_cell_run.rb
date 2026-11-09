@@ -13,6 +13,18 @@ module DataDrip
 
     DELETED_BACKFILLER_LABEL = "Deleted user"
 
+    # Error type for a run naming a class, option or input this cell's code
+    # does not have. In a cell receiving a dispatched run that usually means
+    # the cell's deploy is behind the coordinator's, which the Cell API tells
+    # the coordinator so it can retry later (see CellDispatcherJob).
+    UNKNOWN_HERE = :unknown_here
+
+    # Whether the run was rejected only for naming something this cell's code
+    # does not have.
+    def unknown_here?
+      errors.any? && errors.all? { |error| error.type == UNKNOWN_HERE }
+    end
+
     included do
       belongs_to :backfiller, class_name: DataDrip.backfiller_class, optional: true
 

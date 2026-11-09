@@ -57,6 +57,16 @@ module DataDrip
         params[:acting_backfiller_id].to_i
       end
 
+      # A run this cell refused to create. `code: "unknown_here"` says the only
+      # problem is a class, option or input this cell's code does not have,
+      # which the coordinator retries for a while (this cell's deploy is most
+      # likely behind) instead of failing the dispatch outright.
+      def render_rejection(run)
+        body = { errors: run.errors.full_messages }
+        body[:code] = DataDrip::MultiCellRun::UNKNOWN_HERE.to_s if run.unknown_here?
+        render json: body, status: :unprocessable_entity
+      end
+
       def render_snapshot(run, status: :ok)
         render json: DataDrip::RunSnapshot.for(run), status: status
       end

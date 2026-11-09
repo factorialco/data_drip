@@ -578,7 +578,7 @@ Execution stays strictly cell-local (each cell's own workers process each cell's
 - Runs are correlated by a `group_uuid`, and creation is idempotent per `(group_uuid, cell_id)` — duplicate deliveries and retries are safe.
 - The coordinator's show page renders one card per cell with that cell's own status, progress, errors, and (for scripts) the tail of its log. Cells that may still change are polled concurrently against one shared deadline; a cell whose run reached a terminal state is served from the snapshot cached on its dispatch record, so a finished group costs nothing to view and stays readable after those cells are gone.
 - A run's status in the lists and page headers is the **group's** status — the worst of the coordinator's own run and every leg. A run that completed here is not reported as completed while another cell is still working, or failed.
-- A cell that can't be reached shows as "unreachable" without blocking anything; a dispatch the target cell rejected (e.g. the class isn't deployed there yet) shows the error with a **Retry dispatch** button.
+- A cell that can't be reached shows as "unreachable" without blocking anything; a dispatch the target cell rejected shows the error with a **Retry dispatch** button. A cell that rejects a run only because it does not know its class, or one of its options or inputs, is most likely still deploying it: that dispatch stays pending and is retried on its own (see [When a cell's deploy is behind](#when-a-cells-deploy-is-behind)).
 - Stopping or deleting a coordinator run fans the action out to the other cells, which re-apply the usual rules (owner-only, runs that already executed are kept as history). A stop also reaches legs that have not started yet, and dispatches not delivered yet are cancelled; one that lands anyway is stopped as it arrives. A delete is refused unless every cell acknowledges: the coordinator's dispatch records are the only place a remote leg can be seen or stopped from, so they are never discarded while a leg is still scheduled somewhere.
 - In the cell *executing* a fanned-in run, any operator may stop or delete it. Backfiller ids are cell-scoped, so the coordinator's author matches nobody there and an ownership check would leave the run unstoppable from the one cell that can actually stop it.
 
@@ -671,6 +671,42 @@ every few seconds.
 When several people watch the same run, one request claims the refresh through `Rails.cache` and
 the job releases the claim once it has reported. With no shared cache store configured this simply
 stops deduplicating.
+
+### Linked cells
+
+Some deployments are not cells of the same application but still need to stay in step with it — a staging copy, or a sales demo running the same code against its own data. `linked_cells` offers each one on the new-run form as a box of its own, independent of **Run this in multiple cells**:
+
+```ruby
+DataDrip.linked_cells = -> {
+  { "demo-eu" => { label: "Demo", default_for: %i[backfill] } }
+}
+```
+
+- `label` names the cell on the form ("Also run in Demo") and on its card on the run page. Defaults to the id.
+- `default_for` lists the run types (`:backfill`, `:script`) whose fresh form starts with the box ticked. Defaults to none. A form shown again after a failed create keeps what was submitted.
+- A linked cell is reached through `cell_transport`, like any other cell. `url` and `headers` receive the cell id, so a linked cell can live on another host and use its own secret:
+
+  ```ruby
+  headers: ->(cell_id) {
+    secret = cell_id == "demo-eu" ? ENV["DATA_DRIP_DEMO_SECRET"] : ENV["DATA_DRIP_CELL_SECRET"]
+    { "Authorization" => "Bearer #{secret}" }
+  }
+  ```
+
+- The linked cell itself needs only its `current_cell_id`, the Cell API mounted, and the token in `cell_api_tokens`. It needs no `cell_ids` or transport: it receives runs, it never sends them. Give it a token of its own, which the other cells never accept, so a linked cell can never act on them.
+- Once dispatched, a linked cell's leg is like any other: it can be stopped, retried and deleted from the coordinator, and it counts in the group's status.
+- Linked cells work in a deployment with no other cells of its own (`cell_ids` empty or just this cell). An id that is also in `cell_ids`, or is this cell, is ignored.
+
+The [requirements](#requirements) still apply. If the linked cell's ids overlap with this cell's, an option naming a record (a company id, say) names a different record there: untick the box for such runs.
+
+### When a cell's deploy is behind
+
+When a new class ships, the cells rarely deploy it at the same instant. A cell asked to run a class, option or input its code does not have yet answers with `code: "unknown_here"`, and the coordinator keeps that dispatch pending, says why on its card, and asks again every `cell_deploy_lag_retry_interval` until `cell_deploy_lag_retry_window` has passed since the run was created. Only then is the dispatch marked failed, for a human to retry. Stopping the group cancels a dispatch that is still waiting.
+
+```ruby
+DataDrip.cell_deploy_lag_retry_window = 24.hours    # 0 or nil: fail straight away
+DataDrip.cell_deploy_lag_retry_interval = 15.minutes
+```
 
 ### Mounting the Cell API
 

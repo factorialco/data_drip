@@ -52,20 +52,21 @@ module DataDrip
 
     private
 
-    # Saves a new run. Unless the form opted in to several cells, this is the
-    # plain save single-cell DataDrip has always done: no group, no dispatch,
-    # none of the multi-cell code involved.
+    # Saves a new run. Unless the form opted in to several cells or to a linked
+    # cell, this is the plain save single-cell DataDrip has always done: no
+    # group, no dispatch, none of the multi-cell code involved.
     def save_new_run(run)
-      return run.save unless multi_cell_requested?
-
-      remote_cell_ids = selected_remote_cell_ids
-      if remote_cell_ids.empty?
+      remote_cell_ids = multi_cell_requested? ? selected_remote_cell_ids : []
+      if multi_cell_requested? && remote_cell_ids.empty?
         run.validate
         run.errors.add(:base, "Pick at least one other cell, or untick \"Run this in multiple cells\".")
         return false
       end
 
-      DataDrip::GroupCreator.call(run: run, remote_cell_ids: remote_cell_ids)
+      target_cell_ids = remote_cell_ids + selected_linked_cell_ids
+      return run.save if target_cell_ids.empty?
+
+      DataDrip::GroupCreator.call(run: run, remote_cell_ids: target_cell_ids)
     end
 
     def multi_cell_requested?
@@ -77,6 +78,12 @@ module DataDrip
     # dropped whatever the form said.
     def selected_remote_cell_ids
       Array(params[:target_cell_ids]).map(&:to_s) & DataDrip.remote_cell_ids
+    end
+
+    # The linked cells the form ticked. Each has its own box, independent of
+    # "Run this in multiple cells".
+    def selected_linked_cell_ids
+      Array(params[:linked_cell_ids]).map(&:to_s) & DataDrip.linked_cell_ids
     end
 
     # Loads everything the per-cell cards need, entirely from the snapshots
