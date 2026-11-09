@@ -35,6 +35,8 @@ module DataDrip
             updated_at: Time.current
           )
         withdraw(dispatch, remote_run_id) if delivered.zero?
+      elsif unknown_here?(response) && deploy_lag_retry?(dispatch)
+        wait_for_deploy(dispatch, failure_message(response))
       else
         mark_failed(dispatch, failure_message(response))
         # A 4xx is a considered rejection (validation, unknown class after a
@@ -134,6 +136,41 @@ module DataDrip
           reason: reason
         }.to_json
       )
+    end
+
+    def unknown_here?(response)
+      response.body.is_a?(Hash) &&
+        response.body["code"] == DataDrip::MultiCellRun::UNKNOWN_HERE.to_s
+    end
+
+    # Whether the dispatch is still within the window in which a cell that
+    # does not know the run's class (or one of its options) is assumed to be
+    # deploying it, counted from when the run was created.
+    def deploy_lag_retry?(dispatch)
+      window = DataDrip.resolved_cell_deploy_lag_retry_window
+      window.positive? && Time.current < dispatch.created_at + window
+    end
+
+    # Keeps the dispatch pending, so the group stays active and a stop still
+    # cancels it, and asks again after the retry interval. Conditional like
+    # the other transitions: a dispatch cancelled meanwhile stays cancelled,
+    # and is not asked about again.
+    def wait_for_deploy(dispatch, reason)
+      retry_at = Time.current + DataDrip.resolved_cell_deploy_lag_retry_interval
+      deadline = dispatch.created_at + DataDrip.resolved_cell_deploy_lag_retry_window
+      waiting =
+        owed(dispatch).update_all(
+          status: DataDrip::CellDispatch.statuses[:pending],
+          error_message:
+            "Not deployed in that cell yet (#{reason}). Retrying every " \
+              "#{retry_interval_words} until #{deadline.utc.strftime("%Y-%m-%d %H:%M UTC")}.",
+          updated_at: Time.current
+        )
+      self.class.set(wait_until: retry_at).perform_later(dispatch) if waiting.positive?
+    end
+
+    def retry_interval_words
+      ActiveSupport::Duration.build(DataDrip.resolved_cell_deploy_lag_retry_interval.to_i).inspect
     end
 
     def run_id_in(response)

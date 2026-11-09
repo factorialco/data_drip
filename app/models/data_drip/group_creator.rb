@@ -5,8 +5,9 @@ module DataDrip
   # remote cell, each delivered by its own background job. The dispatch payload
   # is frozen here so retries re-send exactly what was originally requested.
   #
-  # Only for runs the operator opted in to running in several cells; every
-  # other run is a plain save, exactly as in single-cell DataDrip.
+  # Only for runs the operator opted in to sending to other cells (several
+  # cells, or a linked cell); every other run is a plain save, exactly as in
+  # single-cell DataDrip.
   class GroupCreator
     def self.call(run:, remote_cell_ids: [])
       new(run: run, remote_cell_ids: remote_cell_ids).call
@@ -20,7 +21,7 @@ module DataDrip
     # Returns whether the local run was saved (mirroring run.save so the
     # controllers keep their render-on-validation-error flow).
     def call
-      raise DataDrip::Error, "multi-cell is not configured" unless DataDrip.multi_cell?
+      raise DataDrip::Error, "no other cell is configured" unless DataDrip.dispatching?
 
       @run.group_uuid ||= SecureRandom.uuid
       @run.origin = :local
@@ -52,7 +53,7 @@ module DataDrip
 
     def create_dispatches
       # Never dispatch to unknown cells or to ourselves, whatever the form said.
-      cells = @remote_cell_ids.map(&:to_s) & DataDrip.remote_cell_ids
+      cells = @remote_cell_ids.map(&:to_s) & DataDrip.dispatchable_cell_ids
 
       cells.map do |cell_id|
         DataDrip::CellDispatch.create!(

@@ -97,7 +97,7 @@ module DataDrip
     def script_class_exists
       return if script_class
 
-      errors.add(:script_class_name, "must be a valid DataDrip script class")
+      errors.add(:script_class_name, UNKNOWN_HERE, message: "must be a valid DataDrip script class")
     end
 
     def script_class_properly_configured?
@@ -119,7 +119,7 @@ module DataDrip
           errors.add(:inputs, "#{error.attribute} #{error.message}")
         end
       rescue ActiveModel::UnknownAttributeError => e
-        errors.add(:inputs, "contains unknown attributes: #{e.message}")
+        errors.add(:inputs, UNKNOWN_HERE, message: "contains unknown attributes: #{e.message}")
       end
     end
 

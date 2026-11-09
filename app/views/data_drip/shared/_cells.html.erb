@@ -31,9 +31,15 @@
 
   <% dispatches.each do |dispatch| %>
     <% remote_run = dispatch.last_snapshot.presence %>
+    <% linked_cell = DataDrip.linked_cell(dispatch.cell_id) %>
     <div class="<%= card_classes %>">
       <div class="flex items-center justify-between gap-x-3">
-        <p class="truncate font-mono text-sm font-medium text-zinc-900 dark:text-white" title="<%= dispatch.cell_id %>"><%= dispatch.cell_id %></p>
+        <p class="truncate font-mono text-sm font-medium text-zinc-900 dark:text-white" title="<%= dispatch.cell_id %>">
+          <%= dispatch.cell_id %>
+          <% if linked_cell %>
+            <span class="ml-1 rounded-md bg-drip-50 px-1.5 py-0.5 font-sans text-xs font-medium text-drip-700 inset-ring inset-ring-drip-700/10 dark:bg-drip-400/10 dark:text-drip-400 dark:inset-ring-drip-400/20"><%= linked_cell.label %></span>
+          <% end %>
+        </p>
 
         <% if dispatch.pending? %>
           <%= status_tag("enqueued") %>
@@ -56,7 +62,9 @@
         <% end %>
       </div>
 
-      <% if dispatch.pending? %>
+      <% if dispatch.pending? && dispatch.error_message.present? %>
+        <p class="mt-3 text-sm wrap-anywhere text-zinc-500 dark:text-zinc-400"><%= dispatch.error_message %></p>
+      <% elsif dispatch.pending? %>
         <p class="mt-3 text-sm text-zinc-500 dark:text-zinc-400">Dispatching to this cell…</p>
       <% elsif dispatch.failed? %>
         <p class="mt-3 text-sm wrap-anywhere text-red-700 dark:text-red-400"><%= dispatch.error_message %></p>

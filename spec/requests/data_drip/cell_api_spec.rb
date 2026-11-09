@@ -171,6 +171,17 @@ RSpec.describe "DataDrip Cell API", type: :request do
 
       expect(response).to have_http_status(:unprocessable_entity)
       expect(response.parsed_body["errors"].join).to match(/valid DataDrip backfill class/)
+      expect(response.parsed_body["code"]).to eq("unknown_here")
+    end
+
+    it "flags an option this cell does not know as unknown here" do
+      post "/data_drip/cell_api/v1/backfill_runs",
+           params: create_payload.merge(options: { added_in_a_later_deploy: "x" }).to_json,
+           headers: headers
+
+      expect(response).to have_http_status(:unprocessable_entity)
+      expect(response.parsed_body["errors"].join).to match(/unknown attributes/)
+      expect(response.parsed_body["code"]).to eq("unknown_here")
     end
 
     it "requires a group_uuid" do
@@ -531,6 +542,16 @@ RSpec.describe "DataDrip Cell API", type: :request do
 
       expect(response).to have_http_status(:unprocessable_entity)
       expect(response.parsed_body["errors"]).to be_present
+      expect(response.parsed_body).not_to have_key("code")
+    end
+
+    it "flags an unknown script class as unknown here" do
+      post "/data_drip/cell_api/v1/script_runs",
+           params: script_payload.merge(script_class_name: "NotDeployedYet").to_json,
+           headers: headers
+
+      expect(response).to have_http_status(:unprocessable_entity)
+      expect(response.parsed_body["code"]).to eq("unknown_here")
     end
   end
 end

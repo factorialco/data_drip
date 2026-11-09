@@ -80,6 +80,38 @@ module DataDrip
   # `queue_name` also runs long scripts may want them on a queue of their own.
   mattr_accessor :cell_queue_name, default: nil
 
+  # Cells outside `cell_ids` that a run can also be sent to, each chosen with
+  # its own checkbox on the new-run form, independently of "Run this in
+  # multiple cells". For a separate deployment that runs the same code and has
+  # to stay in step with these cells without being one of them: a staging copy
+  # or a sales demo, say. Keyed by cell id:
+  #
+  #   { "demo-eu" => { label: "Demo", default_for: %i[backfill] } }
+  #
+  # `label` names the cell in the form and on the per-cell cards (default: the
+  # id). `default_for` lists the run types (`:backfill`, `:script`) whose
+  # fresh form starts with the box ticked (default: none). A linked cell is
+  # reached through `cell_transport` like any other cell, and its leg is shown
+  # and counted in the group's status like any other leg. An id that is also
+  # in `cell_ids`, or is this cell, is ignored.
+  mattr_accessor :linked_cells, default: {}
+
+  # How long, and how often, a dispatch keeps being retried while the target
+  # cell does not know the run's class or one of its options yet: its deploy
+  # is most likely behind this cell's. The dispatch stays pending meanwhile,
+  # and is marked failed, for a human to retry, once the window has passed.
+  # A window of 0 (or nil) marks it failed straight away.
+  mattr_accessor :cell_deploy_lag_retry_window, default: 24.hours
+  mattr_accessor :cell_deploy_lag_retry_interval, default: 15.minutes
+
+  # One entry of `linked_cells`, resolved.
+  LinkedCell =
+    Struct.new(:id, :label, :default_for, keyword_init: true) do
+      def default_for?(runnable_type)
+        default_for.include?(runnable_type.to_sym)
+      end
+    end
+
   class Error < StandardError
   end
 
@@ -119,6 +151,49 @@ module DataDrip
 
   def self.remote_cell_ids
     resolved_cell_ids - [ resolved_current_cell_id ]
+  end
+
+  def self.resolved_linked_cells
+    current = resolved_current_cell_id
+    return [] if current.nil? || cell_transport.blank?
+
+    excluded = resolved_cell_ids + [ current ]
+    (resolve_setting(linked_cells) || {}).filter_map do |id, settings|
+      id = id.to_s
+      next if id.empty? || excluded.include?(id)
+
+      settings = (settings || {}).to_h.symbolize_keys
+      LinkedCell.new(
+        id: id,
+        label: settings[:label].presence&.to_s || id,
+        default_for: Array(settings[:default_for]).map(&:to_sym)
+      )
+    end
+  end
+
+  def self.linked_cell(cell_id)
+    resolved_linked_cells.find { |cell| cell.id == cell_id.to_s }
+  end
+
+  def self.linked_cell_ids
+    resolved_linked_cells.map(&:id)
+  end
+
+  # Every cell a run created here may be sent to.
+  def self.dispatchable_cell_ids
+    (multi_cell? ? remote_cell_ids : []) + linked_cell_ids
+  end
+
+  def self.dispatching?
+    dispatchable_cell_ids.any?
+  end
+
+  def self.resolved_cell_deploy_lag_retry_window
+    resolve_setting(cell_deploy_lag_retry_window).to_f
+  end
+
+  def self.resolved_cell_deploy_lag_retry_interval
+    resolve_setting(cell_deploy_lag_retry_interval).to_f
   end
 
   def self.hooks_handler_class
