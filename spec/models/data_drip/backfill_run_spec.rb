@@ -274,7 +274,7 @@ RSpec.describe DataDrip::BackfillRun, type: :model do
     it "is unlimited when neither the run nor the class sets one" do
       run = create_run("BackfillRunSpec::RetryableBackfill")
 
-      expect(run.max_parallel_batches).to be_nil
+      expect(run.max_parallel_batches).to eq(0)
       expect(run.parallel_batches_limit).to be_nil
     end
 
@@ -287,22 +287,30 @@ RSpec.describe DataDrip::BackfillRun, type: :model do
     it "keeps a blank limit as unlimited even when the class sets one" do
       run = create_run("BackfillRunSpec::SequentialRetryableBackfill", max_parallel_batches: "")
 
-      expect(run.reload.max_parallel_batches).to be_nil
+      expect(run.reload.max_parallel_batches).to eq(0)
       expect(run.parallel_batches_limit).to be_nil
     end
 
-    it "rejects a limit below 1" do
+    # Runs created before the column existed, or by an older gem, have NULL.
+    it "follows the class's limit when the run recorded none" do
+      run = create_run("BackfillRunSpec::SequentialRetryableBackfill")
+      run.update_column(:max_parallel_batches, nil)
+
+      expect(run.reload.parallel_batches_limit).to eq(1)
+    end
+
+    it "rejects a negative limit" do
       run =
         DataDrip::BackfillRun.new(
           backfill_class_name: "BackfillRunSpec::RetryableBackfill",
           batch_size: 10,
           start_at: 1.hour.from_now,
           backfiller: backfiller,
-          max_parallel_batches: 0
+          max_parallel_batches: -1
         )
 
       expect(run).not_to be_valid
-      expect(run.errors[:max_parallel_batches]).to include("must be greater than 0")
+      expect(run.errors[:max_parallel_batches]).to include("must be greater than or equal to 0")
     end
   end
 

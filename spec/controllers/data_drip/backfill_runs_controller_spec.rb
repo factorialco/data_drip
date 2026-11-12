@@ -68,11 +68,20 @@ RSpec.describe DataDrip::BackfillRunsController, type: :controller do
         )
       end
 
+      it "leaves the parallel limit blank when the source run had no limit" do
+        source_run.update_column(:max_parallel_batches, 0)
+
+        get :new, params: { source_run_id: source_run.id }
+
+        input = response.body[/<input[^>]*name="backfill_run\[max_parallel_batches\]"[^>]*>/]
+        expect(input).not_to include("value=")
+      end
+
       it "pre-fills the class, batch size, max records, parallel limit and options from the source run" do
         get :new, params: { source_run_id: source_run.id }
 
-        expect(response.body).to include(
-          'value="2" name="backfill_run[max_parallel_batches]"'
+        expect(response.body).to match(
+          /<input[^>]* value="2"[^>]* name="backfill_run\[max_parallel_batches\]"/
         )
 
         expect(response.body).to include(

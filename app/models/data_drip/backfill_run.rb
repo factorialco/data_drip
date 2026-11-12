@@ -27,10 +27,11 @@ module DataDrip
                 greater_than_or_equal_to: 0
               },
               allow_nil: true
+    # 0 is "no limit" (see #parallel_batches_limit).
     validates :max_parallel_batches,
               numericality: {
                 only_integer: true,
-                greater_than: 0
+                greater_than_or_equal_to: 0
               },
               allow_nil: true,
               if: :max_parallel_batches_supported?
@@ -60,17 +61,23 @@ module DataDrip
 
     # How many batches of this run may be enqueued or running at once; nil is
     # unlimited. The run keeps the limit it was created with (the form
-    # pre-fills the class's own), so a blank field means no limit even for a
-    # class that declares one. Installs without the column use the class's.
+    # pre-fills the class's own), stored as a number, or 0 for "no limit",
+    # so a blank field means no limit even for a class that declares one.
+    # NULL means no limit was recorded: the run predates the column, or an
+    # older version of the gem created it. Such a run, like every run on an
+    # install without the column, follows its class's limit.
     def parallel_batches_limit
-      return backfill_class&.max_parallel_batches unless max_parallel_batches_supported?
+      stored = self[:max_parallel_batches] if max_parallel_batches_supported?
+      return backfill_class&.max_parallel_batches if stored.nil?
 
-      self[:max_parallel_batches]
+      stored.zero? ? nil : stored
     end
 
+    # A blank limit (the form's cleared field, or nil) is stored as 0, "no
+    # limit", so it is not mistaken for a limit that was never recorded.
     def max_parallel_batches=(value)
       @max_parallel_batches_assigned = true
-      super
+      super(value.blank? ? 0 : value)
     end
 
     def terminal?
@@ -225,13 +232,13 @@ module DataDrip
     private
 
     # A run created without choosing a limit (from the console, or a Cell API
-    # delivery from a coordinator that predates the field) takes the class's.
-    # A limit that was assigned, blank included, is kept as given.
+    # delivery from a coordinator that predates the field) records the
+    # class's. A limit that was assigned, blank included, is kept as given.
     def default_max_parallel_batches
       return unless max_parallel_batches_supported?
       return if @max_parallel_batches_assigned
 
-      self[:max_parallel_batches] = backfill_class&.max_parallel_batches
+      self[:max_parallel_batches] = backfill_class&.max_parallel_batches || 0
     end
 
     def run_hooks_and_enqueue

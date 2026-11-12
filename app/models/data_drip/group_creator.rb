@@ -93,8 +93,8 @@ module DataDrip
                 "batch_size" => @run.batch_size,
                 "amount_of_elements" => @run.amount_of_elements
               )
-            # Sent even when nil: a blank limit means unlimited in every cell,
-            # not "use the class's".
+            # The limit this run recorded, 0 being "no limit", so every cell
+            # runs with it rather than with its own copy of the class's.
             if @run.max_parallel_batches_supported?
               backfill["max_parallel_batches"] = @run.max_parallel_batches
             end

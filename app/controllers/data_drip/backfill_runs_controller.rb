@@ -424,12 +424,12 @@ module DataDrip
       params.require(:backfill_run).permit(*permitted, options: {})
     end
 
-    # "Run again" keeps the source run's limit, which may differ from its
-    # class's. Without the column there is nothing to copy.
+    # "Run again" keeps the limit the source run ran with, which may differ
+    # from its class's. Without the column there is nowhere to put it.
     def copied_max_parallel_batches(source_run)
       return {} unless DataDrip::BackfillRun.max_parallel_batches_supported?
 
-      { max_parallel_batches: source_run.max_parallel_batches }
+      { max_parallel_batches: source_run.parallel_batches_limit }
     end
 
     def backfill_class_names
