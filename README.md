@@ -56,6 +56,14 @@ rails generate data_drip:add_batch_diagnostics
 
 Until it runs, batches keep working and show only the error message, and `log` lines go to the Rails log.
 
+To choose the parallel batches limit per run in the new-run form on an older install:
+
+```bash
+rails generate data_drip:add_max_parallel_batches
+```
+
+Until it runs, the field is hidden and every run uses its class's `max_parallel_batches`.
+
 To add the performance indexes to an older install (composite indexes on the runs list and per-run batch queries):
 
 ```bash
@@ -160,6 +168,8 @@ end
 ```
 
 The default (`nil`) keeps the unlimited behaviour. "Retry failed batches" respects the limit too.
+
+The new-run form has a **Maximum parallel batches** field, pre-filled with the class's `max_parallel_batches` when you pick a backfill. Change it to use a different limit for that run, or clear it to run without one. The run keeps the limit it was created with: "Run again" copies it, and a later change to the class doesn't affect runs that already exist. A run created in code without `max_parallel_batches` takes the class's value.
 
 ## Hooks
 

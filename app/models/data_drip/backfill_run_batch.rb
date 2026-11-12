@@ -49,7 +49,7 @@ module DataDrip
     # many siblings are enqueued or running; DripperChild enqueues the next
     # pending batch when one finishes.
     def slot_available?
-      limit = backfill_run.backfill_class&.max_parallel_batches
+      limit = backfill_run.parallel_batches_limit
       return true if limit.nil?
 
       backfill_run.batches.where(status: %i[enqueued running]).count < limit

@@ -253,6 +253,59 @@ RSpec.describe DataDrip::BackfillRun, type: :model do
     end
   end
 
+  describe "max_parallel_batches" do
+    def create_run(backfill_class_name, **attributes)
+      DataDrip::BackfillRun.create!(
+        backfill_class_name: backfill_class_name,
+        batch_size: 10,
+        start_at: 1.hour.from_now,
+        backfiller: backfiller,
+        **attributes
+      )
+    end
+
+    it "takes the class's limit when none is given" do
+      run = create_run("BackfillRunSpec::SequentialRetryableBackfill")
+
+      expect(run.max_parallel_batches).to eq(1)
+      expect(run.parallel_batches_limit).to eq(1)
+    end
+
+    it "is unlimited when neither the run nor the class sets one" do
+      run = create_run("BackfillRunSpec::RetryableBackfill")
+
+      expect(run.max_parallel_batches).to be_nil
+      expect(run.parallel_batches_limit).to be_nil
+    end
+
+    it "keeps a limit chosen for the run over the class's" do
+      run = create_run("BackfillRunSpec::SequentialRetryableBackfill", max_parallel_batches: 4)
+
+      expect(run.reload.parallel_batches_limit).to eq(4)
+    end
+
+    it "keeps a blank limit as unlimited even when the class sets one" do
+      run = create_run("BackfillRunSpec::SequentialRetryableBackfill", max_parallel_batches: "")
+
+      expect(run.reload.max_parallel_batches).to be_nil
+      expect(run.parallel_batches_limit).to be_nil
+    end
+
+    it "rejects a limit below 1" do
+      run =
+        DataDrip::BackfillRun.new(
+          backfill_class_name: "BackfillRunSpec::RetryableBackfill",
+          batch_size: 10,
+          start_at: 1.hour.from_now,
+          backfiller: backfiller,
+          max_parallel_batches: 0
+        )
+
+      expect(run).not_to be_valid
+      expect(run.errors[:max_parallel_batches]).to include("must be greater than 0")
+    end
+  end
+
   describe "backfiller name" do
     let(:valid_attributes) do
       {

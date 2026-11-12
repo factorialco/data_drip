@@ -86,12 +86,19 @@ module DataDrip
               "inputs" => @run.inputs || {}
             )
           else
-            base.merge(
-              "backfill_class_name" => @run.backfill_class_name,
-              "options" => @run.options || {},
-              "batch_size" => @run.batch_size,
-              "amount_of_elements" => @run.amount_of_elements
-            )
+            backfill =
+              base.merge(
+                "backfill_class_name" => @run.backfill_class_name,
+                "options" => @run.options || {},
+                "batch_size" => @run.batch_size,
+                "amount_of_elements" => @run.amount_of_elements
+              )
+            # Sent even when nil: a blank limit means unlimited in every cell,
+            # not "use the class's".
+            if @run.max_parallel_batches_supported?
+              backfill["max_parallel_batches"] = @run.max_parallel_batches
+            end
+            backfill
           end
         end
     end

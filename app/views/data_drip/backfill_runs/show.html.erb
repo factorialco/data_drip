@@ -55,6 +55,11 @@
         <dd class="font-medium text-zinc-900 tabular-nums dark:text-white"><%= number_with_delimiter(@backfill_run.amount_of_elements) %></dd>
       <% end %>
 
+      <% if @backfill_run.parallel_batches_limit.present? %>
+        <dt class="text-zinc-500 dark:text-zinc-400">Maximum parallel batches</dt>
+        <dd class="font-medium text-zinc-900 tabular-nums dark:text-white"><%= number_with_delimiter(@backfill_run.parallel_batches_limit) %></dd>
+      <% end %>
+
       <dt class="text-zinc-500 dark:text-zinc-400">Created</dt>
       <dd class="font-medium text-zinc-900 dark:text-white"><%= format_datetime_in_user_timezone(@backfill_run.created_at, @user_timezone) %></dd>
 

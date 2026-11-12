@@ -27,17 +27,51 @@ module DataDrip
                 greater_than_or_equal_to: 0
               },
               allow_nil: true
+    validates :max_parallel_batches,
+              numericality: {
+                only_integer: true,
+                greater_than: 0
+              },
+              allow_nil: true,
+              if: :max_parallel_batches_supported?
 
     # One callback, not two: `enqueue` commits its own `enqueued!` transition, which runs these hooks
     # for it and replaces `previous_changes`. This commit's hooks have to run first, and apps run
     # separate after_commit callbacks in either order (run_after_transaction_callbacks_in_order_defined).
     after_commit :run_hooks_and_enqueue
 
+    before_create :default_max_parallel_batches
+
     DataDrip.cross_rails_enum(
       self,
       :status,
       %i[pending enqueued running completed failed stopped]
     )
+
+    # Column added by `rails generate data_drip:add_max_parallel_batches`.
+    # Older installs without it keep working, with only the class's limit.
+    def self.max_parallel_batches_supported?
+      column_names.include?("max_parallel_batches")
+    end
+
+    def max_parallel_batches_supported?
+      has_attribute?(:max_parallel_batches)
+    end
+
+    # How many batches of this run may be enqueued or running at once; nil is
+    # unlimited. The run keeps the limit it was created with (the form
+    # pre-fills the class's own), so a blank field means no limit even for a
+    # class that declares one. Installs without the column use the class's.
+    def parallel_batches_limit
+      return backfill_class&.max_parallel_batches unless max_parallel_batches_supported?
+
+      self[:max_parallel_batches]
+    end
+
+    def max_parallel_batches=(value)
+      @max_parallel_batches_assigned = true
+      super
+    end
 
     def terminal?
       completed? || failed? || stopped?
@@ -66,7 +100,7 @@ module DataDrip
     # Puts every failed batch back in line and the run back to running, and
     # resumes planning if that is what failed; returns how many batches were
     # retried. Each goes through BackfillRunBatch#enqueue, so a
-    # `max_parallel_batches` limit still holds. Shared by the UI and the Cell
+    # parallel batches limit still holds. Shared by the UI and the Cell
     # API so the two cannot drift.
     def retry_failed_batches!
       resume_planning = planning_failed?
@@ -189,6 +223,16 @@ module DataDrip
     end
 
     private
+
+    # A run created without choosing a limit (from the console, or a Cell API
+    # delivery from a coordinator that predates the field) takes the class's.
+    # A limit that was assigned, blank included, is kept as given.
+    def default_max_parallel_batches
+      return unless max_parallel_batches_supported?
+      return if @max_parallel_batches_assigned
+
+      self[:max_parallel_batches] = backfill_class&.max_parallel_batches
+    end
 
     def run_hooks_and_enqueue
       run_hooks

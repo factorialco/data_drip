@@ -52,10 +52,12 @@ module DataDrip
       @run =
         if @source_run
           DataDrip::BackfillRun.new(
-            backfill_class_name: @source_run.backfill_class_name,
-            batch_size: @source_run.batch_size,
-            amount_of_elements: @source_run.amount_of_elements,
-            options: copied_options(@source_run)
+            {
+              backfill_class_name: @source_run.backfill_class_name,
+              batch_size: @source_run.batch_size,
+              amount_of_elements: @source_run.amount_of_elements,
+              options: copied_options(@source_run)
+            }.merge(copied_max_parallel_batches(@source_run))
           )
         else
           DataDrip::BackfillRun.new
@@ -281,7 +283,7 @@ module DataDrip
       backfill_class_name = params[:backfill_class_name]
 
       if backfill_class_name.blank?
-        render json: { html: "" }
+        render json: { html: "", max_parallel_batches: nil }
         return
       end
 
@@ -302,7 +304,12 @@ module DataDrip
 
       html = helpers.backfill_option_inputs(temp_run)
 
-      render json: { html: html }
+      # The form pre-fills the class's parallel batches limit; the operator
+      # can lower, raise or clear it for this run.
+      render json: {
+        html: html,
+        max_parallel_batches: backfill_class.max_parallel_batches
+      }
     end
 
     private
@@ -410,13 +417,19 @@ module DataDrip
     end
 
     def backfill_run_params
-      params.require(:backfill_run).permit(
-        :backfill_class_name,
-        :batch_size,
-        :start_at,
-        :amount_of_elements,
-        options: {}
-      )
+      permitted = %i[backfill_class_name batch_size start_at amount_of_elements]
+      if DataDrip::BackfillRun.max_parallel_batches_supported?
+        permitted << :max_parallel_batches
+      end
+      params.require(:backfill_run).permit(*permitted, options: {})
+    end
+
+    # "Run again" keeps the source run's limit, which may differ from its
+    # class's. Without the column there is nothing to copy.
+    def copied_max_parallel_batches(source_run)
+      return {} unless DataDrip::BackfillRun.max_parallel_batches_supported?
+
+      { max_parallel_batches: source_run.max_parallel_batches }
     end
 
     def backfill_class_names

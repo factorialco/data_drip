@@ -47,6 +47,7 @@ RSpec.describe DataDrip::GroupCreator do
       expect(payload["origin_cell_id"]).to eq("cell-a")
       expect(payload["backfill_class_name"]).to eq("AddRoleToEmployee")
       expect(payload["batch_size"]).to eq(100)
+      expect(payload).to include("max_parallel_batches" => nil)
       expect(payload["backfiller_id"]).to eq(backfiller.id)
       expect(payload["backfiller_name"]).to eq("Suzie")
       expect(Time.iso8601(payload["start_at"])).to be_within(1.second).of(run.start_at)

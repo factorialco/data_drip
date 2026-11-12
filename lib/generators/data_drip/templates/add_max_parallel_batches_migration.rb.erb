@@ -1,0 +1,5 @@
+class AddMaxParallelBatchesToDataDripBackfillRuns < ActiveRecord::Migration<%= migration_version %>
+  def change
+    add_column :data_drip_backfill_runs, :max_parallel_batches, :integer
+  end
+end

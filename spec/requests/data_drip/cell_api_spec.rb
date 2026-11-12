@@ -116,6 +116,19 @@ RSpec.describe "DataDrip Cell API", type: :request do
       expect(body["status"]).to eq("enqueued")
     end
 
+    it "keeps the coordinator's parallel batches limit, a blank one included" do
+      post "/data_drip/cell_api/v1/backfill_runs",
+           params: create_payload.merge(max_parallel_batches: 3).to_json,
+           headers: headers
+      expect(DataDrip::BackfillRun.last!.max_parallel_batches).to eq(3)
+
+      post "/data_drip/cell_api/v1/backfill_runs",
+           params: create_payload.merge(group_uuid: "group-2", amount_of_elements: 1, max_parallel_batches: nil).to_json,
+           headers: headers
+      expect(response).to have_http_status(:created)
+      expect(DataDrip::BackfillRun.last!.max_parallel_batches).to be_nil
+    end
+
     it "accepts a backfiller_id that does not exist locally" do
       missing_id = backfiller.id + 999_999
 
