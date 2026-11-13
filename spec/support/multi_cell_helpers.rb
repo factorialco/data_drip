@@ -32,6 +32,9 @@ module MultiCellHelpers
     DataDrip.cell_status_refresh_interval = 3
     DataDrip.script_output_tail_bytes = 4_096
     DataDrip.cell_queue_name = nil
+    DataDrip.linked_cells = {}
+    DataDrip.cell_deploy_lag_retry_window = 24.hours
+    DataDrip.cell_deploy_lag_retry_interval = 15.minutes
   end
 
   def cell_api_url(cell_id, path)

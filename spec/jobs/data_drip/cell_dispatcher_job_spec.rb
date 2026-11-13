@@ -160,6 +160,87 @@ RSpec.describe DataDrip::CellDispatcherJob do
     expect(dispatch.error_message).to match(/must be a valid DataDrip backfill class/)
   end
 
+  # The target cell does not know the class yet: its deploy is most likely
+  # behind this cell's, so the dispatch waits for it instead of failing.
+  describe "a cell that does not know the run's class yet" do
+    let(:unknown_here) do
+      {
+        status: 422,
+        body: {
+          errors: [ "Backfill class name must be a valid DataDrip backfill class" ],
+          code: "unknown_here"
+        }.to_json
+      }
+    end
+
+    before { stub_request(:post, create_url).to_return(unknown_here) }
+
+    it "keeps the dispatch pending and asks again after the retry interval" do
+      freeze_time do
+        expect { described_class.perform_now(dispatch) }.to have_enqueued_job(described_class)
+          .with(dispatch)
+          .at(15.minutes.from_now)
+
+        expect(dispatch.reload).to be_pending
+        expect(dispatch.error_message).to match(/Not deployed in that cell yet .*must be a valid/)
+        expect(dispatch.error_message).to match(/Retrying every 15 minutes until/)
+      end
+    end
+
+    it "is delivered once the cell knows the class" do
+      described_class.perform_now(dispatch)
+      stub_request(:post, create_url).to_return(status: 201, body: { id: 4242 }.to_json)
+
+      described_class.perform_now(dispatch)
+
+      expect(dispatch.reload).to be_dispatched
+      expect(dispatch.error_message).to be_nil
+    end
+
+    it "marks the dispatch failed once the window has passed" do
+      dispatch
+
+      travel 25.hours do
+        expect { described_class.perform_now(dispatch) }.not_to have_enqueued_job(described_class)
+
+        expect(dispatch.reload).to be_failed
+        expect(dispatch.error_message).to match(/must be a valid DataDrip backfill class/)
+      end
+    end
+
+    it "marks the dispatch failed straight away when the retry is turned off" do
+      DataDrip.cell_deploy_lag_retry_window = 0
+
+      expect { described_class.perform_now(dispatch) }.not_to have_enqueued_job(described_class)
+
+      expect(dispatch.reload).to be_failed
+    end
+
+    it "stops asking once the dispatch is cancelled" do
+      stub_request(:post, create_url).to_return do
+        DataDrip::CellDispatch.where(id: dispatch.id).update_all(
+          status: DataDrip::CellDispatch.statuses[:cancelled]
+        )
+        unknown_here
+      end
+
+      expect { described_class.perform_now(dispatch) }.not_to have_enqueued_job(described_class)
+
+      expect(dispatch.reload).to be_cancelled
+    end
+  end
+
+  it "marks a rejection for any other reason failed straight away" do
+    stub_request(:post, create_url).to_return(
+      status: 422,
+      body: { errors: [ "Options company_id can't be blank" ] }.to_json
+    )
+
+    expect { described_class.perform_now(dispatch) }.not_to have_enqueued_job(described_class)
+
+    expect(dispatch.reload).to be_failed
+  end
+
   it "marks a 5xx as failed and raises so the queue retries" do
     stub_request(:post, create_url).to_return(status: 503, body: "")
 

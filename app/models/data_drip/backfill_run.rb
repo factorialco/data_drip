@@ -261,7 +261,8 @@ module DataDrip
 
       errors.add(
         :backfill_class_name,
-        "must be a valid DataDrip backfill class"
+        UNKNOWN_HERE,
+        message: "must be a valid DataDrip backfill class"
       )
     end
 
@@ -300,7 +301,7 @@ module DataDrip
         backfill_options: options || {}
       )
     rescue ActiveModel::UnknownAttributeError => e
-      errors.add(:options, "contains unknown attributes: #{e.message}")
+      errors.add(:options, UNKNOWN_HERE, message: "contains unknown attributes: #{e.message}")
     end
 
     def start_at_must_be_valid_datetime
