@@ -103,17 +103,22 @@ module DataDrip
         end
 
         def create_params
-          params.permit(
-            :group_uuid,
-            :origin_cell_id,
-            :backfill_class_name,
-            :batch_size,
-            :amount_of_elements,
-            :start_at,
-            :backfiller_id,
-            :backfiller_name,
-            options: {}
-          )
+          permitted = %i[
+            group_uuid
+            origin_cell_id
+            backfill_class_name
+            batch_size
+            amount_of_elements
+            start_at
+            backfiller_id
+            backfiller_name
+          ]
+          # A cell that has not added the column yet runs with its class's
+          # limit rather than rejecting the delivery.
+          if DataDrip::BackfillRun.max_parallel_batches_supported?
+            permitted << :max_parallel_batches
+          end
+          params.permit(*permitted, options: {})
         end
       end
     end

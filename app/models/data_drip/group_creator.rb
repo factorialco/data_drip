@@ -86,12 +86,20 @@ module DataDrip
               "inputs" => @run.inputs || {}
             )
           else
-            base.merge(
-              "backfill_class_name" => @run.backfill_class_name,
-              "options" => @run.options || {},
-              "batch_size" => @run.batch_size,
-              "amount_of_elements" => @run.amount_of_elements
-            )
+            backfill =
+              base.merge(
+                "backfill_class_name" => @run.backfill_class_name,
+                "options" => @run.options || {},
+                "batch_size" => @run.batch_size,
+                "amount_of_elements" => @run.amount_of_elements
+              )
+            # Only a limit the operator chose for this run (0 being "no
+            # limit"), so every cell applies it. Without one the key is left
+            # out and each cell follows its own class, as before the field.
+            if @run.max_parallel_batches_supported? && !@run.max_parallel_batches.nil?
+              backfill["max_parallel_batches"] = @run.max_parallel_batches
+            end
+            backfill
           end
         end
     end

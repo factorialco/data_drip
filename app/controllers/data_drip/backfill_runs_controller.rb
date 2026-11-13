@@ -52,10 +52,12 @@ module DataDrip
       @run =
         if @source_run
           DataDrip::BackfillRun.new(
-            backfill_class_name: @source_run.backfill_class_name,
-            batch_size: @source_run.batch_size,
-            amount_of_elements: @source_run.amount_of_elements,
-            options: copied_options(@source_run)
+            {
+              backfill_class_name: @source_run.backfill_class_name,
+              batch_size: @source_run.batch_size,
+              amount_of_elements: @source_run.amount_of_elements,
+              options: copied_options(@source_run)
+            }.merge(copied_max_parallel_batches(@source_run))
           )
         else
           DataDrip::BackfillRun.new
@@ -302,7 +304,12 @@ module DataDrip
 
       html = helpers.backfill_option_inputs(temp_run)
 
-      render json: { html: html }
+      # The form pre-fills the class's parallel batches limit; the operator
+      # can lower or raise it for this run, or set 0 for no limit.
+      render json: {
+        html: html,
+        max_parallel_batches: backfill_class.max_parallel_batches
+      }
     end
 
     private
@@ -410,13 +417,25 @@ module DataDrip
     end
 
     def backfill_run_params
-      params.require(:backfill_run).permit(
-        :backfill_class_name,
-        :batch_size,
-        :start_at,
-        :amount_of_elements,
-        options: {}
-      )
+      permitted = %i[backfill_class_name batch_size start_at amount_of_elements]
+      if DataDrip::BackfillRun.max_parallel_batches_supported?
+        permitted << :max_parallel_batches
+      end
+      params.require(:backfill_run).permit(*permitted, options: {})
+    end
+
+    # "Run again" pre-fills the limit the source run has now: its override if
+    # it had one, else its class's current one, as picking the class would.
+    # Blank when neither has a limit; 0 only when the run lifted its class's
+    # limit, since a blank field would bring the class's back. A value equal
+    # to the class's is dropped on create, so an un-overridden run stays that
+    # way. Without the column there is nowhere to put it.
+    def copied_max_parallel_batches(source_run)
+      return {} unless DataDrip::BackfillRun.max_parallel_batches_supported?
+
+      limit = source_run.parallel_batches_limit
+      limit ||= 0 unless source_run.backfill_class&.max_parallel_batches.nil?
+      { max_parallel_batches: limit }
     end
 
     def backfill_class_names

@@ -59,6 +59,39 @@ RSpec.describe DataDrip::BackfillRunBatch, type: :model do
       expect(first.reload.status).to eq("enqueued")
       expect(second.reload.status).to eq("pending")
     end
+
+    it "follows the class's limit for a run that recorded none" do
+      run = build_run("BackfillRunBatchSpec::SequentialBackfill")
+      run.update_column(:max_parallel_batches, nil)
+      first = build_pending_batch(run)
+      second = build_pending_batch(run)
+
+      expect { first.enqueue; second.enqueue }.to have_enqueued_job(
+        DataDrip::DripperChild
+      ).exactly(:once)
+    end
+
+    it "follows the run's own limit over the class's" do
+      run = build_run("BackfillRunBatchSpec::SequentialBackfill")
+      run.update_column(:max_parallel_batches, 2)
+      batches = Array.new(3) { build_pending_batch(run) }
+
+      expect { batches.each(&:enqueue) }.to have_enqueued_job(
+        DataDrip::DripperChild
+      ).exactly(:twice)
+      expect(batches.map { |batch| batch.reload.status }).to eq(%w[enqueued enqueued pending])
+    end
+
+    it "enqueues every batch when the run cleared the class's limit" do
+      run = build_run("BackfillRunBatchSpec::SequentialBackfill")
+      run.update_column(:max_parallel_batches, 0)
+      first = build_pending_batch(run)
+      second = build_pending_batch(run)
+
+      expect { first.enqueue; second.enqueue }.to have_enqueued_job(
+        DataDrip::DripperChild
+      ).exactly(:twice)
+    end
   end
 
   describe "#run!" do

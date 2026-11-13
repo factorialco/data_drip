@@ -33,11 +33,11 @@ module DataDrip
 
     private
 
-    # Sequential runs (see Backfill.max_parallel_batches) hand the slot over to
+    # Runs with a parallel batches limit (BackfillRun#parallel_batches_limit) hand the slot over to
     # the oldest pending batch. A stopped run releases its pending batches
     # instead, so they do not sit in pending forever.
     def enqueue_next_pending(parent)
-      return if parent.backfill_class&.max_parallel_batches.nil?
+      return if parent.parallel_batches_limit.nil?
 
       parent.reload
       if parent.stopped?

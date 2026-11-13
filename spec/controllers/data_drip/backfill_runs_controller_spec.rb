@@ -15,6 +15,12 @@ RSpec.describe DataDrip::BackfillRunsController, type: :controller do
   describe "GET #new" do
     render_views
 
+    it "shows the parallel batches field on the form" do
+      get :new
+
+      expect(response.body).to include('name="backfill_run[max_parallel_batches]"')
+    end
+
     it "renders the class picker with all backfill classes" do
       get :new
 
@@ -52,6 +58,7 @@ RSpec.describe DataDrip::BackfillRunsController, type: :controller do
           backfill_class_name: "AddRoleToEmployee",
           batch_size: 50,
           amount_of_elements: 10,
+          max_parallel_batches: 2,
           start_at: 1.hour.from_now,
           backfiller: backfiller,
           options: {
@@ -61,8 +68,47 @@ RSpec.describe DataDrip::BackfillRunsController, type: :controller do
         )
       end
 
-      it "pre-fills the class, batch size, max records and options from the source run" do
+      it "leaves the limit blank when neither the source run nor its class has one" do
+        source_run.update_column(:max_parallel_batches, nil)
+
         get :new, params: { source_run_id: source_run.id }
+
+        input = response.body[/<input[^>]*name="backfill_run\[max_parallel_batches\]"[^>]*>/]
+        expect(input).not_to include("value=")
+      end
+
+      it "pre-fills the class's limit when the source run had no override" do
+        source_run.update_columns(
+          backfill_class_name: "BackfillRunsControllerSpec::LimitedBackfill",
+          max_parallel_batches: nil
+        )
+
+        get :new, params: { source_run_id: source_run.id }
+
+        expect(response.body).to match(
+          /<input[^>]* value="3"[^>]* name="backfill_run\[max_parallel_batches\]"/
+        )
+      end
+
+      it "pre-fills 0 when the source run lifted its class's limit" do
+        source_run.update_columns(
+          backfill_class_name: "BackfillRunsControllerSpec::LimitedBackfill",
+          max_parallel_batches: 0
+        )
+
+        get :new, params: { source_run_id: source_run.id }
+
+        expect(response.body).to match(
+          /<input[^>]* value="0"[^>]* name="backfill_run\[max_parallel_batches\]"/
+        )
+      end
+
+      it "pre-fills the class, batch size, max records, parallel limit and options from the source run" do
+        get :new, params: { source_run_id: source_run.id }
+
+        expect(response.body).to match(
+          /<input[^>]* value="2"[^>]* name="backfill_run\[max_parallel_batches\]"/
+        )
 
         expect(response.body).to include(
           'type="text" value="AddRoleToEmployee" name="backfill_run[backfill_class_name]"'
@@ -143,6 +189,58 @@ RSpec.describe DataDrip::BackfillRunsController, type: :controller do
     end
 
     render_views
+
+    it "stores the parallel batches limit chosen in the form" do
+      post :create,
+           params: {
+             backfill_run: valid_attributes.merge(
+               backfill_class_name: "BackfillRunsControllerSpec::LimitedBackfill",
+               max_parallel_batches: "5"
+             )
+           }
+
+      expect(DataDrip::BackfillRun.last!.max_parallel_batches).to eq(5)
+    end
+
+    # A form whose pre-fill never arrived (slow or failed fetch) submits a
+    # blank field; it must not drop the class's limit.
+    it "uses the class's limit when the field is blank" do
+      post :create,
+           params: {
+             backfill_run: valid_attributes.merge(
+               backfill_class_name: "BackfillRunsControllerSpec::LimitedBackfill",
+               max_parallel_batches: ""
+             )
+           }
+
+      run = DataDrip::BackfillRun.last!
+      expect(run.max_parallel_batches).to be_nil
+      expect(run.parallel_batches_limit).to eq(3)
+    end
+
+    it "records nothing when the pre-filled class limit is left as it is" do
+      post :create,
+           params: {
+             backfill_run: valid_attributes.merge(
+               backfill_class_name: "BackfillRunsControllerSpec::LimitedBackfill",
+               max_parallel_batches: "3"
+             )
+           }
+
+      expect(DataDrip::BackfillRun.last!.max_parallel_batches).to be_nil
+    end
+
+    it "runs without a limit when the field is 0" do
+      post :create,
+           params: {
+             backfill_run: valid_attributes.merge(
+               backfill_class_name: "BackfillRunsControllerSpec::LimitedBackfill",
+               max_parallel_batches: "0"
+             )
+           }
+
+      expect(DataDrip::BackfillRun.last!.parallel_batches_limit).to be_nil
+    end
 
     it "creates a new BackfillRun and redirects on success" do
       expect do
@@ -735,6 +833,14 @@ RSpec.describe DataDrip::BackfillRunsController, type: :controller do
       html = JSON.parse(response.body)["html"]
       expect(html).to include("backfill_run[options][age]")
       expect(html).to include("backfill_run[options][name]")
+      expect(JSON.parse(response.body)).to include("max_parallel_batches" => nil)
+    end
+
+    it "returns the class's parallel batches limit to pre-fill the form" do
+      get :backfill_options,
+          params: { backfill_class_name: "BackfillRunsControllerSpec::LimitedBackfill" }
+
+      expect(JSON.parse(response.body)).to include("max_parallel_batches" => 3)
     end
   end
 
@@ -839,4 +945,18 @@ class RunAgainDryRunBackfill < DataDrip::Backfill
   end
 
   def process_element(_element); end
+end
+
+module BackfillRunsControllerSpec
+  class LimitedBackfill < DataDrip::Backfill
+    def self.max_parallel_batches
+      3
+    end
+
+    def scope
+      Employee.none
+    end
+
+    def process_element(_element); end
+  end
 end
