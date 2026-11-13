@@ -93,9 +93,10 @@ module DataDrip
                 "batch_size" => @run.batch_size,
                 "amount_of_elements" => @run.amount_of_elements
               )
-            # The limit this run recorded, 0 being "no limit", so every cell
-            # runs with it rather than with its own copy of the class's.
-            if @run.max_parallel_batches_supported?
+            # Only a limit the operator chose for this run (0 being "no
+            # limit"), so every cell applies it. Without one the key is left
+            # out and each cell follows its own class, as before the field.
+            if @run.max_parallel_batches_supported? && !@run.max_parallel_batches.nil?
               backfill["max_parallel_batches"] = @run.max_parallel_batches
             end
             backfill

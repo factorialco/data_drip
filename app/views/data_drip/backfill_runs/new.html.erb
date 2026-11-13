@@ -91,12 +91,10 @@
       <%= f.label :max_parallel_batches, class: DataDrip::BackfillRunsHelper::LABEL_CLASSES do %>
         Maximum parallel batches <span class="font-normal text-zinc-400 dark:text-zinc-500">· optional</span>
       <% end %>
-      <%# A stored 0 is "no limit": show it as the blank field it came from. %>
-      <%= f.number_field :max_parallel_batches, min: 1, step: 1, placeholder: "No limit",
-          value: @run.max_parallel_batches&.nonzero?,
+      <%= f.number_field :max_parallel_batches, min: 0, step: 1, placeholder: "Class default",
           data: { backfill_options_target: "maxParallelBatches" },
           class: "#{DataDrip::BackfillRunsHelper::INPUT_CLASSES} mt-1.5 max-w-40" %>
-      <p class="mt-1.5 text-sm text-pretty text-zinc-500 dark:text-zinc-400">How many batches may be queued or running at once; the rest wait their turn. Filled in from the backfill class. Leave blank for no limit.</p>
+      <p class="mt-1.5 text-sm text-pretty text-zinc-500 dark:text-zinc-400">How many batches may be queued or running at once; the rest wait their turn. Filled in from the backfill class; left blank, the class's limit applies. Enter 0 for no limit.</p>
     </div>
   <% end %>
 

@@ -47,12 +47,22 @@ RSpec.describe DataDrip::GroupCreator do
       expect(payload["origin_cell_id"]).to eq("cell-a")
       expect(payload["backfill_class_name"]).to eq("AddRoleToEmployee")
       expect(payload["batch_size"]).to eq(100)
-      expect(payload).to include("max_parallel_batches" => 0)
+      # No limit chosen for the run: each cell follows its own class, as before.
+      expect(payload).not_to have_key("max_parallel_batches")
       expect(payload["backfiller_id"]).to eq(backfiller.id)
       expect(payload["backfiller_name"]).to eq("Suzie")
       expect(Time.iso8601(payload["start_at"])).to be_within(1.second).of(run.start_at)
 
       expect(enqueued_jobs.count { |job| job[:job] == DataDrip::CellDispatcherJob }).to eq(2)
+    end
+
+    it "sends a limit chosen for the run to every cell" do
+      run = build_run
+      run.max_parallel_batches = 2
+
+      described_class.call(run: run, remote_cell_ids: %w[cell-b])
+
+      expect(DataDrip::CellDispatch.last!.payload).to include("max_parallel_batches" => 2)
     end
 
     it "ignores unknown cells and never dispatches to the current cell" do

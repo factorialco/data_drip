@@ -62,7 +62,7 @@ To choose the parallel batches limit per run in the new-run form on an older ins
 rails generate data_drip:add_max_parallel_batches
 ```
 
-Until it runs, the field is hidden and every run uses its class's `max_parallel_batches`. Runs that already exist keep doing so after it runs: the column stays empty for them, and an empty column means the class's limit (a run with no limit stores `0`).
+Until it runs, the field is hidden and every run uses its class's `max_parallel_batches`. After it runs, nothing changes for a run unless someone sets a different limit for it in the form: the column stays empty, and an empty column means the class's limit, read live as before.
 
 To add the performance indexes to an older install (composite indexes on the runs list and per-run batch queries):
 
@@ -169,7 +169,7 @@ end
 
 The default (`nil`) keeps the unlimited behaviour. "Retry failed batches" respects the limit too.
 
-The new-run form has a **Maximum parallel batches** field, pre-filled with the class's `max_parallel_batches` when you pick a backfill. Change it to use a different limit for that run, or clear it to run without one. The run keeps the limit it was created with: "Run again" copies it, and a later change to the class doesn't affect runs that already exist. A run created in code without `max_parallel_batches` takes the class's value, and runs created before the column existed keep following their class's.
+The new-run form has a **Maximum parallel batches** field, pre-filled with the class's `max_parallel_batches` when you pick a backfill. Change it to use a different limit for that run, or enter `0` to run without one. A blank field uses the class's limit. Only a limit that differs from the class's is stored on the run, and "Run again" copies it. Every other run, including runs created in code, follows its class's `max_parallel_batches` live, so changing it (in a deploy, or through config the method reads) applies to runs in flight as it always has.
 
 ## Hooks
 

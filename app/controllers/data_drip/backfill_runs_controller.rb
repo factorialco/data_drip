@@ -283,7 +283,7 @@ module DataDrip
       backfill_class_name = params[:backfill_class_name]
 
       if backfill_class_name.blank?
-        render json: { html: "", max_parallel_batches: nil }
+        render json: { html: "" }
         return
       end
 
@@ -305,7 +305,7 @@ module DataDrip
       html = helpers.backfill_option_inputs(temp_run)
 
       # The form pre-fills the class's parallel batches limit; the operator
-      # can lower, raise or clear it for this run.
+      # can lower or raise it for this run, or set 0 for no limit.
       render json: {
         html: html,
         max_parallel_batches: backfill_class.max_parallel_batches
@@ -424,12 +424,18 @@ module DataDrip
       params.require(:backfill_run).permit(*permitted, options: {})
     end
 
-    # "Run again" keeps the limit the source run ran with, which may differ
-    # from its class's. Without the column there is nowhere to put it.
+    # "Run again" pre-fills the limit the source run has now: its override if
+    # it had one, else its class's current one, as picking the class would.
+    # Blank when neither has a limit; 0 only when the run lifted its class's
+    # limit, since a blank field would bring the class's back. A value equal
+    # to the class's is dropped on create, so an un-overridden run stays that
+    # way. Without the column there is nowhere to put it.
     def copied_max_parallel_batches(source_run)
       return {} unless DataDrip::BackfillRun.max_parallel_batches_supported?
 
-      { max_parallel_batches: source_run.parallel_batches_limit }
+      limit = source_run.parallel_batches_limit
+      limit ||= 0 unless source_run.backfill_class&.max_parallel_batches.nil?
+      { max_parallel_batches: limit }
     end
 
     def backfill_class_names

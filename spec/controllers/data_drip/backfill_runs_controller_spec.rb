@@ -68,13 +68,39 @@ RSpec.describe DataDrip::BackfillRunsController, type: :controller do
         )
       end
 
-      it "leaves the parallel limit blank when the source run had no limit" do
-        source_run.update_column(:max_parallel_batches, 0)
+      it "leaves the limit blank when neither the source run nor its class has one" do
+        source_run.update_column(:max_parallel_batches, nil)
 
         get :new, params: { source_run_id: source_run.id }
 
         input = response.body[/<input[^>]*name="backfill_run\[max_parallel_batches\]"[^>]*>/]
         expect(input).not_to include("value=")
+      end
+
+      it "pre-fills the class's limit when the source run had no override" do
+        source_run.update_columns(
+          backfill_class_name: "BackfillRunsControllerSpec::LimitedBackfill",
+          max_parallel_batches: nil
+        )
+
+        get :new, params: { source_run_id: source_run.id }
+
+        expect(response.body).to match(
+          /<input[^>]* value="3"[^>]* name="backfill_run\[max_parallel_batches\]"/
+        )
+      end
+
+      it "pre-fills 0 when the source run lifted its class's limit" do
+        source_run.update_columns(
+          backfill_class_name: "BackfillRunsControllerSpec::LimitedBackfill",
+          max_parallel_batches: 0
+        )
+
+        get :new, params: { source_run_id: source_run.id }
+
+        expect(response.body).to match(
+          /<input[^>]* value="0"[^>]* name="backfill_run\[max_parallel_batches\]"/
+        )
       end
 
       it "pre-fills the class, batch size, max records, parallel limit and options from the source run" do
@@ -176,12 +202,40 @@ RSpec.describe DataDrip::BackfillRunsController, type: :controller do
       expect(DataDrip::BackfillRun.last!.max_parallel_batches).to eq(5)
     end
 
-    it "runs without a limit when the field is cleared" do
+    # A form whose pre-fill never arrived (slow or failed fetch) submits a
+    # blank field; it must not drop the class's limit.
+    it "uses the class's limit when the field is blank" do
       post :create,
            params: {
              backfill_run: valid_attributes.merge(
                backfill_class_name: "BackfillRunsControllerSpec::LimitedBackfill",
                max_parallel_batches: ""
+             )
+           }
+
+      run = DataDrip::BackfillRun.last!
+      expect(run.max_parallel_batches).to be_nil
+      expect(run.parallel_batches_limit).to eq(3)
+    end
+
+    it "records nothing when the pre-filled class limit is left as it is" do
+      post :create,
+           params: {
+             backfill_run: valid_attributes.merge(
+               backfill_class_name: "BackfillRunsControllerSpec::LimitedBackfill",
+               max_parallel_batches: "3"
+             )
+           }
+
+      expect(DataDrip::BackfillRun.last!.max_parallel_batches).to be_nil
+    end
+
+    it "runs without a limit when the field is 0" do
+      post :create,
+           params: {
+             backfill_run: valid_attributes.merge(
+               backfill_class_name: "BackfillRunsControllerSpec::LimitedBackfill",
+               max_parallel_batches: "0"
              )
            }
 
@@ -760,10 +814,10 @@ RSpec.describe DataDrip::BackfillRunsController, type: :controller do
   end
 
   describe "GET #backfill_options" do
-    it "returns empty html and clears the limit when no class name is given" do
+    it "returns empty html when no class name is given" do
       get :backfill_options
 
-      expect(JSON.parse(response.body)).to eq({ "html" => "", "max_parallel_batches" => nil })
+      expect(JSON.parse(response.body)).to eq({ "html" => "" })
     end
 
     it "returns empty html when the class name is unknown" do

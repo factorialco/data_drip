@@ -41,7 +41,7 @@ module DataDrip
     # separate after_commit callbacks in either order (run_after_transaction_callbacks_in_order_defined).
     after_commit :run_hooks_and_enqueue
 
-    before_create :default_max_parallel_batches
+    before_create :drop_max_parallel_batches_matching_class
 
     DataDrip.cross_rails_enum(
       self,
@@ -60,24 +60,18 @@ module DataDrip
     end
 
     # How many batches of this run may be enqueued or running at once; nil is
-    # unlimited. The run keeps the limit it was created with (the form
-    # pre-fills the class's own), stored as a number, or 0 for "no limit",
-    # so a blank field means no limit even for a class that declares one.
-    # NULL means no limit was recorded: the run predates the column, or an
-    # older version of the gem created it. Such a run, like every run on an
-    # install without the column, follows its class's limit.
+    # unlimited. The column holds only a limit the operator chose for this run
+    # instead of its class's: a number, or 0 for "no limit". NULL, the usual
+    # case, means the run follows its class's limit, read live exactly as
+    # before the column existed, so a class whose limit changes (in a deploy,
+    # or through config) still applies to its runs in flight. That covers runs
+    # that predate the column, runs created by an older gem, and every run on
+    # an install without it.
     def parallel_batches_limit
       stored = self[:max_parallel_batches] if max_parallel_batches_supported?
       return backfill_class&.max_parallel_batches if stored.nil?
 
       stored.zero? ? nil : stored
-    end
-
-    # A blank limit (the form's cleared field, or nil) is stored as 0, "no
-    # limit", so it is not mistaken for a limit that was never recorded.
-    def max_parallel_batches=(value)
-      @max_parallel_batches_assigned = true
-      super(value.blank? ? 0 : value)
     end
 
     def terminal?
@@ -231,14 +225,19 @@ module DataDrip
 
     private
 
-    # A run created without choosing a limit (from the console, or a Cell API
-    # delivery from a coordinator that predates the field) records the
-    # class's. A limit that was assigned, blank included, is kept as given.
-    def default_max_parallel_batches
+    # Keeps only a real override. A blank limit (the form's field left empty,
+    # or a pre-fill that never arrived) and a limit equal to the class's (the
+    # pre-filled value left as it was) are stored as NULL, so the run follows
+    # its class exactly as it would without this column. 0 counts as equal to
+    # a class with no limit.
+    def drop_max_parallel_batches_matching_class
       return unless max_parallel_batches_supported?
-      return if @max_parallel_batches_assigned
 
-      self[:max_parallel_batches] = backfill_class&.max_parallel_batches || 0
+      chosen = self[:max_parallel_batches]
+      return if chosen.nil?
+
+      class_limit = backfill_class&.max_parallel_batches
+      self[:max_parallel_batches] = nil if chosen == (class_limit || 0)
     end
 
     def run_hooks_and_enqueue
