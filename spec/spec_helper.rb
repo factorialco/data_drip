@@ -68,6 +68,7 @@ RSpec.configure do |config|
   end
 
   config.include MultiCellHelpers
+  config.include ActiveSupport::Testing::TimeHelpers
 
   config.before :each do
     if defined?(DataDrip::BackfillRunBatch)

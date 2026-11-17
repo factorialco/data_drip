@@ -16,10 +16,19 @@ RSpec.describe DataDrip::GroupCreator do
     )
   end
 
-  # Only reached for a run the operator opted in to running in several cells.
-  it "refuses to run without multi-cell configured" do
+  # Only reached for a run the operator opted in to sending to other cells.
+  it "refuses to run without another cell configured" do
     expect { described_class.call(run: build_run, remote_cell_ids: [ "cell-b" ]) }
-      .to raise_error(DataDrip::Error, /not configured/)
+      .to raise_error(DataDrip::Error, /no other cell is configured/)
+  end
+
+  it "dispatches to a linked cell in a deployment with no other cell of its own" do
+    configure_multi_cell!(cells: %w[cell-a])
+    DataDrip.linked_cells = { "demo" => {} }
+    run = build_run
+
+    expect(described_class.call(run: run, remote_cell_ids: %w[demo cell-b])).to be(true)
+    expect(run.dispatches.map(&:cell_id)).to eq(%w[demo])
   end
 
   context "in multi-cell mode" do
