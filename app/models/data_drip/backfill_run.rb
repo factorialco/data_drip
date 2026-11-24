@@ -46,7 +46,10 @@ module DataDrip
     DataDrip.cross_rails_enum(
       self,
       :status,
-      %i[pending enqueued running completed failed stopped]
+      # `skipped` is last so existing rows keep their integer values. It marks
+      # a coordinator run whose cell was left out of its own run: the row only
+      # anchors the group here, and never executes (see MultiCellRun).
+      %i[pending enqueued running completed failed stopped skipped]
     )
 
     # Column added by `rails generate data_drip:add_max_parallel_batches`.
@@ -75,7 +78,7 @@ module DataDrip
     end
 
     def terminal?
-      completed? || failed? || stopped?
+      completed? || failed? || stopped? || skipped?
     end
 
     # The dripper writes total_count once it has planned every batch, so a

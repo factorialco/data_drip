@@ -258,6 +258,32 @@ RSpec.describe DataDrip::ScriptRunsController, type: :controller do
     end
   end
 
+  describe "GET #show for a run that left this cell out" do
+    render_views
+
+    it "shows the other cells and no output of its own" do
+      configure_multi_cell!
+      script_run = create_script_run(group_uuid: "g-1", cell_id: "cell-a", status: :skipped)
+      DataDrip::CellDispatch.create!(
+        group_uuid: "g-1",
+        cell_id: "cell-b",
+        runnable_type: :script,
+        status: :dispatched,
+        remote_run_id: 9,
+        last_status: "completed",
+        last_synced_at: Time.current,
+        last_snapshot: { "id" => 9, "type" => "script", "status" => "completed" }
+      )
+
+      get :show, params: { id: script_run.id }
+
+      body = Nokogiri::HTML(response.body)
+      expect(body.at_css("[data-script-run-updates-target=status]").text).to include("Completed")
+      expect(response.body).to include("not picked for this run")
+      expect(body.at_css("[data-script-run-updates-target=output]")).to be_nil
+    end
+  end
+
   describe "DELETE #destroy" do
     it "deletes an enqueued run" do
       script_run = create_script_run

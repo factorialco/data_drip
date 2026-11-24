@@ -126,7 +126,7 @@ module DataDrip
         flash[:alert] = "You can only delete backfill runs you created."
         return redirect_to backfill_runs_path(tab: params[:tab] || "my_runs")
       end
-      if !@backfill_run.not_yet_run?
+      if !@backfill_run.deletable?
         flash[:alert] = "Backfill run can only be deleted before it has run."
         return redirect_to backfill_runs_path(tab: params[:tab] || "my_runs")
       end

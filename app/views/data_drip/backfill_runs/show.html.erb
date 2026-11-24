@@ -26,7 +26,7 @@
               form: { data: { turbo_confirm: "Stop this backfill run? Batches that are already running will finish." } },
               class: danger_button_classes %>
         <% end %>
-        <% if @backfill_run.not_yet_run? %>
+        <% if @backfill_run.deletable? %>
           <%= button_to "Delete run",
               backfill_run_path(@backfill_run),
               method: :delete,
@@ -42,9 +42,15 @@
   </p>
 
   <div class="mt-8 grid items-start gap-x-12 gap-y-8 lg:grid-cols-[3fr_2fr]">
-    <div data-backfill-run-updates-target="progress">
-      <%= render "progress", backfill_run: @backfill_run %>
-    </div>
+    <% if @backfill_run.executes_here? %>
+      <div data-backfill-run-updates-target="progress">
+        <%= render "progress", backfill_run: @backfill_run %>
+      </div>
+    <% else %>
+      <p class="text-sm text-pretty text-zinc-500 dark:text-zinc-400">
+        This cell (<span class="font-mono text-xs"><%= @backfill_run.cell_id %></span>) was not picked for this run: it executes only in the cells below.
+      </p>
+    <% end %>
 
     <dl class="grid grid-cols-[auto_1fr] content-start gap-x-6 gap-y-2 text-sm">
       <dt class="text-zinc-500 dark:text-zinc-400">Batch size</dt>
@@ -89,6 +95,7 @@
     </div>
   <% end %>
 
+  <% if @backfill_run.executes_here? %>
   <div class="mt-12">
     <div class="flex flex-wrap items-center gap-3" data-backfill-run-updates-target="batchesMeta">
       <%= render "batches_meta", backfill_run: @backfill_run, batch_status: params[:batch_status] %>
@@ -134,4 +141,5 @@
       </div>
     <% end %>
   </div>
+  <% end %>
 </div>

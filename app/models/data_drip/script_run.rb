@@ -23,7 +23,9 @@ module DataDrip
     DataDrip.cross_rails_enum(
       self,
       :status,
-      %i[pending enqueued running completed failed]
+      # `skipped` is last so existing rows keep their integer values. See
+      # BackfillRun.
+      %i[pending enqueued running completed failed skipped]
     )
 
     # `output` is a MEDIUMTEXT column (16MB) but a runaway script can still

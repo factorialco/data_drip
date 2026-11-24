@@ -34,6 +34,58 @@ RSpec.describe DataDrip::MultiCellGroup do
     )
   end
 
+  describe "a group whose run left this cell out" do
+    let(:run) { build_run(status: :skipped) }
+
+    it "takes its status from the other cells alone" do
+      dispatch(cell_id: "cell-b", last_status: "completed")
+
+      expect(described_class.new(run: run).status).to eq("completed")
+    end
+
+    it "is pending until any other cell has reported" do
+      dispatch(cell_id: "cell-b")
+
+      expect(described_class.new(run: run).status).to eq("pending")
+    end
+
+    it "counts only the other cells" do
+      dispatch(cell_id: "cell-b")
+      dispatch(cell_id: "cell-c")
+
+      expect(described_class.new(run: run).cells_count).to eq(2)
+    end
+
+    it "is finished once every other cell is" do
+      dispatch(cell_id: "cell-b", last_status: "completed")
+
+      expect(described_class.new(run: run)).not_to be_active
+    end
+  end
+
+  describe "#not_started_anywhere?" do
+    let(:run) { build_run(status: :skipped) }
+
+    it "holds while every leg is undelivered or not started" do
+      dispatch(cell_id: "cell-b", status: :pending, remote_run_id: nil)
+      dispatch(cell_id: "cell-c", last_status: "enqueued")
+
+      expect(described_class.new(run: run)).to be_not_started_anywhere
+    end
+
+    it "does not hold for a delivered leg that has not reported yet" do
+      dispatch(cell_id: "cell-b")
+
+      expect(described_class.new(run: run)).not_to be_not_started_anywhere
+    end
+
+    it "does not hold once a leg has started" do
+      dispatch(cell_id: "cell-b", last_status: "running")
+
+      expect(described_class.new(run: run)).not_to be_not_started_anywhere
+    end
+  end
+
   describe "#status" do
     it "is the run's own status when there are no other cells" do
       expect(described_class.new(run: build_run(status: :running)).status).to eq("running")

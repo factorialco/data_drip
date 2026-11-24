@@ -34,6 +34,25 @@ RSpec.describe DataDrip::GroupCreator do
   context "in multi-cell mode" do
     before { configure_multi_cell! }
 
+    it "leaves this cell out of the run when asked to, never enqueuing it here" do
+      run = build_run
+
+      expect(described_class.call(run: run, remote_cell_ids: %w[cell-b], run_here: false)).to be(true)
+      expect(run.reload).to be_skipped
+      expect(run.cell_id).to eq("cell-a")
+      expect(run.dispatches.map(&:cell_id)).to eq(%w[cell-b])
+      expect(enqueued_jobs.map { |job| job[:job] }).not_to include(DataDrip::Dripper)
+    end
+
+    it "refuses a run left out of this cell that reaches no other cell" do
+      run = build_run
+
+      expect(described_class.call(run: run, remote_cell_ids: %w[unknown], run_here: false)).to be(false)
+      expect(run.errors[:base]).to include("Pick at least one cell to run this in.")
+      expect(DataDrip::BackfillRun.count).to eq(0)
+      expect(DataDrip::CellDispatch.count).to eq(0)
+    end
+
     it "assigns a group, stamps the cell, and creates one dispatch per remote cell" do
       run = build_run
 

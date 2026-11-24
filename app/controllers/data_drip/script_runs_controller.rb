@@ -97,7 +97,7 @@ module DataDrip
         flash[:alert] = "You can only delete script runs you created."
         return redirect_to script_runs_path(tab: params[:tab] || "my_runs")
       end
-      if !@script_run.not_yet_run?
+      if !@script_run.deletable?
         flash[:alert] = "Script run can only be deleted before it has run."
         return redirect_to script_runs_path(tab: params[:tab] || "my_runs")
       end

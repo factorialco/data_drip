@@ -8,14 +8,19 @@ module DataDrip
   # Only for runs the operator opted in to sending to other cells (several
   # cells, or a linked cell); every other run is a plain save, exactly as in
   # single-cell DataDrip.
+  #
+  # With `run_here: false` the coordinator's own cell is left out of the run:
+  # the local run is still created, to anchor the group here, but as `skipped`,
+  # so it is never enqueued and the group is what the other cells do.
   class GroupCreator
-    def self.call(run:, remote_cell_ids: [])
-      new(run: run, remote_cell_ids: remote_cell_ids).call
+    def self.call(run:, remote_cell_ids: [], run_here: true)
+      new(run: run, remote_cell_ids: remote_cell_ids, run_here: run_here).call
     end
 
-    def initialize(run:, remote_cell_ids: [])
+    def initialize(run:, remote_cell_ids: [], run_here: true)
       @run = run
       @remote_cell_ids = remote_cell_ids
+      @run_here = run_here
     end
 
     # Returns whether the local run was saved (mirroring run.save so the
@@ -26,6 +31,7 @@ module DataDrip
       @run.group_uuid ||= SecureRandom.uuid
       @run.origin = :local
       @run.cell_id = DataDrip.resolved_current_cell_id
+      @run.status = :skipped unless @run_here
 
       dispatches = []
 
@@ -38,6 +44,12 @@ module DataDrip
           raise ActiveRecord::Rollback unless @run.save
 
           dispatches = create_dispatches
+          # A run left out of its own cell that reaches no other cell would run
+          # nowhere at all.
+          if dispatches.empty? && !@run_here
+            @run.errors.add(:base, "Pick at least one cell to run this in.")
+            raise ActiveRecord::Rollback
+          end
           true
         end
 

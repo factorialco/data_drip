@@ -65,11 +65,48 @@ RSpec.describe DataDrip::BackfillRunsController, type: :controller do
       expect(DataDrip::BackfillRun.last!.dispatches.map(&:cell_id)).to eq(%w[cell-c])
     end
 
-    it "refuses to run in several cells without another cell picked" do
-      post :create, params: { backfill_run: valid_attributes, multi_cell: "1" }
+    it "runs as a plain run when only this cell is picked" do
+      post :create, params: { backfill_run: valid_attributes, multi_cell: "1", run_in_current_cell: "1" }
+
+      run = DataDrip::BackfillRun.last!
+      expect(run.group_uuid).to be_nil
+      expect(run).to be_enqueued
+      expect(DataDrip::CellDispatch.count).to eq(0)
+    end
+
+    it "refuses to run with no cell picked at all" do
+      post :create, params: { backfill_run: valid_attributes, multi_cell: "1", run_in_current_cell: "0" }
 
       expect(response).to have_http_status(:unprocessable_entity)
       expect(DataDrip::BackfillRun.count).to eq(0)
+    end
+
+    # The local run still anchors the group (its page, stop, delete), but is
+    # never enqueued here.
+    it "leaves this cell out when it is unticked" do
+      post :create,
+           params: {
+             backfill_run: valid_attributes,
+             multi_cell: "1",
+             run_in_current_cell: "0",
+             target_cell_ids: %w[cell-b]
+           }
+
+      run = DataDrip::BackfillRun.last!
+      expect(run).to be_skipped
+      expect(run.cell_id).to eq("cell-a")
+      expect(run.dispatches.map(&:cell_id)).to eq(%w[cell-b])
+    end
+
+    it "keeps this cell in the run when the form does not say otherwise" do
+      post :create,
+           params: {
+             backfill_run: valid_attributes,
+             multi_cell: "1",
+             target_cell_ids: %w[cell-b]
+           }
+
+      expect(DataDrip::BackfillRun.last!).to be_enqueued
     end
 
     it "never dispatches when multi-cell is not configured, whatever the form says" do
@@ -105,6 +142,28 @@ RSpec.describe DataDrip::BackfillRunsController, type: :controller do
       expect(multi_cell_box["checked"]).to be_present
       expect(target_cell_boxes.map { |box| box["value"] }).to eq(%w[cell-b cell-c])
       expect(target_cell_boxes).to all(satisfy { |box| box["checked"] && !box["disabled"] })
+    end
+
+    it "offers this cell as a cell that can be left out, ticked by default" do
+      get :new
+
+      box = Nokogiri::HTML(response.body).at_css("input[type=checkbox][name=run_in_current_cell]")
+      expect(box["value"]).to eq("1")
+      expect(box["checked"]).to be_present
+      expect(box["disabled"]).to be_nil
+    end
+
+    it "keeps this cell unticked when a form submitted without it is shown again" do
+      post :create,
+           params: {
+             backfill_run: valid_attributes.merge(batch_size: 0),
+             multi_cell: "1",
+             run_in_current_cell: "0",
+             target_cell_ids: %w[cell-b]
+           }
+
+      box = Nokogiri::HTML(response.body).at_css("input[type=checkbox][name=run_in_current_cell]")
+      expect(box["checked"]).to be_nil
     end
 
     it "hides the cell targeting section in single-cell mode" do
@@ -410,6 +469,79 @@ RSpec.describe DataDrip::BackfillRunsController, type: :controller do
       get :show, params: { id: plain.id }
 
       expect(response.body).not_to include(">Cells<")
+    end
+  end
+
+  describe "a group whose run left this cell out" do
+    render_views
+
+    let!(:run) do
+      DataDrip::BackfillRun.create!(
+        valid_attributes.merge(backfiller: backfiller, group_uuid: "g-1", cell_id: "cell-a", status: :skipped)
+      )
+    end
+
+    def dispatch_to_b(**attributes)
+      DataDrip::CellDispatch.create!(
+        {
+          group_uuid: "g-1",
+          cell_id: "cell-b",
+          runnable_type: :backfill,
+          status: :dispatched,
+          remote_run_id: 77
+        }.merge(attributes)
+      )
+    end
+
+    it "never executes here" do
+      expect(run.reload).to be_skipped
+      expect(run.batches).to be_empty
+    end
+
+    it "shows the group's status, and says this cell is not part of the run" do
+      dispatch_to_b(
+        last_status: "running",
+        last_synced_at: Time.current,
+        last_snapshot: { "id" => 77, "type" => "backfill", "status" => "running" }
+      )
+
+      get :show, params: { id: run.id }
+
+      body = Nokogiri::HTML(response.body)
+      expect(body.at_css("[data-backfill-run-updates-target=status]").text).to include("Running")
+      expect(response.body).to include("not picked for this run")
+      expect(response.body).to include("Stop run")
+      expect(body.at_css("[data-backfill-run-updates-target=batchesTable]")).to be_nil
+    end
+
+    it "may be deleted while no cell has started it" do
+      dispatch_to_b(last_status: "enqueued", last_synced_at: Time.current)
+      stub_request(:delete, cell_api_url("cell-b", "/v1/backfill_runs/77")).to_return(status: 204, body: "")
+
+      delete :destroy, params: { id: run.id }
+
+      expect(DataDrip::BackfillRun.exists?(run.id)).to be(false)
+    end
+
+    it "is kept as history once a cell has started it" do
+      dispatch_to_b(last_status: "running", last_synced_at: Time.current)
+
+      delete :destroy, params: { id: run.id }
+
+      expect(DataDrip::BackfillRun.exists?(run.id)).to be(true)
+      expect(flash[:alert]).to include("only be deleted before it has run")
+    end
+
+    it "stops the other cells, leaving this cell's run as it was" do
+      dispatch_to_b(last_status: "running", last_synced_at: Time.current)
+      stub_request(:post, cell_api_url("cell-b", "/v1/backfill_runs/77/stop"))
+        .to_return(status: 200, body: { id: 77, type: "backfill", status: "stopped" }.to_json,
+                   headers: { "Content-Type" => "application/json" })
+
+      post :stop, params: { id: run.id }
+
+      expect(run.reload).to be_skipped
+      expect(flash[:notice]).to include("acknowledged")
     end
   end
 
