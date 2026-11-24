@@ -18,7 +18,7 @@
       <%= link_to "Run again",
           new_script_run_path(source_run_id: @script_run.id),
           class: secondary_button_classes %>
-      <% if @script_run.manageable_by?(find_current_backfiller) && @script_run.not_yet_run? %>
+      <% if @script_run.manageable_by?(find_current_backfiller) && @script_run.deletable? %>
         <%= button_to "Delete run",
             script_run_path(@script_run),
             method: :delete,
@@ -46,6 +46,11 @@
   <% end %>
 
   <div class="mt-8 grid items-start gap-x-12 gap-y-8 lg:grid-cols-[3fr_2fr]">
+    <% if !@script_run.executes_here? %>
+    <p class="text-sm text-pretty text-zinc-500 dark:text-zinc-400">
+      This cell (<span class="font-mono text-xs"><%= @script_run.cell_id %></span>) was not picked for this run: it executes only in the cells above, each with its own output.
+    </p>
+    <% else %>
     <div>
       <div
         class="mb-6 <%= @script_run.failed? ? "" : "hidden" %> overflow-x-auto rounded-lg bg-red-50 p-4 dark:bg-red-400/10"
@@ -64,6 +69,7 @@
         data-script-run-updates-target="output"
       ><%= @script_run.output %></pre>
     </div>
+    <% end %>
 
     <dl class="grid grid-cols-[auto_1fr] content-start gap-x-6 gap-y-2 text-sm">
       <dt class="text-zinc-500 dark:text-zinc-400">Created</dt>
@@ -72,11 +78,13 @@
       <dt class="text-zinc-500 dark:text-zinc-400">Scheduled start</dt>
       <dd class="font-medium text-zinc-900 dark:text-white"><%= format_datetime_in_user_timezone(@script_run.start_at, @user_timezone) %></dd>
 
+      <% if @script_run.executes_here? %>
       <dt class="text-zinc-500 dark:text-zinc-400">Started</dt>
       <dd class="font-medium text-zinc-900 dark:text-white" data-script-run-updates-target="startedAt"><%= format_datetime_in_user_timezone(@script_run.started_at, @user_timezone) %></dd>
 
       <dt class="text-zinc-500 dark:text-zinc-400">Finished</dt>
       <dd class="font-medium text-zinc-900 dark:text-white" data-script-run-updates-target="finishedAt"><%= format_datetime_in_user_timezone(@script_run.finished_at, @user_timezone) %></dd>
+      <% end %>
 
       <% present_inputs = (@script_run.inputs || {}).reject { |_key, value| value.blank? } %>
       <% if present_inputs.present? %>

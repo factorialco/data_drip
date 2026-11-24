@@ -127,11 +127,26 @@ RSpec.describe DataDrip::BackfillRunsController, type: :controller do
       expect(DataDrip::CellDispatch.count).to eq(0)
     end
 
-    it "still asks for another cell when several cells are asked for but none is picked" do
+    it "runs here and in the linked cell when only this cell is picked of the others" do
       post :create, params: { backfill_run: valid_attributes, multi_cell: "1", linked_cell_ids: %w[linked-x] }
 
-      expect(response).to have_http_status(:unprocessable_entity)
-      expect(DataDrip::BackfillRun.count).to eq(0)
+      run = DataDrip::BackfillRun.last!
+      expect(run).to be_enqueued
+      expect(run.dispatches.map(&:cell_id)).to eq(%w[linked-x])
+    end
+
+    it "runs only in the linked cell when this cell is left out too" do
+      post :create,
+           params: {
+             backfill_run: valid_attributes,
+             multi_cell: "1",
+             run_in_current_cell: "0",
+             linked_cell_ids: %w[linked-x]
+           }
+
+      run = DataDrip::BackfillRun.last!
+      expect(run).to be_skipped
+      expect(run.dispatches.map(&:cell_id)).to eq(%w[linked-x])
     end
   end
 

@@ -79,6 +79,19 @@ module DataDrip
       local? && group_uuid.present? && dispatches.exists?
     end
 
+    # Whether this run executes in this cell. A coordinator whose own cell was
+    # left out of the run is `skipped`: its row only anchors the group (its
+    # page, its dispatches, stop and delete), and it is never enqueued.
+    def executes_here?
+      !skipped?
+    end
+
+    # Still safe to delete: nothing has started running yet. A skipped
+    # coordinator never runs here, so that is a question about its legs.
+    def deletable?
+      skipped? ? group.not_started_anywhere? : not_yet_run?
+    end
+
     # Who may stop or delete this run. Ownership decides whenever there is an
     # owner to speak of. A run fanned in from another cell usually has none:
     # backfiller ids identify a record in the coordinator's cell, so nothing

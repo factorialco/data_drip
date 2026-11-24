@@ -4,8 +4,10 @@
     "Run this in multiple cells", only in multi-cell mode: a fresh form ("Run
     again" included) starts ticked with every cell picked; a form shown again
     after a failed create keeps what was submitted. Unticked, the run is
-    created exactly as in single-cell DataDrip: no group, no dispatches. The
-    current cell is always included, so the list only offers the other cells.
+    created exactly as in single-cell DataDrip: no group, no dispatches. Ticked,
+    any of the cells may be picked, this one included, as long as at least one
+    is: a run left out of this cell is still created here, to follow it, but
+    never executes here.
 
     Each linked cell (DataDrip.linked_cells) gets a box of its own, independent
     of the one above. A fresh form ticks it when the cell's `default_for`
@@ -18,6 +20,7 @@
   <% submitted_ticked = !request.get? && params[:multi_cell] == "1" %>
   <% enabled = request.get? || submitted_ticked %>
   <% selected_cells = submitted_ticked ? Array(params[:target_cell_ids]).map(&:to_s) : remote_cells %>
+  <% current_selected = !submitted_ticked || params[:run_in_current_cell] != "0" %>
   <% submitted_linked = Array(params[:linked_cell_ids]).map(&:to_s) %>
 
   <fieldset class="mb-5" data-controller="cell-scope">
@@ -42,11 +45,21 @@
       <%= "hidden" unless enabled %>
     >
       <div class="flex items-center gap-x-2 text-sm">
-        <%= check_box_tag "current_cell_always", "1", true,
-            disabled: true,
-            class: "size-4 accent-drip-700 opacity-50 dark:accent-drip-400" %>
-        <span class="font-mono text-xs text-zinc-500 dark:text-zinc-400"><%= current_cell %></span>
-        <span class="text-xs text-zinc-400 dark:text-zinc-500">· this cell, always included</span>
+        <%# Unticked boxes are not submitted: the hidden "0" is what tells the
+            server this cell was left out. A form without either means this
+            cell, as before the box could be unticked. %>
+        <%= hidden_field_tag "run_in_current_cell", "0", id: nil,
+            disabled: !enabled,
+            data: { cell_scope_target: "checkbox" } %>
+        <%= check_box_tag "run_in_current_cell", "1", current_selected,
+            id: "run_in_current_cell",
+            disabled: !enabled,
+            class: "size-4 accent-drip-700 dark:accent-drip-400",
+            data: { cell_scope_target: "checkbox" } %>
+        <%= label_tag "run_in_current_cell",
+            current_cell,
+            class: "font-mono text-xs text-zinc-700 dark:text-zinc-300" %>
+        <span class="text-xs text-zinc-400 dark:text-zinc-500">· this cell</span>
       </div>
       <% remote_cells.each do |cell_id| %>
         <div class="flex items-center gap-x-2 text-sm">
@@ -63,7 +76,7 @@
         </div>
       <% end %>
       <p class="text-sm text-pretty text-zinc-500 dark:text-zinc-400">
-        The run executes independently in each cell, against that cell's data.
+        The run executes independently in each cell you pick, against that cell's data. Pick at least one.
       </p>
     </div>
   <% else %>

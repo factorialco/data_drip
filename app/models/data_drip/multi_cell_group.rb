@@ -32,6 +32,7 @@ module DataDrip
     UNKNOWN_SEVERITY = 5
 
     ACTIVE_STATUSES = %w[pending enqueued running].freeze
+    NOT_STARTED_STATUSES = %w[pending enqueued].freeze
 
     attr_reader :run, :dispatches
 
@@ -62,18 +63,20 @@ module DataDrip
       run.local? && dispatches.any?
     end
 
-    # Total cells the group spans, the coordinator included.
+    # Total cells the group spans: the coordinator's own, unless it was left
+    # out of the run, and every other cell.
     def cells_count
-      dispatches.size + 1
+      dispatches.size + (run.executes_here? ? 1 : 0)
     end
 
     # The group's status: the worst of the coordinator's own run and every leg
     # we know about. A leg whose dispatch failed never ran at all, so it counts
-    # as a failure of the group.
+    # as a failure of the group. A coordinator that does not run here has no
+    # say; until any leg has reported, such a group is pending.
     def status
-      statuses = [ run.status.to_s ]
+      statuses = run.executes_here? ? [ run.status.to_s ] : []
       statuses += dispatches.map { |dispatch| dispatch_status(dispatch) }
-      statuses.compact.max_by { |status| STATUS_SEVERITY.fetch(status, UNKNOWN_SEVERITY) }
+      statuses.compact.max_by { |status| STATUS_SEVERITY.fetch(status, UNKNOWN_SEVERITY) } || "pending"
     end
 
     # Whether anything in the group may still change. Drives both the polling
@@ -82,6 +85,16 @@ module DataDrip
       return true if ACTIVE_STATUSES.include?(run.status.to_s)
 
       dispatches.any?(&:active?)
+    end
+
+    # Whether no cell has started the run yet: every leg is undelivered, called
+    # off, or last reported as not started. A delivered leg that has not
+    # reported yet may already be running, so it does not count as not started.
+    def not_started_anywhere?
+      dispatches.all? do |dispatch|
+        dispatch.pending? || dispatch.failed? || dispatch.cancelled? || dispatch.deleted_remotely? ||
+          NOT_STARTED_STATUSES.include?(dispatch.last_run_status)
+      end
     end
 
     # Whether another cell's leg may still start or keep running: being

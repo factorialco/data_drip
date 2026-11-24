@@ -54,28 +54,37 @@ module DataDrip
 
     # Saves a new run. Unless the form opted in to several cells or to a linked
     # cell, this is the plain save single-cell DataDrip has always done: no
-    # group, no dispatch, none of the multi-cell code involved.
+    # group, no dispatch, none of the multi-cell code involved. Picking only
+    # this cell is the same plain save.
     def save_new_run(run)
       remote_cell_ids = multi_cell_requested? ? selected_remote_cell_ids : []
-      if multi_cell_requested? && remote_cell_ids.empty?
+      run_here = !multi_cell_requested? || current_cell_selected?
+      target_cell_ids = remote_cell_ids + selected_linked_cell_ids
+
+      if !run_here && target_cell_ids.empty?
         run.validate
-        run.errors.add(:base, "Pick at least one other cell, or untick \"Run this in multiple cells\".")
+        run.errors.add(:base, "Pick at least one cell, or untick \"Run this in multiple cells\".")
         return false
       end
 
-      target_cell_ids = remote_cell_ids + selected_linked_cell_ids
       return run.save if target_cell_ids.empty?
 
-      DataDrip::GroupCreator.call(run: run, remote_cell_ids: target_cell_ids)
+      DataDrip::GroupCreator.call(run: run, remote_cell_ids: target_cell_ids, run_here: run_here)
     end
 
     def multi_cell_requested?
       DataDrip.multi_cell? && params[:multi_cell] == "1"
     end
 
-    # The other cells the form picked. The current cell is always part of the
-    # run (it is where the run is being created), and unknown cells are
-    # dropped whatever the form said.
+    # Whether the form kept this cell in the run. The box sends "0" when
+    # unticked; a form without it at all (an older page, a script posting the
+    # form) means this cell, as it always did.
+    def current_cell_selected?
+      params[:run_in_current_cell] != "0"
+    end
+
+    # The other cells the form picked. Unknown cells are dropped whatever the
+    # form said.
     def selected_remote_cell_ids
       Array(params[:target_cell_ids]).map(&:to_s) & DataDrip.remote_cell_ids
     end
