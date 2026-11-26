@@ -33,8 +33,8 @@ module DataDrip
 
     private
 
-    # Runs with a parallel batches limit (BackfillRun#parallel_batches_limit) hand the slot over to
-    # the oldest pending batch. A stopped run releases its pending batches
+    # Runs with a parallel batches limit (BackfillRun#parallel_batches_limit) hand the free slots
+    # to the oldest pending batches. A stopped run releases its pending batches
     # instead, so they do not sit in pending forever.
     def enqueue_next_pending(parent)
       return if parent.parallel_batches_limit.nil?
@@ -45,7 +45,7 @@ module DataDrip
         return
       end
 
-      parent.batches.pending.order(:id).first&.enqueue
+      parent.enqueue_pending_batches
     end
   end
 end

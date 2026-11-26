@@ -82,6 +82,19 @@ RSpec.describe DataDrip::BackfillRunBatch, type: :model do
       expect(batches.map { |batch| batch.reload.status }).to eq(%w[enqueued enqueued pending])
     end
 
+    it "does not enqueue a batch another caller claimed after it was loaded" do
+      run = build_run("BackfillRunBatchSpec::SequentialBackfill")
+      run.update_column(:max_parallel_batches, 2)
+      batch = build_pending_batch(run)
+      stale_copy = described_class.find(batch.id)
+
+      expect(batch.enqueue).to be(true)
+      expect { expect(stale_copy.enqueue).to be(false) }.not_to have_enqueued_job(
+        DataDrip::DripperChild
+      )
+      expect(batch.reload.status).to eq("enqueued")
+    end
+
     it "enqueues every batch when the run cleared the class's limit" do
       run = build_run("BackfillRunBatchSpec::SequentialBackfill")
       run.update_column(:max_parallel_batches, 0)
