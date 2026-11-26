@@ -214,6 +214,30 @@ module DataDrip
       end
     end
 
+    # Hands every free parallel slot to the oldest pending batches and returns
+    # them. Slots are counted and batches claimed under the run's row lock: two
+    # children finishing at once used to pick the same oldest batch, one of
+    # them found it already enqueued, and the slot it held stayed empty for the
+    # rest of the run, so a run slowly fell to a single batch at a time. Filling
+    # every free slot also restores a run that already lost slots that way.
+    def enqueue_pending_batches
+      limit = parallel_batches_limit
+      return [] if limit.nil?
+
+      claimed =
+        self.class.transaction do
+          self.class.lock.find(id)
+          free = limit - batches.where(status: %i[enqueued running]).count
+          next [] unless free.positive?
+
+          batches.pending.order(:id).limit(free).to_a.each(&:enqueued!)
+        end
+
+      # After the commit, for the reason BackfillRunBatch#enqueue gives.
+      claimed.each { |batch| DataDrip::DripperChild.perform_later(batch) }
+      claimed
+    end
+
     # Called after each batch reaches a terminal state. Once no batch is still
     # active, the run settles on its own terminal state: failed if any batch
     # failed, otherwise completed. A run that was stopped is left untouched,

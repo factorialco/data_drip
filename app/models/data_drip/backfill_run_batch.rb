@@ -33,21 +33,30 @@ module DataDrip
     # installs that have not run it keep working, without the extra detail.
     DIAGNOSTIC_COLUMNS = %w[error_class error_backtrace failed_record_id output].freeze
 
+    # Returns whether the batch was enqueued.
     def enqueue
-      return unless pending?
-      return unless slot_available?
+      return false unless pending?
+
+      claimed =
+        if backfill_run.parallel_batches_limit.nil?
+          enqueued!
+          true
+        else
+          claim_slot
+        end
 
       # The transition MUST commit before the job is enqueued. A worker can pick
       # the job up the instant it is visible; if it runs the batch to completion
       # first, a trailing `enqueued!` would stomp that terminal state and the
       # parent run, seeing a forever-active batch, would never settle.
-      enqueued!
-      DataDrip::DripperChild.perform_later(self)
+      DataDrip::DripperChild.perform_later(self) if claimed
+      claimed
     end
 
     # With a parallelism limit, a batch is only enqueued while fewer than that
-    # many siblings are enqueued or running; DripperChild enqueues the next
-    # pending batch when one finishes.
+    # many siblings are enqueued or running; DripperChild hands the free slots
+    # to the oldest pending batches when one finishes
+    # (BackfillRun#enqueue_pending_batches).
     def slot_available?
       limit = backfill_run.parallel_batches_limit
       return true if limit.nil?
@@ -136,6 +145,20 @@ module DataDrip
     end
 
     private
+
+    # Counts the free slots and takes one under the run's row lock, the same
+    # lock BackfillRun#enqueue_pending_batches holds, so concurrent callers can
+    # neither claim the same batch nor go over the limit.
+    def claim_slot
+      DataDrip::BackfillRun.transaction do
+        DataDrip::BackfillRun.lock.find(backfill_run_id)
+        # Another caller may have claimed this batch since it was loaded.
+        next false unless self.class.pending.exists?(id) && slot_available?
+
+        enqueued!
+        true
+      end
+    end
 
     def run_hooks_and_enqueue
       run_hooks

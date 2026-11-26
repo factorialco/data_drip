@@ -137,6 +137,32 @@ RSpec.describe DataDrip::DripperChild, type: :job do
       expect(batch2.reload.status).to eq("enqueued")
     end
 
+    it "fills every free slot, so a run that lost slots gets them back" do
+      run.update_column(:max_parallel_batches, 3)
+      batch3 = build_batch(run, start_id: employee4.id, finish_id: employee4.id)
+      batch4 = build_batch(run, start_id: employee4.id, finish_id: employee4.id)
+
+      expect { described_class.new.perform(batch1) }.to have_enqueued_job(
+        DataDrip::DripperChild
+      ).exactly(3).times
+
+      expect([ batch2, batch3, batch4 ].map { |batch| batch.reload.status }).to all(eq("enqueued"))
+    end
+
+    it "fills only the slots siblings in flight leave free" do
+      run.update_column(:max_parallel_batches, 2)
+      batch2.update_column(:status, DataDrip::BackfillRunBatch.statuses[:running])
+      batch3 = build_batch(run, start_id: employee4.id, finish_id: employee4.id)
+      batch4 = build_batch(run, start_id: employee4.id, finish_id: employee4.id)
+
+      expect { described_class.new.perform(batch1) }.to have_enqueued_job(
+        DataDrip::DripperChild
+      ).with(batch3).exactly(:once)
+
+      expect(batch3.reload.status).to eq("enqueued")
+      expect(batch4.reload.status).to eq("pending")
+    end
+
     it "hands the slot over even when the batch failed" do
       failing_run = build_run("DripperChildSpec::SequentialFailBackfill")
       first = build_batch(failing_run, start_id: employee3.id, finish_id: employee3.id)
